@@ -15,10 +15,12 @@ const WORKFLOW = parse(SOURCE);
 const JOBS = WORKFLOW.jobs;
 const TAG_IF =
   /^\$\{\{ github\.ref_type == 'tag'( && needs\.classify\.outputs\.kind == '(rc|final)')? \}\}$/;
+// rc-quality's three matrix jobs: one matrix makes at most 256 jobs (tests/quality/lib/full-shards.ts).
+const QUALITY_JOBS = ['rc-quality-1', 'rc-quality-2', 'rc-quality-3'];
 const RC_JOBS = [
   'rc-verify',
   'rc-quality-plan',
-  'rc-quality',
+  ...QUALITY_JOBS,
   'rc-quality-verdict',
   'rc-rehearsal',
   'rc-build',
@@ -88,6 +90,14 @@ test('the workflow token is contents: read, and each write is a tag-gated job of
   });
   for (const id of Object.keys(JOBS)) {
     if (DRY_RUN_JOBS.includes(id)) continue;
+    // The quality jobs' own conditions, held exactly below, start with the tag's.
+    if (QUALITY_JOBS.includes(id) || id === 'rc-quality-verdict') {
+      assert.match(
+        JOBS[id].if,
+        /github\.ref_type == 'tag' && needs\.classify\.outputs\.kind == 'rc'/,
+      );
+      continue;
+    }
     assert.match(JOBS[id].if, TAG_IF, `${id} runs on tag pushes only`);
   }
   for (const id of RC_JOBS) assert.match(JOBS[id].if, /kind == 'rc'/, id);
@@ -128,7 +138,7 @@ test('the dry run holds contents: read, no secret, and never reaches GHCR', () =
 });
 
 test("the candidate's quality gate holds contents: read and no secret, and rc-tag waits on it", () => {
-  for (const id of ['rc-quality-plan', 'rc-quality', 'rc-quality-verdict']) {
+  for (const id of ['rc-quality-plan', ...QUALITY_JOBS, 'rc-quality-verdict']) {
     assert.equal(JOBS[id].permissions, undefined, `${id} keeps the workflow's contents: read`);
     assert.doesNotMatch(
       JSON.stringify(JOBS[id]),
@@ -139,6 +149,54 @@ test("the candidate's quality gate holds contents: read and no secret, and rc-ta
   }
   // tests/quality/full-shards.test.ts holds its shards, timeout, and commands.
   assert.ok(JOBS['rc-tag'].needs.includes('rc-quality-verdict'));
+});
+
+test("rc-quality's three matrix jobs are one job but for their id, shard list and max-parallel, and the verdict runs only when each passed or was handed no shard", () => {
+  const plan = JOBS['rc-quality-plan'];
+  assert.deepEqual(plan.outputs, {
+    count: '${{ steps.count.outputs.count }}',
+    shards1: '${{ steps.count.outputs.shards1 }}',
+    shards2: '${{ steps.count.outputs.shards2 }}',
+    shards3: '${{ steps.count.outputs.shards3 }}',
+  });
+  const own = (id, at) => ({
+    if: `\${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' && needs.rc-quality-plan.outputs.shards${at} != '[]' }}`,
+    shard: `\${{ fromJSON(needs.rc-quality-plan.outputs.shards${at}) }}`,
+  });
+  // 6, 5 and 5 at once: 16 together, under the account's 20 job slots.
+  const parallel = QUALITY_JOBS.map((id) => JOBS[id].strategy['max-parallel']);
+  assert.deepEqual(parallel, [6, 5, 5]);
+  const [first, ...others] = QUALITY_JOBS.map((id, at) => {
+    const job = structuredClone(JOBS[id]);
+    assert.deepEqual(
+      { if: job.if, shard: job.strategy.matrix.shard },
+      own(id, at + 1),
+      `${id} runs the shards rc-quality-plan hands it, and skips with none`,
+    );
+    delete job.if;
+    delete job.strategy.matrix.shard;
+    delete job.strategy['max-parallel'];
+    return job;
+  });
+  for (const [at, job] of others.entries()) assert.deepEqual(job, first, QUALITY_JOBS[at + 1]);
+  // Every job's shards upload under one pattern, by their number in the whole plan.
+  assert.match(SOURCE, /name: reports-quality-release-\$\{\{ matrix\.shard \}\}/);
+  const job = (k) => `needs.rc-quality-${k}.result`;
+  const handed = (k) => `needs.rc-quality-plan.outputs.shards${k}`;
+  assert.equal(
+    JOBS['rc-quality-verdict'].if,
+    `\${{ !cancelled() && github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' && needs.rc-quality-plan.result == 'success' && ${[
+      1, 2, 3,
+    ]
+      .map((k) => `(${job(k)} == 'success' || (${job(k)} == 'skipped' && ${handed(k)} == '[]'))`)
+      .join(' && ')} }}`,
+  );
+  // And it judges the merged plan whole: every shard of the count, every job's.
+  const merge = stepsOf('rc-quality-verdict').find((each) =>
+    /pnpm ci:quality-release/.test(each.run ?? ''),
+  );
+  assert.equal(merge.run, 'pnpm ci:quality-release --merged "$SHARDS" --shards "$SHARD_COUNT"');
+  assert.equal(merge.env.SHARD_COUNT, '${{ needs.rc-quality-plan.outputs.count }}');
 });
 
 test('each platform builds once, natively on its own runner, with mode=max provenance and an SBOM', () => {
@@ -283,8 +341,14 @@ test('each step waits on the one before it', () => {
   assert.deepEqual(needs('rc-merge'), ['classify', 'rc-build']);
   assert.deepEqual(needs('rc-scan'), ['classify', 'rc-merge']);
   assert.deepEqual(needs('rc-quality-plan'), ['classify', 'rc-verify']);
-  assert.deepEqual(needs('rc-quality'), ['classify', 'rc-quality-plan']);
-  assert.deepEqual(needs('rc-quality-verdict'), ['classify', 'rc-quality', 'rc-quality-plan']);
+  for (const id of QUALITY_JOBS) assert.deepEqual(needs(id), ['classify', 'rc-quality-plan']);
+  assert.deepEqual(needs('rc-quality-verdict'), [
+    'classify',
+    'rc-quality-1',
+    'rc-quality-2',
+    'rc-quality-3',
+    'rc-quality-plan',
+  ]);
   assert.deepEqual(needs('rc-rehearsal'), ['classify', 'rc-verify']);
   assert.deepEqual(needs('rc-smoke'), ['classify', 'rc-merge']);
   assert.deepEqual(needs('rc-tag'), [
@@ -345,9 +409,10 @@ test('scan findings upload for one day only, and the logs get counts from scan-g
       .map((s) => ({ id, ...s.with })),
   );
   const reports = uploads.filter((u) => u.path === 'reports/');
-  // The quality gate's shards and verdict among them: the shards keep three days, the rest one.
+  // The quality gate's shards (each of its three jobs') and verdict among them: the shards keep
+  // three days, the rest one.
   assert.deepEqual(reports.map((u) => u.name).sort(), [
-    'reports-quality-release-${{ matrix.shard }}',
+    ...QUALITY_JOBS.map(() => 'reports-quality-release-${{ matrix.shard }}'),
     'reports-quality-release-verdict',
     'reports-release-dry-run',
     'reports-release-promote-scan',
@@ -596,9 +661,11 @@ test("rc-verify's two checks run unconditioned, and every step if: on a candidat
       .map((each) => [id, each.name ?? each.uses ?? each.run, each.if]),
   );
   assert.deepEqual(conditioned, [
-    ['rc-quality', 'Scrub reports', '${{ always() }}'],
-    ['rc-quality', 'Failure summary', '${{ always() }}'],
-    ['rc-quality', 'Upload reports', "${{ always() && steps.scrub.outcome == 'success' }}"],
+    ...QUALITY_JOBS.flatMap((id) => [
+      [id, 'Scrub reports', '${{ always() }}'],
+      [id, 'Failure summary', '${{ always() }}'],
+      [id, 'Upload reports', "${{ always() && steps.scrub.outcome == 'success' }}"],
+    ]),
     ['rc-quality-verdict', 'Failure summary', '${{ always() }}'],
     ['rc-quality-verdict', 'Upload reports', '${{ always() }}'],
     ['rc-rehearsal', 'Upload reports', '${{ always() }}'],
