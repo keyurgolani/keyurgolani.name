@@ -5,8 +5,9 @@
 // builds (run.ts's externalVariantHost), plans from it, and works out
 // (lib/full-shards.ts):
 //
-// - the release plan's shard count, the fewest, up to MAX_RELEASE_SHARDS,
-//   that keep each shard within RELEASE_CEILING (releaseFor);
+// - the release plan's shard count, the fewest, up to MAX_RELEASE_PLAN,
+//   that keep each shard within RELEASE_CEILING (releaseFor), and which of
+//   them each of release.yml's three rc-quality jobs runs (releaseSlices);
 // - the nightly cycle, the smallest of NIGHT_COUNTS whose every night fits
 //   at FULL_SHARDS shards (rotationFor), which every nightly shard works out
 //   the same way for itself.
@@ -14,7 +15,8 @@
 // It prints both, and the release's shard count and its runner-minutes at
 // rc-quality's timeout (releaseSummary), which it also writes to the job
 // summary, GITHUB_STEP_SUMMARY, when that's set. Under GitHub Actions it
-// writes `count`, `shards` (a JSON list, 1 to count), and `nights` to
+// writes `count`, `shards1` to `shards3` (each rc-quality job's JSON list of
+// shards, together 1 to count, `[]` for a job with none), and `nights` to
 // GITHUB_OUTPUT. A plan past either cap
 // fails, naming its heaviest group. The worktree is removed however it ends.
 
@@ -23,6 +25,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   FULL_SHARDS,
+  RELEASE_JOBS,
+  releaseSlices,
   fullEstimate,
   fullGroups,
   NIGHTLY_CEILING,
@@ -35,17 +39,20 @@ import {
 } from './lib/full-shards';
 import { RUN_ENGINES } from './lib/matrix';
 import { loadPlan } from './plan';
-import { shardOutputs } from './pr-count';
 import { externalVariantHost } from './run';
 
 /**
  * The release's size, as the run prints it and its job summary holds it:
- * the shard count, how many run at once, and the runner-minutes they could
- * take, every shard at rc-quality's timeout.
+ * the shard count, each rc-quality job's share and how many of them run at
+ * once, and the runner-minutes they could take, every shard at rc-quality's
+ * timeout.
  */
 export function releaseSummary(count: number): string {
   const timeout = releaseTimeoutMinutes();
-  return `rc-quality: ${count} shards, ${RELEASE_PARALLEL} at a time, at most ${count * timeout} runner-minutes at the ${timeout}-minute timeout`;
+  const jobs = releaseSlices(count)
+    .map((slice, at) => `${RELEASE_JOBS[at]!.id} ${slice.length} at ${RELEASE_JOBS[at]!.parallel}`)
+    .join(', ');
+  return `rc-quality: ${count} shards (${jobs}), ${RELEASE_PARALLEL} at a time, at most ${count * timeout} runner-minutes at the ${timeout}-minute timeout`;
 }
 
 /**
@@ -59,11 +66,18 @@ export function releaseOf(plan: Parameters<typeof fullGroups>[0]) {
   return { groups, ...releaseFor(groups, weights) };
 }
 
-/** What GITHUB_OUTPUT gets: the release shard count, its matrix list, and the cycle's nights. */
-export function fullOutputs(count: number, nights: number) {
-  // rc-quality's max-parallel is RELEASE_PARALLEL, a constant, so it takes no `parallel`.
-  const { count: shardCount, shards } = shardOutputs(count);
-  return { count: shardCount, shards, nights: String(nights) };
+/**
+ * What GITHUB_OUTPUT gets: the release shard count, each rc-quality job's matrix list (shards1 to
+ * shards3, releaseSlices), and the cycle's nights. Each job's max-parallel is RELEASE_JOBS's, a
+ * constant, so it takes no `parallel`.
+ */
+export function fullOutputs(count: number, nights: number): Record<string, string> {
+  const slices = releaseSlices(count);
+  return {
+    count: String(count),
+    ...Object.fromEntries(slices.map((slice, at) => [`shards${at + 1}`, JSON.stringify(slice)])),
+    nights: String(nights),
+  };
 }
 
 /**
@@ -106,7 +120,9 @@ export async function runFullPlan({
     if (env.GITHUB_OUTPUT) {
       appendFileSync(
         env.GITHUB_OUTPUT,
-        `count=${outputs.count}\nshards=${outputs.shards}\nnights=${outputs.nights}\n`,
+        Object.entries(outputs)
+          .map(([key, value]) => `${key}=${value}\n`)
+          .join(''),
       );
     }
     return 0;

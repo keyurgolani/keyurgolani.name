@@ -4,10 +4,11 @@
 // heaviest-first assignment. Nothing here weighs a test again.
 //
 // The caps. A night holds no more than FULL_SHARDS of the account's 20 job
-// slots at once, and a release candidate no more than RELEASE_PARALLEL
-// (max-parallel), so PR CI keeps the rest: 12 a night, and 10 while a
-// candidate runs, so PR CI stays usable through a candidate's longer run at
-// its measured weights.
+// slots at once, and a release candidate no more than RELEASE_PARALLEL (its
+// rc-quality jobs' max-parallel together), so PR CI keeps the rest: 12 a
+// night, and 4 while a candidate runs (the coordinator's sizing ruling for
+// v1.0.0, 2026-11-11: 16 at once, so the reachable scope's run ends in about
+// a day).
 //
 // The nightly rotation. The complete plan is more than one night of
 // FULL_SHARDS shards can run, so it runs over a cycle of N nights, the
@@ -38,9 +39,12 @@
 // the timeout stays. release.yml's rc-quality-plan works the count out
 // (full-plan.ts) and hands it to the matrix. Release shards are dealt
 // heaviest first, not by a hash, so the count needs no steps: unlike the
-// nightly cycle, nothing nests across counts. A plan that needs more than
-// MAX_RELEASE_SHARDS, the most jobs a GitHub matrix makes, fails, naming its
-// heaviest group.
+// nightly cycle, nothing nests across counts. A GitHub matrix makes at most
+// MAX_RELEASE_SHARDS jobs, so the shards are split across RELEASE_JOBS, three
+// rc-quality matrix jobs, each a run of consecutive shards no longer than that
+// (releaseSlices), sized by its max-parallel so the three end together. A
+// plan that needs more than MAX_RELEASE_PLAN, every job's matrix full, fails,
+// naming its heaviest group.
 
 import { createHash } from 'node:crypto';
 import type { Plan } from '../cells';
@@ -69,16 +73,62 @@ export const VISUAL_SPEC = 'visual.spec.ts';
 
 /** The nightly's cap: the most shard jobs of a night at once, and the nightly's shard count. */
 export const FULL_SHARDS = 8;
-/** The release's cap: the most rc-quality shard jobs at once, rc-quality's max-parallel. */
-export const RELEASE_PARALLEL = 10;
+/**
+ * The release's rc-quality matrix jobs, by job id, each with its max-parallel: three, since one
+ * matrix makes at most MAX_RELEASE_SHARDS jobs, at 6, 5 and 5 at once, 16 together (the
+ * coordinator's sizing ruling, 2026-11-11), under the account's 20 job slots.
+ */
+export const RELEASE_JOBS: readonly { readonly id: string; readonly parallel: number }[] = [
+  { id: 'rc-quality-1', parallel: 6 },
+  { id: 'rc-quality-2', parallel: 5 },
+  { id: 'rc-quality-3', parallel: 5 },
+];
+/** The release's cap: the most rc-quality shard jobs at once, its jobs' max-parallel together. */
+export const RELEASE_PARALLEL = RELEASE_JOBS.reduce((sum, job) => sum + job.parallel, 0);
 /** The cycle lengths the rotation takes, the smallest that fits: a week, doubled each time. */
 export const NIGHT_COUNTS: readonly number[] = [7, 14, 28, 56];
 /** The longest cycle: past eight weeks, the nightly needs more shards or a longer night instead. */
 export const MAX_NIGHTS = NIGHT_COUNTS.at(-1)!;
 /** How many buckets a server's cell tests are split into, each with a night of its own. */
 export const BUCKETS = 4;
-/** The most release shards: the most jobs a GitHub matrix makes. */
+/** The most shards one rc-quality job takes: the most jobs a GitHub matrix makes. */
 export const MAX_RELEASE_SHARDS = 256;
+/** The most release shards: every rc-quality job's matrix full. */
+export const MAX_RELEASE_PLAN = RELEASE_JOBS.length * MAX_RELEASE_SHARDS;
+
+/**
+ * The shards, 1 to `count`, each rc-quality job runs: consecutive runs, the first job's first, each
+ * job's share in proportion to its max-parallel (so the three end together, waves of the same
+ * length), the remainder to the first jobs, none past `cap`. A job's list may be empty, for a plan
+ * of fewer shards than jobs: its job skips. Past every job's cap it throws.
+ */
+export function releaseSlices(
+  count: number,
+  jobs: readonly { readonly parallel: number }[] = RELEASE_JOBS,
+  cap: number = MAX_RELEASE_SHARDS,
+): number[][] {
+  if (!Number.isInteger(count) || count < 1)
+    throw new Error(`A release plan of ${count} shards can't be split.`);
+  if (count > jobs.length * cap)
+    throw new Error(
+      `${count} release shards are more than ${jobs.length} jobs of ${cap} hold (MAX_RELEASE_PLAN).`,
+    );
+  const total = jobs.reduce((sum, job) => sum + job.parallel, 0);
+  const sizes = jobs.map((job) => Math.min(cap, Math.floor((count * job.parallel) / total)));
+  let left = count - sizes.reduce((sum, size) => sum + size, 0);
+  for (let at = 0; left > 0; at = (at + 1) % jobs.length) {
+    if (sizes[at]! < cap) {
+      sizes[at] = sizes[at]! + 1;
+      left -= 1;
+    }
+  }
+  let next = 1;
+  return sizes.map((size) => {
+    const slice = Array.from({ length: size }, (_, at) => next + at);
+    next += size;
+    return slice;
+  });
+}
 /**
  * A full shard job's fixed part, in seconds: quality-pr's (SHARD_FIXED, 95 s)
  * plus the reference variant's worktree, installed from its tarball and
@@ -104,8 +154,9 @@ export const NIGHTLY_CEILING = Math.floor((NIGHTLY_TIMEOUT_MINUTES * 60) / TIMEO
 export const FULL_GROUP_BUDGET = NIGHTLY_CEILING - FULL_FIXED;
 /**
  * rc-quality's and rc-preflight's preflight-quality's timeout-minutes, the release shard's cap. It
- * stays at 120, as does RELEASE_PARALLEL's 10 (the coordinator's release-path ruling, 2026-11-07):
- * the shard target, RELEASE_CEILING, is fitted to this cap, never the cap to the target.
+ * stays at 120 (the coordinator's release-path ruling, 2026-11-07): the shard target,
+ * RELEASE_CEILING, is fitted to this cap, never the cap to the target. RELEASE_PARALLEL went from
+ * 10 to 16 with the split into three jobs (the sizing ruling, 2026-11-11).
  */
 export const RELEASE_TIMEOUT_MINUTES = 120;
 
@@ -440,7 +491,7 @@ export function releaseFloor(
 /**
  * The release plan the plan runs: the fewest shards that keep each within
  * RELEASE_CEILING, so one fewer leaves a shard over it. It tries each count
- * up from releaseFloor(), below which none can fit. Past MAX_RELEASE_SHARDS
+ * up from releaseFloor(), below which none can fit. Past MAX_RELEASE_PLAN
  * it throws, naming the heaviest group.
  */
 export function releaseFor(
@@ -450,8 +501,8 @@ export function releaseFor(
 ): { readonly count: number; readonly shards: PrShard[]; readonly slowest: number } {
   let failure = '';
   for (
-    let count = Math.min(releaseFloor(groups, durations, ceiling), MAX_RELEASE_SHARDS);
-    count <= MAX_RELEASE_SHARDS;
+    let count = Math.min(releaseFloor(groups, durations, ceiling), MAX_RELEASE_PLAN);
+    count <= MAX_RELEASE_PLAN;
     count += 1
   ) {
     try {
@@ -462,7 +513,7 @@ export function releaseFor(
     }
   }
   throw new Error(
-    `Even ${MAX_RELEASE_SHARDS} release shards don't fit (MAX_RELEASE_SHARDS): ${failure}`,
+    `Even ${MAX_RELEASE_PLAN} release shards don't fit (MAX_RELEASE_PLAN, ${RELEASE_JOBS.length} jobs of ${MAX_RELEASE_SHARDS}): ${failure}`,
   );
 }
 
