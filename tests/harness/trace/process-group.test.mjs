@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
+import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { groupTracker, signalGroup, spawnGroup, stopGroup } from './process-group.mjs';
@@ -15,6 +17,30 @@ async function gone(pid) {
     await delay(50);
   }
   return false;
+}
+
+/**
+ * Whether `pid` becomes a zombie within `ms`, read by a synchronous ps, so the
+ * event loop never runs and can't reap it meanwhile.
+ */
+function zombieWithin(pid, ms) {
+  const end = Date.now() + ms;
+  for (;;) {
+    let state = '';
+    try {
+      // Linux: /proc's stat holds the state after the command's closing paren; elsewhere, ps.
+      state = existsSync(`/proc/${pid}/stat`)
+        ? readFileSync(`/proc/${pid}/stat`, 'utf8')
+            .replace(/^.*\) /s, '')
+            .slice(0, 1)
+        : execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
+    } catch {
+      // ps exits non-zero once nothing has the pid.
+    }
+    if (state.includes('Z')) return true;
+    if (Date.now() >= end) return false;
+    execFileSync('sleep', ['0.02']);
+  }
 }
 
 /** A shell, leading its own group, that starts a sleep and prints the sleep's pid. */
@@ -46,12 +72,12 @@ test('a group that ignores SIGTERM gets SIGKILL once the grace period is over', 
 
 test('a group left with only its exited leader, not yet reaped, stops without an error', async () => {
   const group = spawnGroup('sh', ['-c', 'exit 0'], { stdio: 'ignore' });
-  // A busy wait, so the event loop can't reap the leader: the group holds
-  // nothing but a zombie, which macOS answers EPERM for.
-  const until = Date.now() + 300;
-  while (Date.now() < until) {
-    // waiting
-  }
+  // Wait, without yielding to the event loop so it can't reap the leader, until
+  // the leader has exited: the group then holds nothing but a zombie, which
+  // macOS answers EPERM for. ps runs synchronously, so nothing reaps meanwhile.
+  // A fixed 300 ms busy wait raced a slow start under load (row 156): the shell
+  // hadn't exited yet, the SIGTERM below killed it, and its code was null.
+  assert.equal(zombieWithin(group.child.pid, 5000), true, 'the leader exited, unreaped');
   assert.doesNotThrow(() => signalGroup(group.child.pid, 0));
   assert.doesNotThrow(() => signalGroup(group.child.pid, 'SIGTERM'));
   await stopGroup(group, { graceMs: 1000 });
