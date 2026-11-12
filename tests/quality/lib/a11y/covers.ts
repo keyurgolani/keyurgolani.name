@@ -19,10 +19,12 @@ export const COVER_GAP = 8;
 
 /**
  * What covers `el` and `margin` round it, read in the page. It hit-tests a
- * grid of points in each of the element's own line boxes, so a wrapped
- * inline's empty corners don't count, and in the band `margin` round them,
- * where a ring would be: the stack from the top, with pointer events forced
- * on, down to the element, its descendant, or its ancestor. A layer above it
+ * grid of points in each line box of the element's own text, so neither a
+ * wrapped inline's empty corners nor a block's empty box count, and lines a
+ * box doesn't hold do (row 152); for a ring, in each of the element's own
+ * boxes and in the band `margin` round them, where the ring would be: the
+ * stack from the top, with pointer events forced on, down to the element,
+ * its descendant, or its ancestor. A layer above it
  * that paints, is fixed or sticky itself or under a fixed or sticky
  * ancestor the element doesn't share, and doesn't span the whole viewport
  * (a grain or tint over every text, which is part of what a visitor reads
@@ -41,7 +43,25 @@ export function stuckCoverScript(
   style.textContent = '*, *::before, *::after { pointer-events: auto !important; }';
   document.head.append(style);
   try {
-    const boxes = [...el.getClientRects()].filter((r) => r.width >= 1 && r.height >= 1);
+    // A text's own line boxes, where its glyphs paint (row 152): a block's client rect is its whole
+    // box, whose empty corner under a cover hides nothing, and a box can hold fewer lines than it
+    // paints. A ring's band (margin) goes round the element's own boxes, and so does an element
+    // with no text of its own.
+    const textBoxes = (): DOMRect[] => {
+      const rects: DOMRect[] = [];
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        rects.push(...range.getClientRects());
+      }
+      return rects;
+    };
+    const own = [...el.getClientRects()];
+    const seen = (r: DOMRect) => r.width >= 1 && r.height >= 1;
+    const text = margin > 0 ? [] : textBoxes().filter(seen);
+    const boxes = text.length > 0 ? text : own.filter(seen);
     const inner: [number, number][] = [];
     const band: [number, number][] = [];
     for (const r of boxes) {
