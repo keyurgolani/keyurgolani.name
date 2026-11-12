@@ -362,10 +362,13 @@ export function timingResult(
       const releaseLimit = round(ceiling * (1 + tolerance));
       const rawValues = runs.map((run) => run[metric]);
       const scaled = calibrated(metric) && referenceMs !== null;
-      const values = runs.map((run) => {
-        const value = atReference(run, metric, referenceMs);
-        return value === null ? null : round(value);
-      });
+      // Read as measured, the values are the raw ones untouched; only scaled ones are rounded.
+      const values = scaled
+        ? runs.map((run) => {
+            const value = atReference(run, metric, referenceMs);
+            return value === null ? null : round(value);
+          })
+        : rawValues;
       const present = values.filter((value): value is number => value !== null);
       const middle = present.length > 0 ? round(median(present)) : null;
       const spread =

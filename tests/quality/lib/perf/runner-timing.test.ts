@@ -121,8 +121,12 @@ test('with no reference measured yet, every metric is read as measured, and the 
       calibration: { ...thresholds.timing.calibration, referenceMs: null },
     },
   } as Thresholds;
-  const runs = five(on(2, [150, 120], 300));
+  // A fractional reading, as a real load's idle work is: read as measured, it's left as it came.
+  const runs = five({ ...on(2, [150, 120], 300), idleTaskMs: 371.6519999999999 } as PerfRun);
   const result = timingResult(runs, 'medium', unmeasured);
+  const idle = result.rows.find((each) => each.metric === 'idleTaskMs')!;
+  assert.deepEqual(idle.values, idle.rawValues, 'idle work as measured, unrounded');
+  assert.equal(idle.values[0], 371.6519999999999);
   const tbt = result.rows.find((each) => each.metric === 'tbtMs')!;
   assert.equal(tbt.calibrated, false);
   assert.equal(tbt.median, 440, 'TBT as this runner measured it');
