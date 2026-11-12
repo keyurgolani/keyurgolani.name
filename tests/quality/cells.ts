@@ -42,6 +42,20 @@
 // registered one outside a fixture package, in any tier; variants carry no
 // tier, so every registered non-fixture composition counts. The 40-cell
 // PR cap and its sentinel ordering wait in the backlog.
+//
+// `reachable` (the coordinator's release scope (c′) for v1.0.0) is a `full`
+// plan over what a visitor or the owner can reach, and nothing else: the
+// public compositions (every registered one but `fallback`, which no site
+// selects, and the reference variant, which only --external-variant
+// installs), and the shipping packs of every tier, with no fixture pack and
+// no generator scheme. Its covering array is pairwise over those alone (the
+// reachable set, 15 x 33 x 15 x 114 tuples, is far past a cross product's
+// run), and beside it each public composition renders every scheme and
+// display mode the resolver accepts on the platform's default language and
+// typography: the 114 a visitor reaches with the default visitorControls.
+// The [37] rule's pairs, the other routes and states, and the surfaces stay
+// as `full` plans them, on the public compositions. `full` stays the
+// harness's regression run.
 
 // First: readBuildMeta() loads the generated registry, which imports
 // `server-only`; #73's shim resolves it to its empty module, as Next's
@@ -64,6 +78,7 @@ import {
   type PackAxis,
 } from '../../packages/appearance/src/index';
 import { MISSING_VARIANT_ID } from '../../packages/variant-contract/src/ids';
+import { REFERENCE_ID } from '../external-variant/id';
 import {
   contractFixture,
   type ContractFixture,
@@ -90,6 +105,12 @@ import { APPEARANCE_STATE, STATE_FIXTURES, type StateFixture } from './lib/state
 import { SWEEP_VIEWPORT, sweeps, type SweepCheck } from './lib/sweep';
 
 export type RunMode = 'pr' | 'full';
+
+/**
+ * A `full` plan narrowed to what a person can reach: the release scope (c′)
+ * v1.0.0 promotes on (lib/release-scope.ts's `reachable`).
+ */
+export type PlanScope = 'reachable';
 
 /** The fallback composition's id, which a site reaches by selecting a variant nothing registers. */
 export const FALLBACK_ID = 'fallback';
@@ -220,6 +241,8 @@ export interface Plan {
   readonly reasons: readonly string[];
   /** The changed variants and languages the [37] rule planned cells for. */
   readonly changes: readonly Change[];
+  /** `reachable` when the plan is narrowed to what a person can reach (PlanInput's scope). */
+  readonly scope?: PlanScope;
 }
 
 /** A tuple for `variant` with the platform's default packs, in `displayMode`. */
@@ -307,7 +330,13 @@ export interface PlanInput {
   readonly changes?: readonly Change[];
   /** The checks the plan must hold each changed pack and variant to (lib/sweep.ts's SWEEP_CHECKS). */
   readonly sweepChecks?: readonly SweepCheck[];
+  /** `reachable`: the full plan over the public compositions and shipping packs alone. */
+  readonly scope?: PlanScope;
 }
+
+/** Whether `id` is a public composition: one a site can publish, so a person can reach it. */
+export const isPublicComposition = (id: string) =>
+  id !== FALLBACK_ID && id !== REFERENCE_ID && !id.startsWith('fixture-');
 
 /**
  * The [37] rule's pairs: each changed variant with each stable design
@@ -355,7 +384,12 @@ export function planCells({
   mode,
   changes = [],
   sweepChecks,
+  scope,
 }: PlanInput): Plan {
+  const reachable = scope === 'reachable';
+  if (reachable && mode !== 'full') {
+    throw new Error(`The reachable scope narrows a full plan, and this one is ${mode}.`);
+  }
   const registry = createAppearanceRegistry(meta);
   // A unit for an id this build doesn't register would exclude nothing, so it fails the plan.
   const strays = unitProblems(registrations.units, [
@@ -367,19 +401,37 @@ export function planCells({
       `The plan has a unit for nothing registered:\n${strays.map((p) => `  - ${p}`).join('\n')}`,
     );
   }
-  const variants = meta.VARIANTS.map(({ manifest }) => manifest).filter(
-    (manifest) => !manifest.id.startsWith('fixture-'),
+  const variants = meta.VARIANTS.map(({ manifest }) => manifest).filter((manifest) =>
+    reachable ? isPublicComposition(manifest.id) : !manifest.id.startsWith('fixture-'),
   );
   // The first composition, which carries each state's sentinel: the platform default (#13)
   // when the build registers it, never whichever id sorts first.
   const lead =
     variants.find((manifest) => manifest.id === PLATFORM_DEFAULTS.variant) ?? variants[0];
+  // A generator scheme renders as asked only from a site's input, which a cell has none of.
+  const generated = new Set(
+    (meta.PACKS ?? [])
+      .filter(
+        (pack) =>
+          pack.kind === 'color-scheme' && 'generator' in pack.manifest && pack.manifest.generator,
+      )
+      .map((pack) => pack.manifest.id),
+  );
+  const shippingPacks = (kind: string) =>
+    (meta.PACKS ?? [])
+      .filter((pack) => pack.kind === kind && !pack.fixture && !generated.has(pack.manifest.id))
+      .map((pack) => pack.manifest.id)
+      .sort();
+  // The reachable scope takes no fixture pack, the tier packs included.
   const packIds = (kind: string) =>
     (meta.PACKS ?? [])
-      .filter((pack) => pack.kind === kind && (!pack.fixture || TIER_PACK.test(pack.manifest.id)))
+      .filter(
+        (pack) =>
+          pack.kind === kind && (!pack.fixture || (!reachable && TIER_PACK.test(pack.manifest.id))),
+      )
       .map((pack) => pack.manifest.id);
   const tierPacks = (meta.PACKS ?? [])
-    .filter((pack) => pack.fixture && TIER_PACK.test(pack.manifest.id))
+    .filter((pack) => !reachable && pack.fixture && TIER_PACK.test(pack.manifest.id))
     .map((pack) => ({
       axis: (
         {
@@ -395,10 +447,13 @@ export function planCells({
   // alone, so its sentinel rows don't grow with #20's catalog: there, a real
   // pack's rendered coverage is the [37] rule's directed cells, and every
   // pack's static gates run in check:appearance. `full` covers every pack.
+  // The reachable scope's array is over the shipping packs alone: what a person can select.
   const covered = (kind: string, platform: string) =>
-    mode === 'full'
-      ? packIds(kind)
-      : packIds(kind).filter((id) => id === platform || TIER_PACK.test(id));
+    reachable
+      ? shippingPacks(kind)
+      : mode === 'full'
+        ? packIds(kind)
+        : packIds(kind).filter((id) => id === platform || TIER_PACK.test(id));
   const coverage = pairwise({
     values: {
       variant: variants.map((manifest) => manifest.id),
@@ -472,6 +527,27 @@ export function planCells({
         fixture: fixtureIn(tuple),
       });
     }
+    // The reachable scope: every scheme and display mode the resolver accepts on the platform's
+    // default language and typography, the pairs a visitor reaches with the default visitorControls.
+    if (reachable) {
+      for (const colorScheme of shippingPacks('color-scheme')) {
+        for (const displayMode of DISPLAY_MODES) {
+          const tuple = { ...defaultTuple(manifest.id, displayMode), colorScheme };
+          if (!accepts(registry, tuple, 'read-only')) continue;
+          add({
+            ...base,
+            tuple,
+            path: first,
+            route: first,
+            state: APPEARANCE_STATE.id,
+            expectedStatus: APPEARANCE_STATE.status,
+            source: APPEARANCE_STATE.source,
+            sentinel: false,
+            fixture: false,
+          });
+        }
+      }
+    }
     // Every other route and state under the published default appearance, in each display mode.
     const routes = [first, ...workRoutes(contractFixture(APPEARANCE_STATE.source))];
     for (const displayMode of DISPLAY_MODES) {
@@ -520,19 +596,6 @@ export function planCells({
   // generator scheme renders as asked only from a site's input, which a
   // cell has none of, so no pair takes one (#20): check:appearance's pack
   // gates are its PR check.
-  const generated = new Set(
-    (meta.PACKS ?? [])
-      .filter(
-        (pack) =>
-          pack.kind === 'color-scheme' && 'generator' in pack.manifest && pack.manifest.generator,
-      )
-      .map((pack) => pack.manifest.id),
-  );
-  const shippingPacks = (kind: string) =>
-    (meta.PACKS ?? [])
-      .filter((pack) => pack.kind === kind && !pack.fixture && !generated.has(pack.manifest.id))
-      .map((pack) => pack.manifest.id)
-      .sort();
   const stablePacks = (kind: string) =>
     (meta.PACKS ?? [])
       .filter((pack) => pack.kind === kind && !pack.fixture && pack.manifest.tier === 'stable')
@@ -745,5 +808,6 @@ export function planCells({
     ],
     reasons: [...reasons].sort(),
     changes: directed,
+    ...(reachable ? { scope: 'reachable' as const } : {}),
   };
 }

@@ -17,6 +17,13 @@
 //
 // Pure Node with no dependencies, so rc-verify's sparse checkout runs it with no install.
 
+/**
+ * The scopes a final release may promote on: a whole matrix, `full` (every cell of the full plan)
+ * or `reachable` (the coordinator's (c′), every cell a visitor or the owner can reach,
+ * tests/quality/lib/release-scope.ts). v1.0.0 promotes on `reachable`, with an empty list.
+ */
+export const FINAL_SCOPES = ['full', 'reachable'];
+
 /** What a printed entry holds for its owner and row until someone fills them: validation refuses both. */
 export const OWNER_PLACEHOLDER = '<owner: the lane or person who fixes it>';
 export const ROUTED_PLACEHOLDER = '<routed: the row that fixes it, as row <n>>';
@@ -211,10 +218,12 @@ export function recordsProblems(records, scope) {
     problems.push(
       `${flaky} flaky entries, over the ${MAX_FLAKY} a list holds without the coordinator's word`,
     );
-  // A final release keeps the full matrix's rule: every cell, and none failing, flaky or not.
+  // A final release keeps a whole matrix's rule: every cell of it, and none failing, flaky or not.
   if (isRelease(scope?.release) && !scope.release.includes('-rc.')) {
-    if (scope.scope !== 'full')
-      problems.push(`${scope.release} is a final release: its scope must be full`);
+    if (!FINAL_SCOPES.includes(scope.scope))
+      problems.push(
+        `${scope.release} is a final release: its scope must be ${FINAL_SCOPES.join(' or ')}`,
+      );
     if (records.length > 0)
       problems.push(`${scope.release} is a final release: its records list must be empty`);
   }

@@ -8,7 +8,7 @@ import { planCells, readBuildMeta, type Plan, type RunMode } from './cells';
 import { readChanges } from './lib/changes';
 import { qualityWeb } from './lib/env';
 import { loadRegistrations } from './lib/registration';
-import { loadReleaseScope, scopePlan } from './lib/release-scope';
+import { loadReleaseScope, plannedScope, scopePlan } from './lib/release-scope';
 
 export const RUN_MODES: readonly RunMode[] = ['pr', 'full'];
 
@@ -23,15 +23,17 @@ export function runMode(env: NodeJS.ProcessEnv = process.env): RunMode {
 export async function loadPlan(env: NodeJS.ProcessEnv = process.env): Promise<Plan> {
   const meta = readBuildMeta(qualityWeb(env));
   const mode = runMode(env);
+  // A release candidate's scope (lib/release-scope.ts), which its jobs name: full mode stays full
+  // without one. The reachable scope is planned (cells.ts), any other cut from the full plan.
+  const release = mode === 'full' ? loadReleaseScope(env) : null;
+  const scope = plannedScope(release?.scope);
   const plan = planCells({
     meta,
     registrations: await loadRegistrations(),
     mode,
     // `full` plans every variant and language as changed, whatever changed.
     changes: mode === 'pr' ? readChanges(meta, env).changes : [],
+    ...(scope ? { scope } : {}),
   });
-  // A release candidate's scope (lib/release-scope.ts), which its jobs name: full mode stays full
-  // without one.
-  const release = mode === 'full' ? loadReleaseScope(env) : null;
   return release ? scopePlan(plan, release.scope) : plan;
 }
