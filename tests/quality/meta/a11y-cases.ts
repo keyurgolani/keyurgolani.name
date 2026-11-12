@@ -1610,6 +1610,17 @@ const COVER_EMPTY_CORNER = built(
   '<div class="bar"></div><p class="band">Short text.</p>',
 );
 
+/**
+ * An underlined link whose words sit in an inline span, on a gradient (row 157): the link paints the underline, and
+ * it reaches the span by propagation, in the text's own color. The span is what axe names; while the sampler reads
+ * its background, the line the link paints under it must go with its glyphs, or it reads as background at 1:1.
+ */
+const UNDERLINE_FROM_LINK = built(
+  'A link whose span takes its underline',
+  `${COVER_STYLE} .band a { color: #222; text-decoration: underline; }`,
+  '<p class="band"><a href="#words"><span>Linked words in a span</span></a></p>',
+);
+
 /** contrast-rotated.html with a second sticker whose line is its own background's color. */
 const ROTATED_FAINT = withFixture(
   'contrast-rotated.html',
@@ -3233,6 +3244,15 @@ export const A11Y_CASES: readonly MetaCase[] = [
     expect: 'pass',
     browser: true,
     run: () => onPage(COVER_CLIPPED_SKIP, contrast),
+  },
+  {
+    id: 'contrast/underline-from-link',
+    gate: 'contrast',
+    input:
+      "an underlined link's words in an inline span on a gradient, the underline the link's, not the span's (row 157)",
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(UNDERLINE_FROM_LINK, contrast),
   },
   // Text an on-scroll entrance slides into place is read once the slide has ended, where its
   // glyphs paint, and passes.
