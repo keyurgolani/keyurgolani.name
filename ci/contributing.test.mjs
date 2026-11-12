@@ -112,3 +112,23 @@ test('a table drifts: a job missing from it, or another command, fails the check
   assert.notDeepEqual(rows[1], [shownName(CI.jobs.docs), shownCommand(localCommand('docs'))]);
   assert.throws(() => tableRows('no table here', 'check-names'), /no check-names table/);
 });
+
+test('CONTRIBUTING.md names the inventory run, its branches, every job of it, and its summary command', () => {
+  const INVENTORY = parse(read('.github/workflows/inventory.yml'));
+  const start = CONTRIBUTING.indexOf('**The inventory run.**');
+  assert.ok(start >= 0, 'CONTRIBUTING.md has the inventory run');
+  const text = CONTRIBUTING.slice(start, CONTRIBUTING.indexOf('\n\n', start));
+  for (const name of [
+    '.github/workflows/inventory.yml',
+    '`kgn-a/inventory-*`',
+    'quality/inventory/workers.json',
+  ])
+    assert.ok(text.includes(name), name);
+  for (const id of Object.keys(INVENTORY.jobs)) {
+    const named =
+      text.includes(`\`${id}\``) ||
+      (/^inventory-\d$/.test(id) && text.includes('`inventory-1` to `inventory-3`'));
+    assert.ok(named, `CONTRIBUTING.md names ${id}`);
+  }
+  assert.ok(text.includes('`pnpm ci:inventory-summary "$SHARDS" --shards <count>`'));
+});

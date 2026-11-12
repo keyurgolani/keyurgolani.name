@@ -236,6 +236,13 @@ const CLASSES = [
     jobs: ALL,
     complete: true,
   },
+  // The inventory run's workflow and its summary, as any workflow file and quality script.
+  {
+    name: 'the inventory workflow',
+    files: ['.github/workflows/inventory.yml'],
+    jobs: ALL,
+    complete: true,
+  },
   { name: 'lockfile', files: ['pnpm-lock.yaml'], jobs: ALL, complete: true },
   { name: 'root config', files: ['tsconfig.base.json'], jobs: ALL, complete: true },
   { name: 'the selector itself', files: ['ci/select-jobs.mjs'], jobs: ALL, complete: true },
