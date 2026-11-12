@@ -17,6 +17,9 @@ import { expect, test } from '../harness/fixtures';
 //     destinations fold and show, and nothing in the capsule is cut either way;
 //   - at 1024 at 1x the Index is Tab's next stop after the name, as the Menu is at 2x, it lists Work,
 //     Writing, Record and About in that order, and its keyboard path, in and back, is the one at 2x;
+//   - at 320 (the phone regression of the fix: on Humanist UI the Menu ran 13.4px past the capsule,
+//     on Accessible Reading 62.6px, over the Appearance pill), nothing in the capsule is cut, runs
+//     past it or into the ornament, and the Menu shows its word;
 //   - just below and just above the fold the name starts where it does at 1024, the capsule at the
 //     header's inset and filling its row to the ornament, as at 1024 (the coordinator's look ruling:
 //     on Accessible Reading the fold fell in the wide layout, where the folded capsule shrank to its
@@ -341,6 +344,22 @@ export function capsuleFit(pack: Pack) {
         ).toBeLessThanOrEqual(1);
         expect(Math.abs(read.endGap), `${width}: the capsule fills the row`).toBeLessThanOrEqual(1);
       }
+    },
+  );
+
+  test(
+    `at 320 on ${pack}, nothing in the capsule is cut, nothing runs past it, and it doesn't run into the ornament`,
+    { annotation },
+    async ({ page }) => {
+      await open(page, 320);
+      await page.setViewportSize({ width: 320, height: 640 });
+      await twoFrames(page);
+      const read = await readHeader(page);
+      console.log(
+        `r150 ${pack} 320: chrome ${read.chromeEm.toFixed(2)}em, cut ${JSON.stringify(read.cut)}`,
+      );
+      expect(read.index).toBe('Menu');
+      expect(read.cut, '320: nothing in the capsule is cut').toEqual([]);
     },
   );
 
