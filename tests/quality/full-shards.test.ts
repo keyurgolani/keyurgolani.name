@@ -25,6 +25,7 @@ import {
   JOB_LIMIT_MINUTES,
   NIGHTLY_CEILING,
   MAX_NIGHTS,
+  MAX_RELEASE_PLAN,
   MAX_RELEASE_SHARDS,
   NIGHT_COUNTS,
   NIGHTLY_TIMEOUT_MINUTES,
@@ -32,9 +33,11 @@ import {
   nightSlice,
   planFingerprint,
   RELEASE_CEILING,
+  RELEASE_JOBS,
   RELEASE_PACE,
   RELEASE_PARALLEL,
   releaseDurations,
+  releaseSlices,
   releaseFloor,
   releaseFor,
   releasePlan,
@@ -373,7 +376,7 @@ function fewestShards(
 ): ReturnType<typeof releaseFor> {
   const release = releaseFor(groups, durations);
   assert.ok(release.count >= releaseFloor(groups, durations), String(release.count));
-  assert.ok(release.count <= MAX_RELEASE_SHARDS);
+  assert.ok(release.count <= MAX_RELEASE_PLAN);
   assert.equal(release.shards.length, release.count);
   assert.ok(release.slowest <= RELEASE_CEILING);
   for (const shard of release.shards) assert.ok(fullEstimate(shard) <= RELEASE_CEILING);
@@ -412,24 +415,35 @@ function testNights(
 /** The salts the balance test rolls the nights with: the plan's own, the empty one, and 49 more. */
 const SALTS = ['', ...Array.from({ length: 49 }, (_, at) => `salt-${at + 1}:`)];
 
-test('the caps: eight shard jobs at once a night, 10 at release, and the release in as many waves of them as rc-quality-plan counts', () => {
+test('the caps: eight shard jobs at once a night, 16 at release across its three jobs, and the release in as many waves of them as rc-quality-plan counts', () => {
   assert.equal(FULL_SHARDS, 8, 'PR CI keeps 12 of the account’s 20 job slots a night');
   assert.equal(
     RELEASE_PARALLEL,
-    10,
-    'PR CI keeps 10 of the account’s 20 job slots while a candidate runs',
+    16,
+    'PR CI keeps 4 of the account’s 20 job slots while a candidate runs',
   );
+  assert.deepEqual(RELEASE_JOBS, [
+    { id: 'rc-quality-1', parallel: 6 },
+    { id: 'rc-quality-2', parallel: 5 },
+    { id: 'rc-quality-3', parallel: 5 },
+  ]);
   assert.deepEqual(NIGHT_COUNTS, [7, 14, 28, 56]);
   assert.equal(MAX_RELEASE_SHARDS, 256);
+  assert.equal(MAX_RELEASE_PLAN, 3 * 256);
   const count = '${{ needs.rc-quality-plan.outputs.count }}';
   assert.deepEqual(SCHEDULED['quality-full']!.strategy?.matrix?.shard, [1, 2, 3, 4, 5, 6, 7, 8]);
-  assert.equal(
-    RELEASE['rc-quality']!.strategy?.matrix?.shard,
-    '${{ fromJSON(needs.rc-quality-plan.outputs.shards) }}',
-  );
+  for (const [at, { id }] of RELEASE_JOBS.entries()) {
+    assert.equal(
+      RELEASE[id]!.strategy?.matrix?.shard,
+      `\${{ fromJSON(needs.rc-quality-plan.outputs.shards${at + 1}) }}`,
+      id,
+    );
+  }
   for (const [where, job, total, cap] of [
     ['scheduled.yml quality-full', SCHEDULED['quality-full']!, String(FULL_SHARDS), FULL_SHARDS],
-    ['release.yml rc-quality', RELEASE['rc-quality']!, count, RELEASE_PARALLEL],
+    ...RELEASE_JOBS.map(
+      ({ id, parallel }) => [`release.yml ${id}`, RELEASE[id]!, count, parallel] as const,
+    ),
   ] as const) {
     assert.equal(job.strategy?.['max-parallel'], cap, where);
     assert.equal(job.strategy?.['fail-fast'], false, where);
@@ -444,16 +458,25 @@ test('the caps: eight shard jobs at once a night, 10 at release, and the release
   // rc-quality-plan counts them from the plan, and hands the count and the matrix list on.
   const plan = RELEASE['rc-quality-plan']!;
   assert.deepEqual(plan.needs, ['classify', 'rc-verify']);
-  assert.deepEqual(RELEASE['rc-quality']!.needs, ['classify', 'rc-quality-plan']);
+  for (const { id } of RELEASE_JOBS) {
+    assert.deepEqual(RELEASE[id]!.needs, ['classify', 'rc-quality-plan'], id);
+  }
   const counted = step(plan, (each) => each.id === 'count', 'the count step');
   assert.equal(counted.run, 'pnpm exec tsx tests/quality/full-plan.ts');
   assert.deepEqual((plan as unknown as { outputs: Record<string, string> }).outputs, {
     count: '${{ steps.count.outputs.count }}',
-    shards: '${{ steps.count.outputs.shards }}',
+    shards1: '${{ steps.count.outputs.shards1 }}',
+    shards2: '${{ steps.count.outputs.shards2 }}',
+    shards3: '${{ steps.count.outputs.shards3 }}',
   });
+  // 64 shards: 24, 20 and 20, by the jobs' max-parallel, so their waves end together.
+  const run = (from: number, to: number) =>
+    JSON.stringify(Array.from({ length: to - from + 1 }, (_, at) => from + at));
   assert.deepEqual(fullOutputs(64, 14), {
     count: '64',
-    shards: JSON.stringify(Array.from({ length: 64 }, (_, at) => at + 1)),
+    shards1: run(1, 24),
+    shards2: run(25, 44),
+    shards3: run(45, 64),
     nights: '14',
   });
   // Each verdict expects every shard that ran, every wave's at release.
@@ -472,7 +495,7 @@ test('the caps: eight shard jobs at once a night, 10 at release, and the release
   assert.equal(release.env?.SHARD_COUNT, count);
   // The count, every shard, and the verdict plan and judge by the one checked-in scope file.
   const ran = step(
-    RELEASE['rc-quality']!,
+    RELEASE['rc-quality-1']!,
     (each) => /pnpm ci:quality-full/.test(each.run ?? ''),
     'run',
   );
@@ -486,7 +509,9 @@ test('the caps: eight shard jobs at once a night, 10 at release, and the release
   assert.deepEqual(RELEASE['rc-quality-verdict']!.needs, [
     'classify',
     'rc-quality-plan',
-    'rc-quality',
+    'rc-quality-1',
+    'rc-quality-2',
+    'rc-quality-3',
   ]);
   // The catalog's plan and shards wait for the quality shards, however they ended, so the night
   // peaks near eight: the plan beside quality-verdict, then seven catalog shards at once. The
@@ -585,8 +610,8 @@ test("the #20 model is a fixed input: CATALOG's shipping packs, the platform def
 
 test(`the release plan fits rc-quality's timeout in the fewest shards that do, at the release's weights in its checked-in scope: the registry's own count, and ${CATALOG_SHARDS} for #20's model, under the most, every group once`, (t) => {
   // #20's catalog in the scope leaves headroom: its count is under the most the plan takes.
-  assert.ok(CATALOG_SHARDS < MAX_RELEASE_SHARDS);
-  const job = RELEASE['rc-quality']!;
+  assert.ok(CATALOG_SHARDS < MAX_RELEASE_PLAN);
+  const job = RELEASE['rc-quality-1']!;
   assert.equal(job['timeout-minutes'], releaseTimeoutMinutes());
   // The cap stays; the ceiling is fitted to it at the measured pace (release-fit.test.ts).
   assert.equal(RELEASE_CEILING, fitReleaseCeiling(RELEASE_PACE));
@@ -1244,7 +1269,7 @@ test('a test waits at most N nights between runs, and across a change of N at mo
   assert.ok(longest(4 * NIGHTS, NIGHTS) <= 4 * NIGHTS, 'two steps down');
 });
 
-test('N and the release shard count are the fewest that fit, a doubling only splits each night in two, and a plan past 56 nights or 256 shards fails', () => {
+test('N and the release shard count are the fewest that fit, a doubling only splits each night in two, and a plan past 56 nights or 768 shards fails', () => {
   const durations = { group: 5 };
   // Visual groups of 2,000 s, as many as it takes for each step to fail before the next fits.
   const visual = (count: number) => synthetic(count, 2000, VISUAL_SPEC, (at) => `chromium v${at}`);
@@ -1277,15 +1302,19 @@ test('N and the release shard count are the fewest that fit, a doubling only spl
     [4 * 128, 128],
     [4 * 128 + 1, 129],
     [4 * 256, 256],
+    [4 * 256 + 1, 257],
+    [4 * 768, 768],
   ] as const) {
     const release = fewestShards(synthetic(count, 2000), durations);
     assert.equal(release.count, shards, String(count));
   }
-  // Past 256, the most jobs a GitHub matrix makes, it fails, naming the heaviest group.
-  assert.equal(MAX_RELEASE_SHARDS, 256);
+  // Past 768, three jobs of the 256 a GitHub matrix makes, it fails, naming the heaviest group.
+  assert.equal(MAX_RELEASE_PLAN, 768);
   assert.throws(
-    () => releaseFor(synthetic(4 * 256 + 1, 2000), durations),
-    /^Error: Even 256 release shards don't fit \(MAX_RELEASE_SHARDS\): The release plan in 256 shards leaves a shard at about \d+s, over the 4800s ceiling\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 2000s\.$/,
+    () => releaseFor(synthetic(4 * 768 + 1, 2000), durations),
+    new RegExp(
+      `^Error: Even 768 release shards don't fit \\(MAX_RELEASE_PLAN, 3 jobs of 256\\): The release plan in 768 shards leaves a shard at about \\d+s, over the ${RELEASE_CEILING}s ceiling\\. Its heaviest group is chromium s\\d+ cells\\.spec\\.ts, at about 2000s\\.$`,
+    ),
   );
   // Each cycle is the last doubled, and a group's night at 2N is its night at N, or that plus N.
   // Release shards are dealt heaviest first, with no hash to nest, so their count takes no steps.
@@ -1378,9 +1407,14 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
   const own = await loadPlan({ QUALITY_WEB: web, QUALITY_MODE: 'full', ...SCOPE });
   const { count, shards } = releaseOf(own);
   const { nights } = rotationFor(fullGroups(own, ENGINES));
+  const slices = releaseSlices(count);
   assert.equal(
     readFileSync(output, 'utf8'),
-    `count=${count}\nshards=${JSON.stringify(Array.from({ length: count }, (_, at) => at + 1))}\nnights=${nights}\n`,
+    `count=${count}\n${slices.map((slice, at) => `shards${at + 1}=${JSON.stringify(slice)}\n`).join('')}nights=${nights}\n`,
+  );
+  assert.deepEqual(
+    slices.flat(),
+    Array.from({ length: count }, (_, at) => at + 1),
   );
   assert.match(
     lines.join('\n'),
@@ -1390,11 +1424,11 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
   // shard count, and its runner-minutes with every shard at rc-quality's timeout.
   assert.equal(
     releaseSummary(count),
-    `rc-quality: ${count} shards, ${RELEASE_PARALLEL} at a time, at most ${count * releaseTimeoutMinutes()} runner-minutes at the ${releaseTimeoutMinutes()}-minute timeout`,
+    `rc-quality: ${count} shards (${slices.map((slice, at) => `${RELEASE_JOBS[at]!.id} ${slice.length} at ${RELEASE_JOBS[at]!.parallel}`).join(', ')}), ${RELEASE_PARALLEL} at a time, at most ${count * releaseTimeoutMinutes()} runner-minutes at the ${releaseTimeoutMinutes()}-minute timeout`,
   );
   assert.equal(
     releaseSummary(85),
-    'rc-quality: 85 shards, 10 at a time, at most 10200 runner-minutes at the 120-minute timeout',
+    'rc-quality: 85 shards (rc-quality-1 32 at 6, rc-quality-2 27 at 5, rc-quality-3 26 at 5), 16 at a time, at most 10200 runner-minutes at the 120-minute timeout',
   );
   // Each release shard's sum of per-key p90 weights, to read the run's real times against.
   for (const shard of shards) {
@@ -1432,4 +1466,45 @@ test("a release shard runs the count it's handed, and a count too small for the 
     () => fullShard(own, ENGINES, '1/2', null),
     /^Error: The release plan in 2 shards leaves a shard at about \d+s, over the 4800s ceiling\. Its heaviest group is /,
   );
+});
+
+test("the release's shards split across its three jobs: consecutive runs, each by its max-parallel, none past a matrix's 256, every shard once", () => {
+  for (const count of [1, 2, 3, 16, 85, 256, 400, 409, 410, 700, 767, 768]) {
+    const slices = releaseSlices(count);
+    assert.equal(slices.length, RELEASE_JOBS.length, String(count));
+    // Every shard once, in order: consecutive runs, the first job's first.
+    assert.deepEqual(
+      slices.flat(),
+      Array.from({ length: count }, (_, at) => at + 1),
+      String(count),
+    );
+    for (const slice of slices) assert.ok(slice.length <= MAX_RELEASE_SHARDS, String(count));
+    // Below the cap, each job's share is within one of its max-parallel's; past it, the capped
+    // job's overflow goes to the others (pinned at 700 below).
+    if (slices.some((slice) => slice.length === MAX_RELEASE_SHARDS)) continue;
+    for (const [at, slice] of slices.entries()) {
+      const share = (count * RELEASE_JOBS[at]!.parallel) / RELEASE_PARALLEL;
+      assert.ok(
+        Math.abs(slice.length - share) < 2,
+        `${count}: ${RELEASE_JOBS[at]!.id} runs ${slice.length}, its share ${share}`,
+      );
+    }
+  }
+  // A plan of fewer shards than jobs leaves the last jobs none: they skip.
+  assert.deepEqual(releaseSlices(1), [[1], [], []]);
+  assert.deepEqual(releaseSlices(2), [[1], [2], []]);
+  // The first job's share passes 256 first: it takes 256, and the others the rest.
+  assert.deepEqual(
+    releaseSlices(700).map((slice) => slice.length),
+    [256, 222, 222],
+  );
+  assert.deepEqual(
+    releaseSlices(768).map((slice) => slice.length),
+    [256, 256, 256],
+  );
+  assert.throws(
+    () => releaseSlices(769),
+    /^Error: 769 release shards are more than 3 jobs of 256 hold \(MAX_RELEASE_PLAN\)\.$/,
+  );
+  assert.throws(() => releaseSlices(0), /can't be split/);
 });

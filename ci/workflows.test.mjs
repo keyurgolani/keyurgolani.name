@@ -451,9 +451,12 @@ test('fresh-clone reads no cache, installs nothing itself, holds no token, and r
 // rc-preflight.yml's jobs, and the release.yml job each one runs as.
 const PREFLIGHT_OF = {
   'preflight-plan': 'rc-quality-plan',
-  'preflight-quality': 'rc-quality',
+  'preflight-quality-1': 'rc-quality-1',
+  'preflight-quality-2': 'rc-quality-2',
+  'preflight-quality-3': 'rc-quality-3',
   'preflight-verdict': 'rc-quality-verdict',
 };
+const PREFLIGHT_QUALITY = ['preflight-quality-1', 'preflight-quality-2', 'preflight-quality-3'];
 const PREFLIGHT_SHA = '${{ needs.preflight-verify.outputs.sha }}';
 
 /** The release.yml job `id` as rc-preflight.yml runs it: on the verified commit, under its own names. */
@@ -470,7 +473,8 @@ function asPreflight(id) {
   // Nothing left reads the event, so the copy runs the same on a dispatch.
   assert.doesNotMatch(JSON.stringify(job), /\bgithub\./, id);
   const own = Object.keys(PREFLIGHT_OF).find((key) => PREFLIGHT_OF[key] === id);
-  job.name = job.name.replace(id, own);
+  // The three quality jobs share one display name, rc-quality's, as the preflight's share its own.
+  job.name = job.name.replace(/^rc-quality \(/, 'preflight-quality (').replace(id, own);
   for (const step of job.steps) {
     if (/^actions\/checkout@/.test(step.uses ?? ''))
       step.with = { ...step.with, ref: PREFLIGHT_SHA };
@@ -481,22 +485,38 @@ function asPreflight(id) {
 test("rc-preflight runs release.yml's quality gate step for step, on the commit it was given", () => {
   assert.deepEqual(Object.keys(PREFLIGHT.jobs), ['preflight-verify', ...Object.keys(PREFLIGHT_OF)]);
   for (const [own, release] of Object.entries(PREFLIGHT_OF)) {
-    const { needs, ...job } = PREFLIGHT.jobs[own];
+    const { needs, if: condition, ...job } = PREFLIGHT.jobs[own];
+    void condition;
     assert.deepEqual(job, asPreflight(release), `${own} is release.yml's ${release}`);
     assert.ok(needs.includes('preflight-verify'), own);
   }
   assert.deepEqual(PREFLIGHT.jobs['preflight-plan'].needs, ['preflight-verify']);
-  assert.deepEqual(PREFLIGHT.jobs['preflight-quality'].needs, [
-    'preflight-verify',
-    'preflight-plan',
-  ]);
+  assert.equal(PREFLIGHT.jobs['preflight-plan'].if, undefined);
+  for (const [at, id] of PREFLIGHT_QUALITY.entries()) {
+    assert.deepEqual(PREFLIGHT.jobs[id].needs, ['preflight-verify', 'preflight-plan']);
+    // Each skips when the plan hands it no shard, as release.yml's do.
+    assert.equal(
+      PREFLIGHT.jobs[id].if,
+      `\${{ needs.preflight-plan.outputs.shards${at + 1} != '[]' }}`,
+      id,
+    );
+  }
   assert.deepEqual(PREFLIGHT.jobs['preflight-verdict'].needs, [
     'preflight-verify',
     'preflight-plan',
-    'preflight-quality',
+    ...PREFLIGHT_QUALITY,
   ]);
-  // The verdict runs only when every shard passed, as the release's does.
-  assert.equal(PREFLIGHT.jobs['preflight-verdict'].if, undefined);
+  // The verdict runs only when every shard passed, as the release's does: each quality job
+  // succeeded, or skipped with no shard handed it. Its condition is the release verdict's, but the
+  // tag's, under the preflight's names.
+  let release = RELEASE.jobs['rc-quality-verdict'].if.replace(
+    "github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' && ",
+    "needs.preflight-verify.result == 'success' && ",
+  );
+  for (const [own, id] of Object.entries(PREFLIGHT_OF)) {
+    release = release.replaceAll(`needs.${id}.`, `needs.${own}.`);
+  }
+  assert.equal(PREFLIGHT.jobs['preflight-verdict'].if, release);
   // The workflow around them is release.yml's too, but the platforms it builds.
   const { PLATFORMS, ...shared } = RELEASE.env;
   assert.ok(PLATFORMS);
@@ -601,7 +621,10 @@ test('rc-preflight reads only, holds no secret, reads no cache, keeps shard repo
   }
   assert.deepEqual(
     uploads.map((u) => u.name),
-    ['reports-quality-preflight-${{ matrix.shard }}', 'reports-quality-preflight-verdict'],
+    [
+      ...PREFLIGHT_QUALITY.map(() => 'reports-quality-preflight-${{ matrix.shard }}'),
+      'reports-quality-preflight-verdict',
+    ],
   );
   for (const upload of uploads) {
     assert.equal(upload.path, 'reports/');
