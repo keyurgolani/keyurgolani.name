@@ -24,7 +24,7 @@ test("Studio's error page says Studio couldn't load, with Reload Studio, and sho
   const html = renderToStaticMarkup(<StudioError error={failure('4021974117')} />);
   assert.match(
     html,
-    /<div class="studio-alert" role="alert"><p>Studio couldn(?:&#x27;|')t load\.<\/p><button type="button" class="studio-button">Reload Studio<\/button><\/div>/,
+    /<div class="studio-alert" role="alert"><p>Studio couldn(?:&#x27;|')t load\.<\/p><div class="studio-alert__actions"><button type="button" class="studio-button">Reload Studio<\/button><\/div><\/div>/,
   );
   assert.match(html, /Reference: <code>4021974117<\/code>/);
   assert.ok(!html.includes('canary'), html);

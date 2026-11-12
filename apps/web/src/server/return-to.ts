@@ -62,6 +62,15 @@ export const SIGN_IN_STATES = [
 ] as const;
 export type SignInState = (typeof SIGN_IN_STATES)[number];
 
+/**
+ * Whether the sign-in page tells Studio's other tabs to leave (row 88c-RC2): after a sign-out, a
+ * native one's 303 or a JavaScript one's assign, which lands here same-origin. A cross-site link
+ * to the same URL, a bookmark, or a typed one never does, so none can sign the owner's tabs out.
+ */
+export function announcesSignOut(state: SignInState | null, fetchSite: string | null): boolean {
+  return (state === 'signed_out' || state === 'store_failed') && fetchSite === 'same-origin';
+}
+
 /** `value` when it is one of SIGN_IN_STATES, and null otherwise. */
 export function signInStateOf(value: string | null | undefined): SignInState | null {
   return (SIGN_IN_STATES as readonly string[]).includes(value ?? '')

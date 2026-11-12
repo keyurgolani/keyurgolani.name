@@ -57,8 +57,11 @@ const OWNER_ONLY = {
   studioFetch: 'studio:auth-required',
   // lib/studio/journal.ts: its key prefix.
   journal: 'portfolio-studio:',
-  // lib/studio/sign-out.ts: the operation it sends.
-  'sign-out': 'auth.logout',
+  // lib/studio/sign-out.ts: the property its answer check reads, which no other client module
+  // reads, and a minifier never renames. Not the operation's name: the Sign out form's action,
+  // '/api/studio/auth.logout', names it by design (a2e33af17), and the page's own client
+  // components render that form, so 'auth.logout' sits in their chunks without sign-out.ts.
+  'sign-out': '.signedOut',
 };
 
 const CHUNK = /static\/chunks\/[\w.-]+\.js/g;
@@ -187,5 +190,12 @@ test("a build's /studio entry holds neither shell, and each shell's chunks hold 
   assert.deepEqual(holding(demo[0]!, OWNER), [], "Demo Studio's chunks hold Owner Studio's code");
   // Each holds its own, its backend included.
   assert.deepEqual(holding(owner[0]!, OWNER), OWNER);
+  // And every OWNER_ONLY marker is in Owner Studio's chunks, so none of the checks above it can
+  // pass by matching nothing in the build.
+  assert.deepEqual(
+    holding(owner[0]!, Object.values(OWNER_ONLY)),
+    Object.values(OWNER_ONLY),
+    "Owner Studio's chunks hold every OWNER_ONLY marker",
+  );
   assert.deepEqual(holding(demo[0]!, DEMO), DEMO);
 });

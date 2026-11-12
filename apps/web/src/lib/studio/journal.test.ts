@@ -216,3 +216,26 @@ test('storage that refuses reads as none and writes nothing, without throwing', 
   assert.doesNotThrow(() => clearJournal(refusing));
   assert.doesNotThrow(() => removeEntry(refusing, 'tab-aaaaaaaa', NOW));
 });
+
+// A pending discard's record (row 88c-RC2, the coordinator's ruling, 2026-11-10): the journal's own
+// key holds, beside the entries, the sign-out time T it last pruned for, so a later page that
+// renders the same T prunes nothing. It's never an entry, reads keep it, and so do writes.
+test("the journal keeps a discard's record beside its entries: reads, writes and removes keep it, and it's never an entry", () => {
+  const storage = memory();
+  const record = { discardApplied: NOW - HOUR };
+  storage.items.set(JOURNAL_KEY, JSON.stringify([record, entry('tab-aaaaaaaa')]));
+  assert.deepEqual(readJournal(storage, NOW), [entry('tab-aaaaaaaa')], 'the record is no entry');
+  assert.deepEqual(JSON.parse(storage.items.get(JOURNAL_KEY)!)[0], record, 'a read keeps it');
+  writeEntry(storage, entry('tab-bbbbbbbb'), NOW);
+  assert.deepEqual(JSON.parse(storage.items.get(JOURNAL_KEY)!)[0], record, 'a write keeps it');
+  removeEntry(storage, 'tab-aaaaaaaa', NOW);
+  removeEntry(storage, 'tab-bbbbbbbb', NOW);
+  assert.deepEqual(
+    JSON.parse(storage.items.get(JOURNAL_KEY) ?? 'null'),
+    [record],
+    'with no entry left the record stays, so the same T never prunes again',
+  );
+  // An explicit discard at sign-out clears everything, its record too.
+  clearJournal(storage);
+  assert.equal(storage.items.has(JOURNAL_KEY), false);
+});

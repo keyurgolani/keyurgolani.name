@@ -19,10 +19,16 @@ import { log } from '../log';
 import type { AuthSessionView } from '../operations';
 import type { Session } from '../session';
 import { dataResult, errorResult, redirectResult, type StudioResult } from '../studio-result';
-import { clearedSessionCookie, readCookies, sessionCookie, type CookieMode } from './cookie';
+import {
+  clearedSessionCookie,
+  discardMarkerCookie,
+  readCookies,
+  sessionCookie,
+  type CookieMode,
+} from './cookie';
 import { clientAddress } from './guard';
 import type { LoginLimits } from './login-limits';
-import { safeReturnTo, signInLocation } from '../return-to';
+import { DEFAULT_RETURN_TO, safeReturnTo, signInLocation } from '../return-to';
 
 // The auth entries' handlers (#2): auth.login and auth.logout, the current
 // session and its extension, and the session list with its revocations.
@@ -211,7 +217,7 @@ export function authHandlers(tools: AuthCommandTools): Readonly<Record<string, H
       return login(input, context);
     },
 
-    'auth.logout': async (authorized, _input, context) => {
+    'auth.logout': async (authorized, input, context) => {
       assertAuthorized(authorized, 'auth.session');
       // Always signed out: the cookie cleared and the cache too, whether a
       // session resolved, ended before or during the request, or the store
@@ -224,6 +230,7 @@ export function authHandlers(tools: AuthCommandTools): Readonly<Record<string, H
       // answer says so: it lapses at its idle limit, with no cookie left to
       // carry it.
       const { requestId, request } = context;
+      const { choice } = input as { choice?: 'keep' | 'discard' };
       const entry = current(context);
       const sent = entry ? [] : readCookies(request, cookie.name);
       const only = sent.length === 1 ? sent[0] : undefined;
@@ -241,9 +248,24 @@ export function authHandlers(tools: AuthCommandTools): Readonly<Record<string, H
           storeFailed = true;
         }
       }
+      // The cache alone, never "storage", which would clear the public site's preferences too.
+      // Sign out's form that chose to discard leaves the pending-discard marker instead, the
+      // sign-out's time, which Studio's next page reads as it renders and its script prunes the
+      // journal by, once (row 88c-RC2). A JSON logout's own script clears the journal itself.
+      const headers: [string, string][] = [...cleared(), ['clear-site-data', '"cache"']];
+      if (context.inputType === 'form' && choice === 'discard') {
+        headers.push(['set-cookie', discardMarkerCookie(cookie, Date.now())]);
+      }
+      // Studio's Sign out form goes to sign-in, saying how it went (row 88c-RC2, row 88b).
+      if (context.inputType === 'form') {
+        return redirectResult(
+          signInLocation(storeFailed ? 'store_failed' : 'signed_out', DEFAULT_RETURN_TO),
+          { headers },
+        );
+      }
       return dataResult(
         storeFailed ? { signedOut: true, reason: 'store_failed' } : { signedOut: true },
-        { headers: [...cleared(), ['clear-site-data', '"cache"']] },
+        { headers },
       );
     },
 

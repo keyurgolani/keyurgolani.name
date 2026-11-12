@@ -1,5 +1,5 @@
 {
-  "release": "1.0.0-rc.2",
+  "release": "1.0.0-rc.3",
   "scope": "default-packs",
   "unswept": "Every pack but each composition's and surface's own default (the language, scheme and typography its quality-pr sentinel renders): the other stable design languages, color schemes and typographies, the tier packs and the fixture packs. Every composition and surface, state, display mode, width, row and engine in RUN_ENGINES.full is in scope, and the visual cells as planned.",
   "records": "records.json",
@@ -8,13 +8,25 @@
       "target": "composition:mission-control",
       "metric": "tbtMs",
       "row": "row 141",
-      "reason": "Under the bar in 1.0.0-rc.1's release run (42540152468), over it in rc.2's preflight 42801199348; an A/B of rc.1's code against 37c8d3f1a on one machine found it no slower than in rc.1: rc.2 reports it, and v1.0.0 gates it again."
+      "reason": "Under the bar in 1.0.0-rc.1's release run (42540152468), over it in rc.2's preflight 42801199348; an A/B of rc.1's code against 37c8d3f1a on one machine found it no slower than in rc.1: rc.2 and rc.3 report it (one release run under the bar, 42966517304, doesn't answer its spread across runners), and v1.0.0 gates it again."
     },
     {
       "target": "composition:raw-grid",
       "metric": "tbtMs",
       "row": "row 141",
-      "reason": "Under the bar in 1.0.0-rc.1's release run (42540152468), over it in rc.2's preflights 42801199348 and 42872581515; an A/B of rc.1's code against 37c8d3f1a on one machine found it no slower than in rc.1: rc.2 reports it, and v1.0.0 gates it again."
+      "reason": "Under the bar in 1.0.0-rc.1's release run (42540152468), over it in rc.2's preflights 42801199348 and 42872581515; an A/B of rc.1's code against 37c8d3f1a on one machine found it no slower than in rc.1: rc.2 and rc.3 report it (one release run under the bar, 42966517304, doesn't answer its spread across runners), and v1.0.0 gates it again."
+    },
+    {
+      "target": "composition:horizontal-cinema",
+      "metric": "tbtMs",
+      "row": "row 143",
+      "reason": "Over the bar in rc.2's release run (42966517304: 224, its bar 220) on product code unchanged since 37c8d3f1a, whose isolated preflight 42872581515 read 160: runner noise near the bar (the coordinator, 2026-11-11). rc.3 reports it, and v1.0.0 gates it again."
+    },
+    {
+      "target": "composition:kinetic-cosmos",
+      "metric": "idleTaskMs",
+      "row": "row 144",
+      "reason": "Over the bar in rc.2's release run (42966517304: 616, its bar 550) on product code that read 302 isolated (42872581515); it swings 293 to 616 across runs, where every other page reads under 200. Not an rc.2 change (the coordinator, 2026-11-11): rc.3 reports it, row 145 finds Kinetic Cosmos's idle work, and v1.0.0 gates it again."
     }
   ]
 }

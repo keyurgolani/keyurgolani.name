@@ -1,6 +1,9 @@
+import { headers } from 'next/headers';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { servedPage } from '~/server/page-guard';
-import { safeReturnTo, signInStateOf } from '~/server/return-to';
+import { pendingDiscard } from '~/server/pending-discard';
+import { announcesSignOut, safeReturnTo, signInStateOf } from '~/server/return-to';
+import { AnnounceSignOut } from '../../_components/announce-sign-out';
 import { PruneJournal } from '../../_components/prune-journal';
 import { SignInForm } from '../../_components/sign-in-form';
 
@@ -10,6 +13,8 @@ import { SignInForm } from '../../_components/sign-in-form';
 // before any script runs, and keeps where the owner was going in the form's
 // own returnTo field. A sign-out whose session the store couldn't end names
 // the deployment's own idle limit, never a fixed one (row 88b).
+// After a sign-out this origin sent here, its script tells Studio's other
+// tabs to leave, as a native Sign out has no script of its own to (row 88c-RC2).
 
 export const metadata = { title: 'Sign in · Portfolio Studio' };
 
@@ -36,7 +41,10 @@ async function SignIn({ searchParams }: { searchParams: Query }) {
         retryAfter={state === 'rate_limited' ? seconds(one(query.retryAfter)) : null}
         idleMinutes={requireDeploymentConfig().sessionLifetime?.idleMinutes ?? null}
       />
-      <PruneJournal />
+      <PruneJournal pending={await pendingDiscard()} />
+      {announcesSignOut(state, (await headers()).get('sec-fetch-site')) ? (
+        <AnnounceSignOut />
+      ) : null}
     </main>
   );
 }
