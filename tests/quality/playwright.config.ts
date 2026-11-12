@@ -82,9 +82,19 @@ export default defineConfig({
   outputDir: path.join(reports, 'results'),
   fullyParallel: false,
   retries: 0,
-  // The planner sizes shards for this many (lib/pr-shards.ts).
-  workers: SHARD_WORKERS,
-  reporter: [['list'], ['./reporter.ts']],
+  // The planner sizes shards for this many (lib/pr-shards.ts). The worker probe
+  // (.github/workflows/worker-probe.yml, evidence only) runs one fixed shard at 1 and at 2,
+  // planned the same way, with QUALITY_PROBE_WORKERS, and keeps Playwright's JSON report of it.
+  workers: process.env.QUALITY_PROBE_WORKERS
+    ? Number(process.env.QUALITY_PROBE_WORKERS)
+    : SHARD_WORKERS,
+  reporter: [
+    ['list'],
+    ['./reporter.ts'],
+    ...(process.env.QUALITY_PROBE_JSON
+      ? [['json', { outputFile: process.env.QUALITY_PROBE_JSON }] as const]
+      : []),
+  ],
   use: { ...base.use, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: RUN_ENGINES[plan.mode].flatMap((engine) => [
     {

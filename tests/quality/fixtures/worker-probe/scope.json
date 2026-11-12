@@ -1,0 +1,6 @@
+{
+  "release": "1.0.0-rc.4",
+  "scope": "reachable",
+  "unswept": "The worker probe's scope, evidence only: the release scope (c′), what no visitor or owner reaches left out (the fallback composition, acme-reference, the fixture and tier packs).",
+  "records": "records.json"
+}

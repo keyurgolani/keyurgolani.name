@@ -1,0 +1,146 @@
+# Evidence only, never merged (row 151, the coordinator's lever (a)): the worker probe. It runs
+# one fixed shard of the release plan for the release scope (c′) twice, at SHARD_WORKERS 1 and
+# at 2, in the same pinned Playwright image, planned the same way (the planner sizes the shard
+# at 2 either way; QUALITY_PROBE_WORKERS sets only Playwright's workers), with retries 0, and
+# reports each run's wall time, its tests' time and per-test pace, and any flake: a test that
+# didn't end as expected, or ended differently in the two runs (ci/evidence/worker-probe.mjs).
+# The result settles the worker count for both big runs, the release run and the inventory run,
+# which keep one setting. It runs on a push of its evidence branch alone, holds contents: read
+# and no secret, and reads no cache.
+name: worker-probe
+
+on:
+  push:
+    branches: [kgn-a/v1-worker-probe]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-probe
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+  # The probe's scope file, (c′) with an empty records list, and the shard it runs.
+  PROBE_SCOPE: tests/quality/fixtures/worker-probe/scope.json
+  PROBE_SHARD: '1'
+
+jobs:
+  # The release plan's shard count for (c′), as rc-quality-plan counts it.
+  probe-plan:
+    name: probe-plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      count: ${{ steps.count.outputs.count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Count the release plan's shards
+        id: count
+        env:
+          QUALITY_RELEASE_SCOPE: ${{ env.PROBE_SCOPE }}
+        run: pnpm exec tsx tests/quality/full-plan.ts
+
+  # The one shard, at each worker count, side by side on two runners of one image.
+  probe:
+    name: probe (${{ matrix.workers }} worker(s))
+    needs: [probe-plan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        workers: [1, 2]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: The shard at ${{ matrix.workers }} worker(s)
+        id: run
+        env:
+          SHARD: ${{ env.PROBE_SHARD }}/${{ needs.probe-plan.outputs.count }}
+          QUALITY_PROBE_WORKERS: ${{ matrix.workers }}
+          QUALITY_PROBE_JSON: ${{ runner.temp }}/probe-playwright.json
+          QUALITY_RELEASE_SCOPE: ${{ env.PROBE_SCOPE }}
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+        run: |
+          start=$(date +%s)
+          status=0
+          pnpm ci:quality-full "--shard=$SHARD" || status=$?
+          echo "wall=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "the shard ended $status after $(( $(date +%s) - start ))s at $QUALITY_PROBE_WORKERS worker(s)"
+      - name: Report the run
+        if: ${{ always() }}
+        env:
+          WORKERS: ${{ matrix.workers }}
+          WALL: ${{ steps.run.outputs.wall }}
+        run: node ci/evidence/worker-probe.mjs one "$RUNNER_TEMP/probe-playwright.json" "$WORKERS" "$WALL" "probe-$WORKERS.json"
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Upload the run's figures
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: probe-summary-${{ matrix.workers }}
+          path: probe-${{ matrix.workers }}.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-worker-probe-${{ matrix.workers }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The two runs side by side, in the job summary.
+  probe-compare:
+    name: probe-compare
+    needs: [probe]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ci/evidence/
+      - name: Download the runs' figures
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: probe-summary-*
+          path: ${{ runner.temp }}/probe
+          merge-multiple: true
+      - name: Compare
+        run: node ci/evidence/worker-probe.mjs compare "$RUNNER_TEMP/probe/probe-1.json" "$RUNNER_TEMP/probe/probe-2.json"

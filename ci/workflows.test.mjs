@@ -661,7 +661,8 @@ test("only release.yml's and rc-preflight.yml's quality jobs name a release scop
     .filter((file) => /\.ya?ml$/.test(file))
     .filter((file) => readFileSync(new URL(file, dir), 'utf8').includes('QUALITY_RELEASE_SCOPE'))
     .sort();
-  assert.deepEqual(naming, ['rc-preflight.yml', 'release.yml']);
+  // worker-probe.yml is evidence only, on its own branch, never merged (row 151's lever (a)).
+  assert.deepEqual(naming, ['rc-preflight.yml', 'release.yml', 'worker-probe.yml']);
   for (const workflow of [RELEASE, PREFLIGHT]) {
     // Never for a whole workflow or job: only on the steps that plan, run or judge the release.
     assert.equal(workflow.env?.QUALITY_RELEASE_SCOPE, undefined);
