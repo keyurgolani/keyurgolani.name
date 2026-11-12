@@ -1261,6 +1261,8 @@ function readVariant(
       layer: stylesheets.layer,
       // K-4 (a): the host writes @view-transition for an opted-in variant alone.
       crossDocumentTransitions: transitionNames(manifest) !== null,
+      // The host writes the root's scroll-padding for a variant that reserves it alone.
+      scrollReserve: manifest.scrollReserve,
     });
     if (!result.ok) {
       for (const problem of result.problems) {

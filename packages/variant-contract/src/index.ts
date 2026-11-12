@@ -103,6 +103,16 @@ export {
   transitionNames,
   TRANSITIONS_MINOR,
 } from './transitions';
+export {
+  hostScrollReserveCss,
+  MAX_SCROLL_RESERVE_LENGTH,
+  MAX_SCROLL_RESERVE_PX,
+  SCROLL_RESERVE_MINOR,
+  scrollReserveMediaProblem,
+  scrollReserveProblem,
+  scrollReservePx,
+  type ScrollReserve,
+} from './scroll-reserve';
 export { isReservedSegment, RESERVED_SEGMENTS } from './segments';
 export {
   dispatch,

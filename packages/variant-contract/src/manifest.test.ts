@@ -45,7 +45,7 @@ test('the fixture, which uses every field, is a valid manifest', () => {
   assert.equal(result.manifest.id, 'acme-ocean');
 });
 
-test('only author, homepage, bestFor, budgets, enhancements, keyBindings, kitLayout, recommendedAppearance, studio, and transitions are optional', () => {
+test('only author, homepage, bestFor, budgets, enhancements, keyBindings, kitLayout, recommendedAppearance, scrollReserve, studio, and transitions are optional', () => {
   const optional = [
     'author',
     'homepage',
@@ -55,6 +55,7 @@ test('only author, homepage, bestFor, budgets, enhancements, keyBindings, kitLay
     'keyBindings',
     'kitLayout',
     'recommendedAppearance',
+    'scrollReserve',
     'studio',
     'transitions',
   ];
