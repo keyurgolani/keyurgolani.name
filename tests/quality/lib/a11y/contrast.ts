@@ -81,9 +81,16 @@ export const NODE_LIMIT_MS = 2_000;
  * color and a neighbour's by fill, and that fills the element's glyphs
  * black or white, by its data-quality-mask, for its mask: by fill and
  * decoration alone, so a currentColor border or icon stays hidden in both.
+ * A decoration an ancestor paints goes too (row 157): an ancestor's
+ * underline, overline or line-through propagates to the element's text, in
+ * the ancestor's decoration color, so hiding the element's own leaves it
+ * under the glyphs, read as background (an underlined link's words in an
+ * inline span read 1:1). Every ancestor's, since a decoration propagates
+ * through block containers too; it's a line along text alone, so no
+ * background goes with it.
  */
 const hideCss = (key: string) =>
-  `[data-quality-glyphs="${key}"], [data-quality-glyphs="${key}"] * { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; text-decoration-color: transparent !important; } [data-quality-neighbours="${key}"], [data-quality-neighbours="${key}"] * { -webkit-text-fill-color: transparent !important; text-shadow: none !important; text-decoration-color: transparent !important; }${(
+  `[data-quality-glyphs="${key}"], [data-quality-glyphs="${key}"] * { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; text-decoration-color: transparent !important; } :has([data-quality-glyphs="${key}"]) { text-decoration-color: transparent !important; } [data-quality-neighbours="${key}"], [data-quality-neighbours="${key}"] * { -webkit-text-fill-color: transparent !important; text-shadow: none !important; text-decoration-color: transparent !important; }${(
     ['black', 'white'] as const
   )
     .map((fill) => {
