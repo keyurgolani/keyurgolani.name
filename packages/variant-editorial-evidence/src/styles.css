@@ -2080,6 +2080,21 @@
   white-space: nowrap;
 }
 
+/*
+ * The case's back matter links and its fact sheet's are targets of 24 px on
+ * their own at every width (2.5.8, rows 97/98's reach): an address each, 17 px
+ * of text, they passed only by the spacing exception, at exactly 24 px to the
+ * link above, and a pixel's move failed it. An inline block, so the link's own
+ * box holds the target and its ring; the padding sets its line in the middle;
+ * the address still breaks after its slashes, inside it.
+ */
+[data-variant='editorial-evidence'] :is(.ee-case__matter li > a, .ee-links > a) {
+  display: inline-block;
+  min-block-size: 24px;
+  min-inline-size: 24px;
+  padding-block: max(0px, calc((24px - 1lh) / 2));
+}
+
 [data-variant='editorial-evidence'] .ee-case__matter {
   display: grid;
   grid-column: 1 / -1;
