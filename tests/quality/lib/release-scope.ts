@@ -9,15 +9,21 @@
 // - `default-packs`: every composition and surface the full plan has, in every state, display
 //   mode, width, row and engine, on its own default packs alone (the language, scheme and
 //   typography its sentinel cell renders, the ones quality:pr runs); every other pack, the tier
-//   packs and the fixture packs are out of scope, named unswept in the file.
+//   packs and the fixture packs are out of scope, named unswept in the file;
+// - `reachable`: the coordinator's scope (c′), what a visitor or the owner can reach and nothing
+//   else, planned rather than cut (cells.ts's `reachable`): a covering array pairwise over the 15
+//   public compositions and the shipping packs of every tier, each public composition in every
+//   scheme and display mode its default language and typography accept (114 today), the [37]
+//   rule's pairs, and every route, state and surface `full` plans, with no fixture pack, no
+//   acme-reference and no fallback composition. v1.0.0 promotes on it, with an empty list.
 //
 // The records list (quality/release/records.json) holds one entry a failure record: its cell,
 // viewport, row and engine, as the run's summary names its test, the record's check, rule and
 // target element, its `owner`, and the `routed` row that fixes it ("row 33"); the key and its
 // matcher are ci/release/release-records.mjs's, which rc-verify uses too. The gate
 // (lib/verdict.ts) fails on a failure the list doesn't name, and on a listed one that's gone from
-// a test that ran, since a fixed record leaves the list. A final release keeps the full matrix's
-// rule: scope `full` and an empty list.
+// a test that ran, since a fixed record leaves the list. A final release keeps a whole matrix's
+// rule: scope `full` or `reachable` (FINAL_SCOPES), and an empty list.
 //
 // A candidate's file may also list `timingReported`: a target's timing metric whose release median
 // is reported, not gated (lib/perf/timing.ts), each with its routed row and its reason. A final's
@@ -29,13 +35,24 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT } from '../../../ci/lib/reports.mjs';
-import { isRelease, isRouted, recordsProblems } from '../../../ci/release/release-records.mjs';
-import type { Plan } from '../cells';
+import {
+  FINAL_SCOPES as FINAL,
+  isRelease,
+  isRouted,
+  recordsProblems,
+} from '../../../ci/release/release-records.mjs';
+import type { Plan, PlanScope } from '../cells';
 import { RUN_ENGINES } from './matrix';
 import { TIMING_METRICS, type TimingMetric } from './perf/samples';
 
-export const SCOPES = ['full', 'default-packs'] as const;
+export const SCOPES = ['full', 'default-packs', 'reachable'] as const;
 export type ReleaseScopeKind = (typeof SCOPES)[number];
+/** The scopes a final release may promote on: a whole matrix, `full` or the reachable one (c′). */
+export const FINAL_SCOPES = FINAL as readonly ReleaseScopeKind[];
+
+/** The scope planCells plans for `scope`, when it plans rather than cuts one. */
+export const plannedScope = (scope: Pick<ReleaseScope, 'scope'> | null | undefined) =>
+  scope?.scope === 'reachable' ? ('reachable' as const satisfies PlanScope) : undefined;
 
 export interface ReleaseScope {
   /** The candidate (X.Y.Z-rc.N) the files are for, or a final (X.Y.Z), which holds the full rule. */
@@ -269,13 +286,21 @@ const packKey = (tuple: Plan['cells'][number]['tuple']) =>
  * `plan` cut to `scope`: `full` keeps it whole; `default-packs` keeps every target's cells on its
  * own default packs (its sentinel cells' language, scheme and typography), no tier or fixture pack,
  * in every state, display mode, viewport and row, and the tests of those cells. The targets stay,
- * so each still needs results.
+ * so each still needs results. `reachable` isn't a cut of `full` (its covering array is its own),
+ * so it keeps a plan planCells planned with that scope, and throws on any other.
  */
-export function scopePlan<P extends Pick<Plan, 'cells' | 'tests'>>(
+export function scopePlan<P extends Pick<Plan, 'cells' | 'tests' | 'scope'>>(
   plan: P,
   scope: Pick<ReleaseScope, 'scope'>,
 ): P {
   if (scope.scope === 'full') return plan;
+  if (scope.scope === 'reachable') {
+    if (plan.scope !== 'reachable')
+      throw new Error(
+        "the reachable scope is planned, not cut from the full plan: plan it with planCells's scope",
+      );
+    return plan;
+  }
   const defaults = new Map<string, Set<string>>();
   for (const cell of plan.cells) {
     if (!cell.sentinel || cell.pack !== undefined || cell.fixture) continue;

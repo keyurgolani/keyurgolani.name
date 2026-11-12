@@ -705,10 +705,11 @@ test('a records entry names its cell, viewport, row, engine, check, rule and tar
   assert.deepEqual(recordsProblems({}, CANDIDATE), ['the records list is not an array']);
 });
 
-test('a final release keeps the full matrix: scope full and an empty records list', () => {
+test('a final release keeps a whole matrix: scope full or reachable, and an empty records list', () => {
+  assert.deepEqual(recordsProblems([], { release: '1.0.0', scope: 'reachable' }), []);
   assert.deepEqual(recordsProblems([], { release: '1.0.0', scope: 'full' }), []);
   assert.deepEqual(recordsProblems([], { release: '1.0.0', scope: 'default-packs' }), [
-    '1.0.0 is a final release: its scope must be full',
+    '1.0.0 is a final release: its scope must be full or reachable',
   ]);
   assert.deepEqual(recordsProblems(LISTED, { release: '1.0.0', scope: 'full' }), [
     '1.0.0 is a final release: its records list must be empty',
@@ -786,7 +787,7 @@ test('a scope file names its release, scope, what it leaves unswept, and its lis
     'release is "v1.0.0-rc.1", not X.Y.Z or X.Y.Z-rc.N',
   ]);
   assert.deepEqual(scopeProblems({ ...good, scope: 'some-packs' }), [
-    'scope is "some-packs", not one of full, default-packs',
+    'scope is "some-packs", not one of full, default-packs, reachable',
   ]);
   assert.deepEqual(scopeProblems({ ...good, unswept: ' ' }), [
     'unswept must say, in words, what a narrowed scope leaves out',
@@ -816,7 +817,7 @@ test('a scope file names its release, scope, what it leaves unswept, and its lis
   writeFileSync(path.join(dir, 'scope.json'), JSON.stringify({ ...good, scope: 'none' }));
   assert.throws(
     () => loadReleaseScope({ [SCOPE_ENV]: path.join(dir, 'scope.json') }),
-    /scope\.json: scope is "none", not one of full, default-packs$/,
+    /scope\.json: scope is "none", not one of full, default-packs, reachable$/,
   );
 });
 

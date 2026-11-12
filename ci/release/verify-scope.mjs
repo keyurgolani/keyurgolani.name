@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FINAL_SCOPES } from './release-records.mjs';
 import { parseReleaseTag } from './tags.mjs';
 
 export const SCOPE_FILE = 'quality/release/scope.json';
@@ -28,15 +29,16 @@ export function scopeMismatch(tag, scope) {
 
 /**
  * Why a final release can't promote the candidate whose commit holds `scope` and `records` (the
- * parsed files), or null when it can: a final keeps the full matrix's rule, every cell in scope,
- * none listed as failing, and no timing reported instead of gated.
+ * parsed files), or null when it can: a final keeps a whole matrix's rule, `full` or `reachable`
+ * (FINAL_SCOPES), every cell of it in scope, none listed as failing, and no timing reported
+ * instead of gated.
  */
 export function finalScopeRefusal(scope, records) {
   if (!scope || typeof scope !== 'object' || !Array.isArray(records))
     return `${SCOPE_FILE} or its records list wasn't read`;
   const problems = [];
-  if (scope.scope !== 'full')
-    problems.push(`its scope is ${JSON.stringify(scope.scope)}, not full`);
+  if (!FINAL_SCOPES.includes(scope.scope))
+    problems.push(`its scope is ${JSON.stringify(scope.scope)}, not ${FINAL_SCOPES.join(' or ')}`);
   if (records.length > 0)
     problems.push(
       `its records list names ${records.length} failing cell test${records.length === 1 ? '' : 's'}`,
@@ -52,7 +54,7 @@ export function finalScopeRefusal(scope, records) {
   }
   return problems.length === 0
     ? null
-    : `${SCOPE_FILE} keeps the candidate from a final release: ${problems.join(', and ')}. A final needs the full matrix clean: scope full, an empty list and no timingReported, then a new candidate. The full matrix fits the release's 256-shard matrix only once RC2's sizing item (per-test cost, then splitting the release matrix across jobs) lands, so v1.0.0 waits on it`;
+    : `${SCOPE_FILE} keeps the candidate from a final release: ${problems.join(', and ')}. A final needs a whole matrix clean: scope full or reachable, an empty list and no timingReported, then a new candidate`;
 }
 
 /** The scope file and its records list at `root`, parsed; throws when either can't be read. */
