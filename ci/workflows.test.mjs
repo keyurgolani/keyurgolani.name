@@ -257,6 +257,9 @@ test('every scheduled job sets timeout-minutes, and only report may write issues
           .sort(),
         'report needs every other scheduled job',
       );
+    } else if (id === 'big-run') {
+      // It lists the repository's runs in flight to pause the nightly (ci/big-run.mjs).
+      assert.deepEqual(job.permissions, { contents: 'read', actions: 'read' });
     } else {
       assert.equal(job.permissions, undefined, `${id} keeps the workflow's contents: read`);
     }
@@ -300,9 +303,10 @@ test('catalog-provenance runs weekly with links, reads only, and report expects 
   const report = SCHEDULED.jobs.report;
   assert.ok(report.needs.includes('catalog-provenance'));
   const step = report.steps.find((s) => s.env?.EXPECTED_SKIPS);
+  // On a night big-run pauses, quality-full and quality-verdict too (ci/big-run.mjs).
   assert.equal(
     step.env.EXPECTED_SKIPS,
-    `\${{ github.event.schedule != '${MONDAY}' && 'links catalog-provenance' || '' }}`,
+    `\${{ format('{0} {1}', github.event.schedule != '${MONDAY}' && 'links catalog-provenance' || '', needs.big-run.outputs.busy == 'true' && 'quality-full quality-verdict' || '') }}`,
   );
 });
 

@@ -50,6 +50,7 @@ import {
   runProjects,
   sliceRecord,
   testBucket,
+  TIMEOUT_MARGIN,
   timeoutMinutes,
   VISUAL_SECONDS,
   VISUAL_SPEC,
@@ -258,6 +259,12 @@ const RELEASE_SHARDS = 32;
  * release plans here are sized to, so their arithmetic stays whatever RELEASE_PACE measures.
  */
 const ASSUMED_CEILING = fitReleaseCeiling({ overheadSeconds: FULL_FIXED, pace: 1 });
+/**
+ * The PR's weights, which the slice tests below plan the full plan's nights by: they test how a
+ * night slices a plan, not its size. A night plans the nightly scope by the release's weights
+ * (nightly-scope.test.ts, and the release-weights test at the end of this file).
+ */
+const PR_WEIGHTS = loadDurations();
 
 /**
  * The full plan the nightly and release runs plan: this checkout's, with the
@@ -421,8 +428,8 @@ function testNights(
 /** The salts the balance test rolls the nights with: the plan's own, the empty one, and 49 more. */
 const SALTS = ['', ...Array.from({ length: 49 }, (_, at) => `salt-${at + 1}:`)];
 
-test('the caps: eight shard jobs at once a night, 16 at release across its three jobs, and the release in as many waves of them as rc-quality-plan counts', () => {
-  assert.equal(FULL_SHARDS, 8, 'PR CI keeps 12 of the account’s 20 job slots a night');
+test('the caps: 16 shard jobs at once a night, 16 at release across its three jobs, and the release in as many waves of them as rc-quality-plan counts', () => {
+  assert.equal(FULL_SHARDS, 16, 'PR CI keeps 4 of the account’s 20 job slots a night');
   assert.equal(
     RELEASE_PARALLEL,
     16,
@@ -437,7 +444,10 @@ test('the caps: eight shard jobs at once a night, 16 at release across its three
   assert.equal(MAX_RELEASE_SHARDS, 256);
   assert.equal(MAX_RELEASE_PLAN, 3 * 256);
   const count = '${{ needs.rc-quality-plan.outputs.count }}';
-  assert.deepEqual(SCHEDULED['quality-full']!.strategy?.matrix?.shard, [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(
+    SCHEDULED['quality-full']!.strategy?.matrix?.shard,
+    Array.from({ length: 16 }, (_, at) => at + 1),
+  );
   for (const [at, { id }] of RELEASE_JOBS.entries()) {
     assert.equal(
       RELEASE[id]!.strategy?.matrix?.shard,
@@ -520,7 +530,7 @@ test('the caps: eight shard jobs at once a night, 16 at release across its three
     'rc-quality-3',
   ]);
   // The catalog's plan and shards wait for the quality shards, however they ended, so the night
-  // peaks near eight: the plan beside quality-verdict, then seven catalog shards at once. The
+  // peaks at the quality shards' 16, then the plan beside quality-verdict and seven catalog shards. The
   // shards also wait for the plan to succeed, so they never run without its matrix.
   assert.deepEqual(SCHEDULED['catalog-full-plan']!.needs, ['quality-full']);
   assert.equal(SCHEDULED['catalog-full-plan']!.if, '${{ !cancelled() }}');
@@ -532,12 +542,20 @@ test('the caps: eight shard jobs at once a night, 16 at release across its three
   assert.equal(SCHEDULED['catalog-full']!.strategy?.['max-parallel'], 7);
 });
 
-test("the nightly timeout is the lead's 90 minutes, and N the fewest nights that fit it: the registry's own, and 28 for #20's model, however the hash falls", (t) => {
-  assert.equal(NIGHTLY_TIMEOUT_MINUTES, 90);
+test("the nightly timeout is 120 minutes, its ceiling the release's measured pace fits to it, and N the fewest nights that fit it at the release's weights: the registry's own, and CATALOG_NIGHTS for #20's model, however the hash falls (row 151)", (t) => {
+  assert.equal(NIGHTLY_TIMEOUT_MINUTES, 120);
   assert.equal(SCHEDULED['quality-full']!['timeout-minutes'], NIGHTLY_TIMEOUT_MINUTES);
-  assert.equal(timeoutMinutes(NIGHTLY_CEILING), NIGHTLY_TIMEOUT_MINUTES);
-  // The checkout's plan, whatever its registry ships, runs the fewest nights that fit.
-  const own = fullGroups(plan, ENGINES);
+  // Fitted as the release's ceiling is: a shard estimated there takes, at rc.2's measured pace,
+  // at most the night's 120 minutes over the 1.5x margin.
+  assert.equal(NIGHTLY_CEILING, fitReleaseCeiling(RELEASE_PACE, NIGHTLY_TIMEOUT_MINUTES));
+  assert.equal(NIGHTLY_CEILING, 6668);
+  const atCeiling =
+    RELEASE_PACE.overheadSeconds + RELEASE_PACE.pace * (NIGHTLY_CEILING - FULL_FIXED);
+  assert.ok(atCeiling * TIMEOUT_MARGIN <= NIGHTLY_TIMEOUT_MINUTES * 60, String(atCeiling));
+  // The checkout's plan, whatever its registry ships, runs the fewest nights that fit, by the
+  // release's weights, as each night plans.
+  const weights = releaseDurations();
+  const own = fullGroups(plan, ENGINES, weights);
   const today = fewestNights(own);
   t.diagnostic(
     `this checkout: about ${Math.round(total(own))}s, ${today.nights} nights, the slowest shard about ${Math.round(today.slowest)}s of ${NIGHTLY_CEILING}s`,
@@ -553,18 +571,19 @@ test("the nightly timeout is the lead's 90 minutes, and N the fewest nights that
     Math.abs(off) <= 0.15,
     `the model is about ${Math.round(seconds)}s, ${CATALOG_SOURCE.commit}'s plan ${CATALOG_SOURCE.seconds}s`,
   );
-  const rotation = fewestNights(groups);
+  const rotation = fewestNights(fullGroups(catalog, ENGINES, weights));
   const loads = rotation.slices.map((slice) => total(slice.flatMap((shard) => shard.groups)));
   t.diagnostic(
     `the model: ${rotation.nights} nights, the heaviest night about ${Math.round(Math.max(...loads))}s of tests, its slowest shard about ${Math.round(rotation.slowest)}s of ${NIGHTLY_CEILING}s`,
   );
   assert.equal(rotation.nights, CATALOG_NIGHTS);
   // On 50 draws of the hash, as #20's real pack ids roll it again, the cycle stays within the cap.
-  const bucketed = bucketGroups(groups);
+  const releaseGroups = fullGroups(catalog, ENGINES, weights);
+  const bucketed = bucketGroups(releaseGroups);
   const counts = new Map<number, number>();
   const ratios: number[] = [];
   for (const salt of SALTS) {
-    const nights = rotationFor(groups, loadDurations(), FULL_SHARDS, salt).nights;
+    const nights = rotationFor(releaseGroups, weights, FULL_SHARDS, salt).nights;
     counts.set(nights, (counts.get(nights) ?? 0) + 1);
     const slices = rotationSlices(bucketed, nights, FULL_SHARDS, salt);
     const each = slices.map((slice) => total(slice.flatMap((shard) => shard.groups)));
@@ -787,7 +806,8 @@ test('a cycle of N nights runs every test of every cell exactly once, a cell on 
   }
   // A cell's tests spread over its buckets' nights, and the record names each one.
   const nights = testNights(plan, cycle);
-  const rotation = fullShard(plan, ENGINES, `1/${FULL_SHARDS}`, night(0)).slice!.rotation;
+  const rotation = fullShard(plan, ENGINES, `1/${FULL_SHARDS}`, night(0), PR_WEIGHTS).slice!
+    .rotation;
   const spread = new Map<string, Set<number>>();
   for (const [key, at] of nights) {
     const cell = (JSON.parse(key) as string[])[0]!;
@@ -810,7 +830,7 @@ test('a cycle of N nights runs every test of every cell exactly once, a cell on 
   const indexes: number[] = [];
   const ran = new Set<string>();
   for (let day = 0; day < cycle; day += 1) {
-    const whole = fullShard(plan, ENGINES, null, night(day));
+    const whole = fullShard(plan, ENGINES, null, night(day), PR_WEIGHTS);
     assert.equal(whole.slice!.nights, cycle);
     indexes.push(whole.slice!.index);
     for (const key of whole.shard.groups.flatMap((group) => group.tests)) {
@@ -881,17 +901,20 @@ test("a plan change moves no other test's night while N holds: a new composition
 
 test('a night over its budget fails before any test, naming the night, its load, and its heaviest group', () => {
   const durations = { group: 5 };
-  // Visual groups whose night is the first: two 2,000 s groups a shard fit, one on each worker; three don't.
+  // Visual groups whose night is the first, each as heavy as a group may be: two a shard fit, one
+  // on each worker; three don't, since two on one worker are past the ceiling.
+  const weight = FULL_GROUP_BUDGET;
+  assert.ok(FULL_FIXED + weight <= NIGHTLY_CEILING && FULL_FIXED + 2 * weight > NIGHTLY_CEILING);
   const first: string[] = [];
   for (let at = 0; first.length < 2 * FULL_SHARDS + 1; at += 1) {
     if (groupNight({ project: `chromium s${at}` }) === 0) first.push(`chromium s${at}`);
   }
-  const groups = (count: number) => synthetic(count, 2000, VISUAL_SPEC, (at) => first[at]!);
+  const groups = (count: number) => synthetic(count, weight, VISUAL_SPEC, (at) => first[at]!);
   assert.equal(nightlyPlan(groups(2 * FULL_SHARDS), durations).nights, NIGHTS);
   assert.throws(
     () => nightlyPlan(groups(2 * FULL_SHARDS + 1), durations),
     new RegExp(
-      `^Error: Night 1 of ${NIGHTS} holds about 34000s of tests, and leaves a shard at about ${FULL_FIXED + 4000}s, over the ${NIGHTLY_CEILING}s ceiling\\. Its heaviest group is chromium s\\d+ visual\\.spec\\.ts, at about 2000s\\.$`,
+      `^Error: Night 1 of ${NIGHTS} holds about ${(2 * FULL_SHARDS + 1) * weight}s of tests, and leaves a shard at about ${FULL_FIXED + 2 * weight}s, over the ${NIGHTLY_CEILING}s ceiling\\. Its heaviest group is chromium s\\d+ visual\\.spec\\.ts, at about ${weight}s\\.$`,
     ),
   );
   // A release shard holds two such groups on each worker; one more is over.
@@ -965,9 +988,9 @@ test('the slice is a pure function of the date and the plan', () => {
     assert.equal(nightSlice(night(day)), (20750 + day) % NIGHTS);
   }
   // The same night and plan, planned again, as each shard's process plans it, is the same shard.
-  for (const shard of ['1/8', '5/8', null]) {
-    const first = fullShard(plan, ENGINES, shard, '2026-10-24');
-    const again = fullShard(structuredClone(plan), ENGINES, shard, '2026-10-24');
+  for (const shard of [`1/${FULL_SHARDS}`, `5/${FULL_SHARDS}`, null]) {
+    const first = fullShard(plan, ENGINES, shard, '2026-10-24', PR_WEIGHTS);
+    const again = fullShard(structuredClone(plan), ENGINES, shard, '2026-10-24', PR_WEIGHTS);
     assert.deepEqual(JSON.parse(JSON.stringify(again)), JSON.parse(JSON.stringify(first)));
     assert.deepEqual([...again.projects].sort(), [...first.projects].sort());
   }
@@ -975,18 +998,18 @@ test('the slice is a pure function of the date and the plan', () => {
   assert.equal(planFingerprint(structuredClone(plan)), planFingerprint(plan));
   assert.notEqual(planFingerprint({ tests: plan.tests.slice(1) }), planFingerprint(plan));
   assert.equal(
-    fullShard(plan, ENGINES, '1/8', '2026-10-24').slice!.fingerprint,
+    fullShard(plan, ENGINES, `1/${FULL_SHARDS}`, '2026-10-24', PR_WEIGHTS).slice!.fingerprint,
     planFingerprint(plan),
   );
   // A night's shards list the same projects: every one any of its groups runs in.
   const shards = Array.from(
     { length: FULL_SHARDS },
-    (_, at) => fullShard(plan, ENGINES, `${at + 1}/8`, '2026-10-24').shard,
+    (_, at) => fullShard(plan, ENGINES, `${at + 1}/${FULL_SHARDS}`, '2026-10-24', PR_WEIGHTS).shard,
   );
-  const listed = fullShard(plan, ENGINES, '1/8', '2026-10-24').projects;
+  const listed = fullShard(plan, ENGINES, `1/${FULL_SHARDS}`, '2026-10-24', PR_WEIGHTS).projects;
   assert.deepEqual([...listed].sort(), [...runProjects(shards)].sort());
   // The whole slice on one machine runs the same groups as its shards between them.
-  const local = fullShard(plan, ENGINES, null, '2026-10-24');
+  const local = fullShard(plan, ENGINES, null, '2026-10-24', PR_WEIGHTS);
   assert.deepEqual(
     local.shard.groups.map(groupKey).sort(),
     shards
@@ -1000,12 +1023,18 @@ test('the slice is a pure function of the date and the plan', () => {
 });
 
 test("a night's plan record is its slice's, visual tests included, so the merge judges the night against it, and a release refuses it", (t) => {
-  const full = fullShard(plan, ENGINES, '1/8', '2026-10-24');
+  const full = fullShard(plan, ENGINES, `1/${FULL_SHARDS}`, '2026-10-24', PR_WEIGHTS);
   const tonight = full.slice!;
   const record = sliceRecord(planRecord(plan), plan, tonight, ENGINES, full.tonight!);
   const ran = new Set(
     Array.from({ length: FULL_SHARDS }, (_, at) =>
-      fullShard(plan, ENGINES, `${at + 1}/8`, '2026-10-24').shard.groups.flatMap((group) =>
+      fullShard(
+        plan,
+        ENGINES,
+        `${at + 1}/${FULL_SHARDS}`,
+        '2026-10-24',
+        PR_WEIGHTS,
+      ).shard.groups.flatMap((group) =>
         group.tests.map((key) => JSON.stringify((JSON.parse(key) as string[]).slice(0, 3))),
       ),
     ).flat(),
@@ -1279,7 +1308,10 @@ test('N and the release shard count are the fewest that fit, a doubling only spl
   const durations = { group: 5 };
   // Visual groups of 2,000 s, as many as it takes for each step to fail before the next fits.
   const visual = (count: number) => synthetic(count, 2000, VISUAL_SPEC, (at) => `chromium v${at}`);
-  for (const count of [40, 160, 320]) {
+  // The counts scale with a night's room for them: its shards, and the groups a worker holds
+  // (one at 8 shards and the 90-minute night these were first sized to).
+  const scale = (FULL_SHARDS * Math.floor((NIGHTLY_CEILING - FULL_FIXED) / 2000)) / 8;
+  for (const count of [40 * scale, 160 * scale, 320 * scale]) {
     const { nights } = rotationFor(visual(count), durations);
     assert.ok(NIGHT_COUNTS.includes(nights));
     // It fits, and the cycle before it doesn't.
@@ -1292,9 +1324,9 @@ test('N and the release shard count are the fewest that fit, a doubling only spl
       );
     }
   }
-  assert.ok(rotationFor(visual(320), durations).nights > NIGHTS);
+  assert.ok(rotationFor(visual(320 * scale), durations).nights > NIGHTS);
   assert.throws(
-    () => rotationFor(visual(2000), durations),
+    () => rotationFor(visual(2000 * scale), durations),
     /^Error: Even 56 nights don't fit, past the longest cycle \(MAX_NIGHTS\): Night \d+ of 56 holds about \d+s of tests, .* Its heaviest group is chromium v\d+ visual\.spec\.ts, at about 2000s\.$/,
   );
   // The release: 2,000 s groups, two on each worker of a shard, so the fewest shards are a
@@ -1412,7 +1444,8 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
   // What this checkout's plan gives, worked out here on its own.
   const own = await loadPlan({ QUALITY_WEB: web, QUALITY_MODE: 'full', ...SCOPE });
   const { count, shards } = releaseOf(own);
-  const { nights } = rotationFor(fullGroups(own, ENGINES));
+  // The nightly's cycle by the release's weights, as each night plans (row 151).
+  const { nights } = rotationFor(fullGroups(own, ENGINES, releaseDurations()), releaseDurations());
   const slices = releaseSlices(count);
   assert.equal(
     readFileSync(output, 'utf8'),
@@ -1515,4 +1548,27 @@ test("the release's shards split across its three jobs: consecutive runs, each b
     /^Error: 769 release shards are more than 3 jobs of 256 hold \(MAX_RELEASE_PLAN\)\.$/,
   );
   assert.throws(() => releaseSlices(0), /can't be split/);
+});
+
+test("a night plans by the release's measured weights, as a release shard does, so the slowest shard of every night of the cycle ends within its 120 minutes at rc.2's pace (row 151)", () => {
+  const weights = releaseDurations();
+  const night = '2026-11-11';
+  const tonight = fullShard(plan, ENGINES, `1/${FULL_SHARDS}`, night);
+  const rotation = rotationFor(fullGroups(plan, ENGINES, weights), weights);
+  assert.equal(tonight.slice!.nights, rotation.nights);
+  assert.deepEqual(tonight.shard, rotation.slices[nightSlice(night, rotation.nights)]![0]);
+  // Every shard of every night, at the measured pace, inside the timeout over the margin.
+  for (const [at, slice] of rotation.slices.entries()) {
+    for (const shard of slice) {
+      const seconds =
+        RELEASE_PACE.overheadSeconds + RELEASE_PACE.pace * (fullEstimate(shard) - FULL_FIXED);
+      assert.ok(
+        seconds * TIMEOUT_MARGIN <= NIGHTLY_TIMEOUT_MINUTES * 60,
+        `night ${at + 1}, shard ${shard.index}: about ${Math.round(seconds)}s`,
+      );
+    }
+  }
+  // The PR's weights size the same plan's nights about four times light: what ran past 90 minutes.
+  const light = total(fullGroups(plan, ENGINES, loadDurations()));
+  assert.ok(total(fullGroups(plan, ENGINES, weights)) > 3 * light);
 });
