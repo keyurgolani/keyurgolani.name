@@ -6,12 +6,13 @@
 # the records list's entries, or whose quality scope file
 # (quality/release/scope.json) is another release's. rc-quality runs #11's
 # full quality matrix on the commit, cut to that scope, in the shards
-# rc-quality-plan counts, 10 at a time, and rc-quality-verdict judges them
-# whole with the release gates (pnpm quality:release), the scope's records
-# list naming the failure records the candidate ships with, each with its
-# owner and routed row; a final keeps the full matrix and an empty list
-# (tests/quality/lib/release-scope.ts), so v1.0.0 waits on RC2's sizing item,
-# which fits the full matrix into the 256-shard matrix. rc-build builds amd64
+# rc-quality-plan counts, split across three matrix jobs of at most 256
+# (rc-quality-1 to rc-quality-3), 16 at a time together, and
+# rc-quality-verdict judges them whole with the release gates (pnpm
+# quality:release), the scope's records list naming the failure records the
+# candidate ships with, each with its owner and routed row; a final keeps a
+# whole matrix, full or reachable (the coordinator's (c′), which v1.0.0
+# promotes on), and an empty list (tests/quality/lib/release-scope.ts). rc-build builds amd64
 # and arm64 once each, natively on its own runner, with BuildKit provenance
 # (mode=max) and an SBOM, and pushes each platform's index to GHCR by digest
 # with no tag. rc-merge merges the two into one index, pushes that by digest
@@ -25,8 +26,8 @@
 #
 # A final release, vX.Y.Z on the newest candidate's commit: promote-verify
 # refuses unless that candidate's release run passed its scan and its
-# quality scope is full with an empty records list (which the full matrix
-# reaches only after RC2's sizing item), promote-scan
+# quality scope is a whole matrix, full or reachable, with an empty records
+# list, promote-scan
 # verifies the candidate digest's attestation and scans it again, and
 # promote points X.Y.Z (and X.Y, X, and latest, unless a newer release holds
 # them) at the same digest with no rebuild. promote is the only job that
@@ -348,13 +349,16 @@ jobs:
 
   # How many shards #11's release plan runs in: the plan of the candidate's
   # scope (quality/release/scope.json, QUALITY_RELEASE_SCOPE), the fewest
-  # shards, up to 256, that keep each within the release ceiling by the sum of
+  # shards, up to 768, that keep each within the release ceiling by the sum of
   # its tests' per-key p90 weights (releaseFor, releaseDurations,
   # tests/quality/lib/full-shards.ts), from the plan of a worktree with the
   # reference variant installed and its registry generated with the quality
-  # flags, as each shard plans (tests/quality/full-plan.ts). A plan past 256,
-  # the most jobs a matrix makes, fails here, naming its heaviest group. It
-  # installs fresh, with no cache, and holds contents: read and no secret.
+  # flags, as each shard plans (tests/quality/full-plan.ts), and which of them
+  # each rc-quality job runs: shards1 to shards3, consecutive runs of at most
+  # 256, the most jobs a matrix makes, sized by each job's max-parallel
+  # (releaseSlices), `[]` for a job with none. A plan past 768 fails here,
+  # naming its heaviest group. It installs fresh, with no cache, and holds
+  # contents: read and no secret.
   rc-quality-plan:
     name: rc-quality-plan
     needs: [classify, rc-verify]
@@ -363,7 +367,9 @@ jobs:
     timeout-minutes: 20
     outputs:
       count: ${{ steps.count.outputs.count }}
-      shards: ${{ steps.count.outputs.shards }}
+      shards1: ${{ steps.count.outputs.shards1 }}
+      shards2: ${{ steps.count.outputs.shards2 }}
+      shards3: ${{ steps.count.outputs.shards3 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -385,26 +391,32 @@ jobs:
   # (quality/release/scope.json), against a worktree with the reference
   # variant installed from its tarball, in as many shards as rc-quality-plan
   # counts, each sized by the sum of its tests' per-key p90 weights
-  # (releaseDurations).
-  # They run 10 at a time, the release's cap (RELEASE_PARALLEL), so in waves,
-  # and PR CI keeps the other 10 of the account's 20 job slots. The timeout is releaseTimeoutMinutes(), the release
+  # (releaseDurations). One matrix makes at most 256 jobs, so the shards are
+  # split across three jobs, rc-quality-1 to rc-quality-3, each running the
+  # consecutive shards rc-quality-plan hands it (shards1 to shards3), and
+  # skipping when it hands it none. They run 6, 5 and 5 at a time, 16
+  # together, the release's cap (RELEASE_PARALLEL, RELEASE_JOBS), so in
+  # waves that end together, and PR CI keeps the other 4 of the account's 20
+  # job slots. The three are one job but for their id, list and
+  # max-parallel (ci/release/release-workflow.test.mjs). The timeout is
+  # releaseTimeoutMinutes(), the release
   # ceiling with its margin, and each shard fails before any test when the
   # plan leaves a shard over that ceiling, naming its heaviest group. It
   # installs fresh, with no cache, in the pinned Playwright image, and holds
   # contents: read and no secret. Each shard's reports are scrubbed however
   # the run ended, and upload only when that scrub succeeds, for three days,
   # so the first wave's outlast the last wave's timeout.
-  rc-quality:
+  rc-quality-1:
     name: rc-quality (${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }})
     needs: [classify, rc-quality-plan]
-    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' && needs.rc-quality-plan.outputs.shards1 != '[]' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 6
       matrix:
-        shard: ${{ fromJSON(needs.rc-quality-plan.outputs.shards) }}
+        shard: ${{ fromJSON(needs.rc-quality-plan.outputs.shards1) }}
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
@@ -448,20 +460,140 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days, not one: at 10 at a time, the first wave's reports must outlast the
-          # last wave's timeout before the verdict downloads them (past about 121 shards at
-          # 120 minutes, a day is too short).
+          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
+          # last wave's end before the verdict downloads them (past about 290 shards at the
+          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
+          retention-days: 3
+
+  rc-quality-2:
+    name: rc-quality (${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }})
+    needs: [classify, rc-quality-plan]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' && needs.rc-quality-plan.outputs.shards2 != '[]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        shard: ${{ fromJSON(needs.rc-quality-plan.outputs.shards2) }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }}
+        env:
+          SHARD: ${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }}
+          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }}
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_RELEASE_SCOPE: quality/release/scope.json
+        run: pnpm ci:quality-full "--shard=$SHARD"
+      # The reports upload only when this succeeds: it deletes what it can't
+      # read, and fails when it did, or when the canary is still in any.
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-release-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
+          # last wave's end before the verdict downloads them (past about 290 shards at the
+          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
+          retention-days: 3
+
+  rc-quality-3:
+    name: rc-quality (${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }})
+    needs: [classify, rc-quality-plan]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' && needs.rc-quality-plan.outputs.shards3 != '[]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        shard: ${{ fromJSON(needs.rc-quality-plan.outputs.shards3) }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }}
+        env:
+          SHARD: ${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }}
+          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }}
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_RELEASE_SCOPE: quality/release/scope.json
+        run: pnpm ci:quality-full "--shard=$SHARD"
+      # The reports upload only when this succeeds: it deletes what it can't
+      # read, and fails when it did, or when the canary is still in any.
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-release-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
+          # last wave's end before the verdict downloads them (past about 290 shards at the
+          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
           retention-days: 3
 
   # The release's quality gate over every shard's reports: the merged
   # verdict, which must be the whole plan, not a night's slice, then the
   # release-only gates (pnpm quality:release -- --merged), over every
-  # shard rc-quality-plan counted, every wave's. It runs only when every shard passed, so any shard
-  # that fails or times out stops the release, and rc-tag waits on it.
+  # shard rc-quality-plan counted, every job's and every wave's. It runs only
+  # when every shard passed: each rc-quality job succeeded, or skipped
+  # because rc-quality-plan handed it no shard. So any shard that fails or
+  # times out stops the release, and rc-tag waits on it.
   rc-quality-verdict:
     name: rc-quality-verdict
-    needs: [classify, rc-quality-plan, rc-quality]
-    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    needs: [classify, rc-quality-plan, rc-quality-1, rc-quality-2, rc-quality-3]
+    if: ${{ !cancelled() && github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' && needs.rc-quality-plan.result == 'success' && (needs.rc-quality-1.result == 'success' || (needs.rc-quality-1.result == 'skipped' && needs.rc-quality-plan.outputs.shards1 == '[]')) && (needs.rc-quality-2.result == 'success' || (needs.rc-quality-2.result == 'skipped' && needs.rc-quality-plan.outputs.shards2 == '[]')) && (needs.rc-quality-3.result == 'success' || (needs.rc-quality-3.result == 'skipped' && needs.rc-quality-plan.outputs.shards3 == '[]')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

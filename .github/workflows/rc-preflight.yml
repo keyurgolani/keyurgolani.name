@@ -13,14 +13,15 @@
 # from anywhere but main, a commit that isn't on main, and a commit whose
 # own release.yml differs from the one at this run's commit (GITHUB_SHA).
 # It doesn't read the commit's ci push run, as rc-verify does: that's what a
-# preflight is for. preflight-plan, preflight-quality, and preflight-verdict
-# are release.yml's rc-quality-plan, rc-quality, and rc-quality-verdict,
-# step for step: main's current gate, from this file at GITHUB_SHA, on the
-# commit's code. #11's quality matrix, cut to the candidate's scope
-# (quality/release/scope.json), in the shards the plan counts, 10 at a
-# time, then the release gates over every shard's reports (pnpm
-# quality:release) and the scope's records list. ci/workflows.test.mjs holds the three to
-# release.yml's.
+# preflight is for. preflight-plan, preflight-quality-1 to -3, and
+# preflight-verdict are release.yml's rc-quality-plan, rc-quality-1 to -3,
+# and rc-quality-verdict, step for step: main's current gate, from this file
+# at GITHUB_SHA, on the commit's code. #11's quality matrix, cut to the
+# candidate's scope (quality/release/scope.json), in the shards the plan
+# counts, split across three matrix jobs of at most 256, 16 at a time
+# together, then the release gates over every shard's reports (pnpm
+# quality:release) and the scope's records list. ci/workflows.test.mjs holds
+# the five to release.yml's.
 #
 # It never tags, builds an image, or publishes, and its verdict never counts
 # for promotion: promote-verify reads only the tag's own release.yml run
@@ -117,7 +118,9 @@ jobs:
     timeout-minutes: 20
     outputs:
       count: ${{ steps.count.outputs.count }}
-      shards: ${{ steps.count.outputs.shards }}
+      shards1: ${{ steps.count.outputs.shards1 }}
+      shards2: ${{ steps.count.outputs.shards2 }}
+      shards3: ${{ steps.count.outputs.shards3 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -136,20 +139,22 @@ jobs:
           QUALITY_RELEASE_SCOPE: quality/release/scope.json
         run: pnpm exec tsx tests/quality/full-plan.ts
 
-  # release.yml's rc-quality, on the commit: 10 shards at a time, as a
-  # candidate runs them, so PR CI keeps the other 10 job slots. Each shard's
-  # reports are scrubbed however the run ended, and upload only when that
-  # scrub succeeds, for three days.
-  preflight-quality:
+  # release.yml's rc-quality-1 to rc-quality-3, on the commit: each the
+  # shards preflight-plan hands it, skipping with none, 6, 5 and 5 at a time,
+  # 16 together, as a candidate runs them, so PR CI keeps the other 4 job
+  # slots. Each shard's reports are scrubbed however the run ended, and
+  # upload only when that scrub succeeds, for three days.
+  preflight-quality-1:
     name: preflight-quality (${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }})
     needs: [preflight-verify, preflight-plan]
+    if: ${{ needs.preflight-plan.outputs.shards1 != '[]' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 6
       matrix:
-        shard: ${{ fromJSON(needs.preflight-plan.outputs.shards) }}
+        shard: ${{ fromJSON(needs.preflight-plan.outputs.shards1) }}
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
@@ -194,9 +199,129 @@ jobs:
           name: reports-quality-preflight-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days, not one: at 10 at a time, the first wave's reports must outlast the
-          # last wave's timeout before the verdict downloads them (past about 121 shards at
-          # 120 minutes, a day is too short).
+          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
+          # last wave's end before the verdict downloads them (past about 290 shards at the
+          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
+          retention-days: 3
+
+  preflight-quality-2:
+    name: preflight-quality (${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }})
+    needs: [preflight-verify, preflight-plan]
+    if: ${{ needs.preflight-plan.outputs.shards2 != '[]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        shard: ${{ fromJSON(needs.preflight-plan.outputs.shards2) }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.preflight-verify.outputs.sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }}
+        env:
+          SHARD: ${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }}
+          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }}
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_RELEASE_SCOPE: quality/release/scope.json
+        run: pnpm ci:quality-full "--shard=$SHARD"
+      # The reports upload only when this succeeds: it deletes what it can't
+      # read, and fails when it did, or when the canary is still in any.
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-preflight-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
+          # last wave's end before the verdict downloads them (past about 290 shards at the
+          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
+          retention-days: 3
+
+  preflight-quality-3:
+    name: preflight-quality (${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }})
+    needs: [preflight-verify, preflight-plan]
+    if: ${{ needs.preflight-plan.outputs.shards3 != '[]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        shard: ${{ fromJSON(needs.preflight-plan.outputs.shards3) }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.preflight-verify.outputs.sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }}
+        env:
+          SHARD: ${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }}
+          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }}
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_RELEASE_SCOPE: quality/release/scope.json
+        run: pnpm ci:quality-full "--shard=$SHARD"
+      # The reports upload only when this succeeds: it deletes what it can't
+      # read, and fails when it did, or when the canary is still in any.
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-preflight-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
+          # last wave's end before the verdict downloads them (past about 290 shards at the
+          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
           retention-days: 3
 
   # release.yml's rc-quality-verdict: the merged verdict over every shard
@@ -204,7 +329,15 @@ jobs:
   # every shard passed.
   preflight-verdict:
     name: preflight-verdict
-    needs: [preflight-verify, preflight-plan, preflight-quality]
+    needs:
+      [
+        preflight-verify,
+        preflight-plan,
+        preflight-quality-1,
+        preflight-quality-2,
+        preflight-quality-3,
+      ]
+    if: ${{ !cancelled() && needs.preflight-verify.result == 'success' && needs.preflight-plan.result == 'success' && (needs.preflight-quality-1.result == 'success' || (needs.preflight-quality-1.result == 'skipped' && needs.preflight-plan.outputs.shards1 == '[]')) && (needs.preflight-quality-2.result == 'success' || (needs.preflight-quality-2.result == 'skipped' && needs.preflight-plan.outputs.shards2 == '[]')) && (needs.preflight-quality-3.result == 'success' || (needs.preflight-quality-3.result == 'skipped' && needs.preflight-plan.outputs.shards3 == '[]')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
