@@ -1524,6 +1524,12 @@
   [data-variant='chapters'] .ch-page--verso {
     grid-row: 1;
   }
+  /* A solo spread's verso spans to the spread's end line wide; folded there's one column, so it
+     takes it, never the 0 px tracks those lines would make (row 118: the band and its who-line
+     had a content box 0 px wide at 390 on a portfolio with no signature work). */
+  [data-variant='chapters'] .ch-spread--solo .ch-page--verso {
+    grid-column: 1;
+  }
   [data-variant='chapters'] .ch-folio--verso {
     grid-row: 2;
   }
