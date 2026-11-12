@@ -1275,6 +1275,132 @@ test('logout still needs the exact Origin, and with a session that counts, its C
   assert.equal((await send(studio('auth.session', token))).status, 401);
 });
 
+// Sign out without JavaScript (row 88c-RC2, F2(ii) as the owner ruled): Studio's Sign out is a
+// form from the first byte, so auth.logout takes a form post. A form post needs no CSRF token,
+// as nothing without script can send one, only on the exact Origin with Sec-Fetch-Site present
+// and same-origin, which only a browser sets; JSON, and every other command, keep the token.
+
+/** auth.logout as Studio's Sign out form posts it: the exact Origin, same-origin, no token. */
+function formLogout(
+  token?: string,
+  body: Record<string, string> = {},
+  headers: Record<string, string> = {},
+) {
+  const sent = new Headers({
+    origin: ORIGIN,
+    'sec-fetch-site': 'same-origin',
+    'x-request-id': 'req-form-logout',
+    'content-type': 'application/x-www-form-urlencoded',
+  });
+  if (token) sent.set('cookie', `__Host-studio_session=${token}`);
+  for (const [name, value] of Object.entries(headers)) {
+    if (value === '') sent.delete(name);
+    else sent.set(name, value);
+  }
+  return new Request(`${ORIGIN}/api/studio/auth.logout`, {
+    method: 'POST',
+    headers: sent,
+    body: new TextEncoder().encode(new URLSearchParams(body).toString()),
+  });
+}
+
+test('a Sign out form post with a session, on the exact Origin and same-origin, needs no token: 303 to signed out, the cookie and the cache cleared, and the session over (row 88c-RC2)', async (t) => {
+  const { send } = await setup(t);
+  const token = tokenOf(await send(login()))!;
+  const out = await send(formLogout(token));
+  assert.equal(out.status, 303);
+  assert.equal(out.headers.get('location'), '/studio/sign-in?state=signed_out');
+  assert.deepEqual(out.headers.getSetCookie(), [CLEARED]);
+  assert.equal(out.headers.get('clear-site-data'), '"cache"');
+  assert.equal((await send(studio('auth.session', token))).status, 401);
+});
+
+/**
+ * The pending-discard marker an https Studio sets (lib/studio/discard-marker.ts, the coordinator's
+ * ruling, 2026-11-10): its value is the sign-out's time, and it's HttpOnly, as only Studio's pages
+ * read it, server-side. The same name, scope and lifetime as before.
+ */
+const DISCARD_MARKER =
+  /^__Host-studio_discard=(\d+); Path=\/; Max-Age=604800; HttpOnly; SameSite=Strict; Secure$/;
+
+test("a Sign out form post that asks to discard clears the cache alone, never the origin's storage, and leaves a pending-discard marker for Studio's next script; keep, or no choice, leaves none (row 88c-RC2)", async (t) => {
+  const { send } = await setup(t);
+  for (const [choice, marked] of [
+    [undefined, false],
+    ['keep', false],
+    ['discard', true],
+  ] as const) {
+    const token = tokenOf(await send(login()))!;
+    const asked = Date.now();
+    const out = await send(formLogout(token, choice ? { choice } : {}));
+    const answered = Date.now();
+    assert.equal(out.status, 303, String(choice));
+    // The public site's preferences stay: no "storage", ever.
+    assert.equal(out.headers.get('clear-site-data'), '"cache"', String(choice));
+    const cookies = out.headers.getSetCookie();
+    assert.equal(cookies[0], CLEARED, String(choice));
+    assert.equal(cookies.length, marked ? 2 : 1, String(choice));
+    if (marked) {
+      const at = Number(DISCARD_MARKER.exec(cookies[1]!)?.[1]);
+      assert.ok(
+        at >= asked && at <= answered,
+        `the marker holds the sign-out's time: ${cookies[1]}`,
+      );
+    }
+    assert.equal((await send(studio('auth.session', token))).status, 401, String(choice));
+  }
+  // A JSON logout, whose script clears the journal itself, sets no marker.
+  const scripted = tokenOf(await send(login()))!;
+  const json = await send(studio('auth.logout', scripted, { choice: 'discard' }));
+  assert.equal(json.status, 200);
+  assert.equal(json.headers.get('clear-site-data'), '"cache"');
+  assert.deepEqual(json.headers.getSetCookie(), [CLEARED]);
+  // Any other choice is no Sign out: the session stays.
+  const token = tokenOf(await send(login()))!;
+  const odd = await send(formLogout(token, { choice: 'everything' }));
+  assert.equal(odd.status, 400);
+  assert.equal((await send(studio('auth.session', token))).status, 200);
+});
+
+test("a Sign out form post the store can't finish goes to the store-failed state, never to signed out (row 88c-RC2, row 88b)", async (t) => {
+  const { send, auth } = await setup(t);
+  t.mock.method(console, 'log', () => {});
+  const token = tokenOf(await send(login()))!;
+  const out = await standingIn(auth, 'end', refusedEnd, () => send(formLogout(token)));
+  assert.equal(out.status, 303);
+  assert.equal(out.headers.get('location'), '/studio/sign-in?state=store_failed');
+  assert.deepEqual(out.headers.getSetCookie(), [CLEARED]);
+  assert.equal(out.headers.get('clear-site-data'), '"cache"');
+});
+
+test('a tokenless Sign out form post needs Sec-Fetch-Site present and same-origin, and the exact Origin; a JSON logout still needs its token (row 88c-RC2)', async (t) => {
+  const { send, audit } = await setup(t);
+  const token = tokenOf(await send(login()))!;
+  const cases: [what: string, headers: Record<string, string>, reason: string][] = [
+    ['no Sec-Fetch-Site', { 'sec-fetch-site': '' }, 'fetch_site'],
+    ['a same-site post', { 'sec-fetch-site': 'same-site' }, 'fetch_site'],
+    ['a cross-site post', { 'sec-fetch-site': 'cross-site' }, 'fetch_site'],
+    ['a user-started post', { 'sec-fetch-site': 'none' }, 'fetch_site'],
+    ['no Origin', { origin: '' }, 'origin_missing'],
+    ['the demo sibling', { origin: 'https://demo.rowan.test' }, 'origin_mismatch'],
+    ['an opaque origin', { origin: 'null' }, 'origin_mismatch'],
+  ];
+  for (const [what, headers, reason] of cases) {
+    const response = await send(formLogout(token, {}, headers));
+    assert.equal(response.status, 403, what);
+    assert.equal(await errorCode(response), 'request_origin_rejected', what);
+    assert.equal(response.headers.get('set-cookie'), null, what);
+    assert.equal(audit.records.at(-1)?.refs.reason, reason, what);
+  }
+  const json = studio('auth.logout', token);
+  json.headers.delete('x-csrf-token');
+  const refused = await send(json);
+  assert.equal(refused.status, 403, 'JSON without its token');
+  assert.equal(audit.records.at(-1)?.refs.reason, 'csrf_missing');
+  // None of them ended the session.
+  assert.equal((await send(studio('auth.session', token))).status, 200);
+});
+
 test('logout, revocation, eviction, and revoke-sessions each end the session on its next request', async (t) => {
   const { send, dataDir, advance } = await setup(t);
   const signIn = async () => {

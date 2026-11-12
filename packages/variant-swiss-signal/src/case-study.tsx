@@ -319,7 +319,7 @@ function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
               className="ss-poster__line"
               data-length={length}
               data-word={fits ? 'long' : undefined}
-              style={fits ? (wordFit(title) as CSSProperties) : undefined}
+              style={length !== 'long' ? (wordFit(title) as CSSProperties) : undefined}
             >
               <h1 className="ss-case__title" id={own('title')}>
                 <span className="ss-poster__text" data-type-role="display">

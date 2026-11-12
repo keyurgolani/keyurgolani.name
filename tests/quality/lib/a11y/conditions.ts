@@ -1516,23 +1516,52 @@ const UNDER_WAY = (() => {
 })();
 
 /**
- * Whether a pixel of `a`, the surface's clip under the first fill, and the
- * same pixel of `b`, under the second, shows what's under the surface: every
- * channel moved the fills' own way between them (UNDER_WAY), strictly, as a
- * surface any short of solid blends them in, down to 254 of 255 opaque, a
- * level or two. A pixel that moves against them in any channel isn't the
- * fill: an antialiased edge rastered a few levels apart from one shot to the
- * next (Kinetic Cosmos's offer card, every channel down, see-through round 3).
+ * How many of a clip's pixels must move the fills' way for its surface to show through: 16, or
+ * every pixel of a clip smaller than that (row 119, the coordinator's bar). A surface short of solid
+ * blends the fills in across all of its fill, and the clip already leaves out its corner radius and
+ * border, so what is see-through moves a run of pixels at least: a 1 px hairline 16 px long, or a
+ * 4x4 hole, still counts. What moves fewer is the raster, not the fill. At an antialiased edge a
+ * stroke's partly covered pixel is composited once per shot, and can come out a level apart between
+ * the two fills even inside an opaque surface: Kinetic Cosmos's index at 1024x768, missing-media /
+ * dark, moved one pixel of its orrery's SVG at (480, 327) by +1, -1, +1, the fills' own signs, in
+ * both passes of the row 119 probe, its dialog opaque. A count, not a share of the clip: a share
+ * large enough to pass that pixel in a small control would miss a small translucent badge in a big
+ * dialog.
+ */
+export const SEE_THROUGH_PIXELS = 16;
+
+/**
+ * Whether `a`, the surface's clip under the first fill, and `b`, under the second, show what's
+ * under the surface: at least SEE_THROUGH_PIXELS of their pixels, or all of a smaller clip's, moved
+ * the fills' own way between them (UNDER_WAY) in every channel, strictly, as a surface any short of
+ * solid blends them in, down to 254 of 255 opaque, a level or two. A pixel that moves against them
+ * in any channel isn't the fill: an antialiased edge rastered a few levels apart from one shot to
+ * the next (Kinetic Cosmos's offer card, every channel down, see-through round 3). Clips of two
+ * sizes can't be compared, and fail closed.
  */
 export function showsThrough(a: Image, b: Image): boolean {
   if (a.width !== b.width || a.height !== b.height) return true;
+  const need = Math.min(SEE_THROUGH_PIXELS, a.width * a.height);
+  let moved = 0;
   for (let i = 0; i < a.width * a.height; i++) {
     let way = true;
     for (let channel = 0; channel < 3 && way; channel++)
       way = Math.sign(a.data[i * 4 + channel]! - b.data[i * 4 + channel]!) === UNDER_WAY[channel];
-    if (way) return true;
+    if (way && ++moved >= need) return true;
   }
   return false;
+}
+
+/**
+ * The see-through verdict on a surface's two shots: off settled frames, showsThrough()'s; off a
+ * surface that never held still, any pixel that differs at all, so it fails closed, as before.
+ */
+export function seenThrough(a: Image, b: Image, settled: boolean): boolean {
+  return settled
+    ? showsThrough(a, b)
+    : a.width !== b.width ||
+        a.height !== b.height ||
+        a.data.some((value, i) => value !== b.data[i]);
 }
 
 /** How long a fill's shot may wait for the surface to hold still: a ring still settling, say. */
@@ -1725,12 +1754,7 @@ async function seeThrough(
     }
   });
   const [a, b] = shots.map(decodePng);
-  // Off a settled frame, a pixel counts only the fills' way (showsThrough()). A surface that never
-  // held still fails closed, as before: any pixel that differs at all counts.
-  return {
-    through: settled ? showsThrough(a!, b!) : a!.data.some((value, i) => value !== b!.data[i]),
-    settled,
-  };
+  return { through: seenThrough(a!, b!, settled), settled };
 }
 
 interface Transparency {

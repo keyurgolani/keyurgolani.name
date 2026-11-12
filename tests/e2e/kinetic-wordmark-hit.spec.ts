@@ -60,3 +60,48 @@ test(
     expect(hits.tagline, "the tagline's center reaches the link").toMatchObject({ reaches: true });
   },
 );
+
+// Row 129 (rc.1's release run, shards 39, 48, 82 and 84): the quality cells' occlusion check
+// still finds the link obscured at 390 on the missing-media home, in every mode. It reads the
+// paint stack with pointer events forced on, so a layer is whatever paints over the point,
+// whatever its pointer-events, and the tagline, painted after the link, lies over the link's
+// center. So the link paints above its tagline: at its center the stack's top is the link, as
+// the check reads it, in light, dark, high contrast and the system's mode.
+for (const mode of ['light', 'dark', 'high-contrast', 'system'] as const) {
+  test(
+    `in ${mode}, the wordmark link paints above its tagline, so its center is the link with pointer events forced, at 390 on the missing-media home (row 129)`,
+    { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+    async ({ page, app }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.context().addCookies([
+        {
+          name: 'portfolio_appearance',
+          value: new URLSearchParams({ scheme: 'warm-parchment', mode }).toString(),
+          url: app.origin,
+        },
+      ]);
+      await page.goto('/', { waitUntil: 'networkidle' });
+      if (mode !== 'system') {
+        await expect(page.locator('[data-variant]').first()).toHaveAttribute(
+          'data-display-mode',
+          mode,
+        );
+      }
+      await expect(page.locator('.kc-masthead .kc-wordmark__role').first()).toBeVisible();
+      const hit = await page.evaluate(() => {
+        const style = document.createElement('style');
+        style.textContent = '*, *::before, *::after { pointer-events: auto !important; }';
+        document.head.append(style);
+        const a = document.querySelector('.kc-masthead .kc-wordmark__link')!;
+        const box = a.getClientRects()[0] ?? a.getBoundingClientRect();
+        const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        style.remove();
+        return {
+          reaches: top !== null && (top === a || a.contains(top)),
+          top: top ? `${top.tagName.toLowerCase()}.${[...top.classList].join('.')}` : 'nothing',
+        };
+      });
+      expect(hit, `${mode}: the stack's top at the link's center`).toMatchObject({ reaches: true });
+    },
+  );
+}

@@ -646,7 +646,11 @@ const OPERATIONS: readonly Operation[] = [
     name: 'auth.logout',
     kind: 'command',
     capability: 'auth.session',
-    input: NO_INPUT,
+    // Studio's Sign out posts it as a form from the first byte, so it works before the shell
+    // hydrates and without JavaScript (row 88c-RC2). Its one field is the no-JS choice to discard
+    // this browser's unsaved changes; keep is the default.
+    input: z.object({ choice: z.enum(['keep', 'discard']).optional() }).strict(),
+    bodyTypes: ['json', 'form'],
     output: z
       .object({ signedOut: z.literal(true), reason: z.literal('store_failed').optional() })
       .strict(),

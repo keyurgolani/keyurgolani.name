@@ -1983,8 +1983,56 @@
 }
 
 @media (max-width: 48rem) {
+  /* With the root text at 200% a phone's twelve tracks came to nothing: eleven rem gutters fill its
+     width, and everything placed on them ran past the page (row 19). On every twelve-track grid the
+     gutter is at most an eleventh of the grid's width, so the tracks and their gutters never come to
+     more than the page; at 1x the gutter is the smaller and nothing moves. The token stays as it is:
+     it also sizes boxes and rules, where 100% is another box's width. */
+  [data-variant='swiss-signal'] :is(.ss-grid, .ss-spread, .ss-press, .ss-contact, .ss-cited) {
+    column-gap: min(var(--layout-grid-gutter), 100% / 11);
+  }
+
+  /* A list's term sits over its value where the list is under 13 of its own letters wide: at 200% root
+     text a phone's row is that narrow, and the term's rem minimum (7rem on a case's facts) left its value
+     a column under one letter wide, whose letters ran off the page (row 19, a case at 320). At 1x every
+     list is 20 of its letters wide or more, and nothing moves. */
+  [data-variant='swiss-signal'] .ss-dl {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 13em) {
+    [data-variant='swiss-signal'] :is(.ss-dl, .ss-case__facts .ss-dl) > div {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Under 48rem the masthead is the name and the Index, at its two ends: the name takes what the Index
+     leaves and wraps beside it, as it did on nine tracks, and the Index goes under the name only where
+     the name's longest word and the Index don't fit side by side (the root text at 200% on a narrow
+     phone). At 1x both sit exactly where the twelve tracks put them. */
+  [data-variant='swiss-signal'] .ss-masthead__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    /* Its one row's space above and below the Index button, kept when it wraps: the name sits that far
+       under the masthead's top, and the Index that far over its rule (row 127). In one row it is the same
+       box as before. */
+    padding-block: max(0px, calc((var(--layout-masthead) - 2.75rem) / 2));
+  }
+
   [data-variant='swiss-signal'] .ss-masthead__name {
-    grid-column: 1 / span 9;
+    flex: 1 1 0;
+  }
+
+  [data-variant='swiss-signal'] .ss-index {
+    margin-inline-start: auto;
+  }
+
+  /* The address's band clears its letters' box at a phone's size too: 0.04em is under a pixel there,
+     and a 3 px band rose into them (row 115). The link is inline, so the padding moves the band,
+     never the line. */
+  [data-variant='swiss-signal'] .ss-email a {
+    padding-block-end: calc(var(--layout-rule-heavy-size) + 0.125rem);
   }
 
   [data-variant='swiss-signal'] .ss-masthead__cell {
@@ -2374,5 +2422,36 @@
 
   [data-variant='swiss-signal'] :is(.ss-sel__title, .ss-row__title) a::after {
     position: static;
+  }
+}
+
+/* ── The poster line where its column is narrow for the reader's text ── */
+
+/*
+ * Where the poster's column holds under 14rem, the poster line's display type (the home hero, a case's
+ * title) is sized from its column: its step, or the size at which its longest word fits the column at
+ * 0.85em a letter, whichever is smaller, never under body size, and it breaks only between words (row 127).
+ * The width is in rem, not px, on purpose: in a container query rem resolves against the root's font size,
+ * so 14rem tracks the reader's text size. At 1x every phone's column holds 17.75rem or more and nothing here
+ * applies; with the root text at 200% a phone's holds 7.75 to 9.9rem. A single word wider than the column at
+ * body size (at 320 with 200% text, about 12 capitals or more) still runs past it: no browser this site is
+ * tested in hyphenates.
+ */
+@container (max-width: 14rem) {
+  [data-variant='swiss-signal'] .ss-poster__line:not([data-length='long']) .ss-poster__text {
+    font-size: max(
+      var(--type-body-font-size),
+      min(var(--type-step-7), calc(100cqi / (var(--layout-ss-word, 8) * 0.85)))
+    );
+    overflow-wrap: normal;
+  }
+
+  [data-variant='swiss-signal']
+    :is(.ss-poster__line[data-length='medium'], .ss-poster__line[data-word='long'])
+    .ss-poster__text {
+    font-size: max(
+      var(--type-body-font-size),
+      min(var(--type-step-6), calc(100cqi / (var(--layout-ss-word, 8) * 0.85)))
+    );
   }
 }
