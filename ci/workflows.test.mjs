@@ -655,13 +655,14 @@ test('rc-preflight reads only, holds no secret, reads no cache, keeps shard repo
   assert.deepEqual(passedRuns('v1.0.0-rc.1', sha, [run], runJobs), []);
 });
 
-test("only release.yml's and rc-preflight.yml's quality jobs name a release scope: every other workflow's gate stays strict", () => {
+test("only release.yml's, rc-preflight.yml's and inventory.yml's quality jobs name a release scope: every other workflow's gate stays strict", () => {
   const dir = new URL('../.github/workflows/', import.meta.url);
   const naming = readdirSync(dir)
     .filter((file) => /\.ya?ml$/.test(file))
     .filter((file) => readFileSync(new URL(file, dir), 'utf8').includes('QUALITY_RELEASE_SCOPE'))
     .sort();
-  assert.deepEqual(naming, ['rc-preflight.yml', 'release.yml']);
+  // inventory.yml runs (c′) whole on its own branches, by its own scope file, and gates on no list.
+  assert.deepEqual(naming, ['inventory.yml', 'rc-preflight.yml', 'release.yml']);
   for (const workflow of [RELEASE, PREFLIGHT]) {
     // Never for a whole workflow or job: only on the steps that plan, run or judge the release.
     assert.equal(workflow.env?.QUALITY_RELEASE_SCOPE, undefined);
@@ -726,4 +727,85 @@ test('each sharded suite runs as many shards as ci/shards.mjs splits it into, an
   const block = source.slice(start, start + 1 + next);
   assert.ok(start >= 0 && next > 0, 'the browser job in ci.yml');
   assert.match(block, /\n {8}shard: \[1, 2, 3, 4\]\n/);
+});
+
+test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/inventory-* pushes alone, with no release job, and its summary reports", () => {
+  const INVENTORY = read('.github/workflows/inventory.yml');
+  // A push of an inventory branch: no tag, no dispatch, no other branch.
+  assert.deepEqual(INVENTORY.on, { push: { branches: ['kgn-a/inventory-*'] } });
+  assert.deepEqual(INVENTORY.permissions, { contents: 'read' });
+  assert.deepEqual(Object.keys(INVENTORY.jobs), [
+    'inventory-plan',
+    'inventory-1',
+    'inventory-2',
+    'inventory-3',
+    'inventory-summary',
+  ]);
+  const text = JSON.stringify(INVENTORY.jobs);
+  assert.doesNotMatch(text, /secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN/);
+  assert.doesNotMatch(
+    text,
+    /docker |buildx|build-push-action|login-action|attest|imagetools|grype|retag|git (tag|push)|gh release|ghcr|promote/i,
+  );
+  for (const [id, job] of Object.entries(INVENTORY.jobs)) {
+    assert.equal(job.permissions, undefined, `${id} keeps contents: read`);
+    assert.ok(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes'] > 0, id);
+    for (const checkout of job.steps.filter((s) => /^actions\/checkout@/.test(s.uses ?? '')))
+      assert.equal(checkout.with['persist-credentials'], false, id);
+    assert.deepEqual(
+      job.steps.filter(usesCache).map((s) => s.name ?? s.uses),
+      [],
+      id,
+    );
+  }
+  // Each matrix job is release.yml's rc-quality job of its number, but for its names, its scope
+  // file, its artifacts, and a run step that reports rather than gates.
+  for (const k of [1, 2, 3]) {
+    const own = structuredClone(INVENTORY.jobs[`inventory-${k}`]);
+    let release = JSON.stringify(RELEASE.jobs[`rc-quality-${k}`])
+      .replaceAll('needs.rc-quality-plan.', 'needs.inventory-plan.')
+      .replaceAll('quality/release/scope.json', 'quality/inventory/scope.json')
+      .replaceAll('reports-quality-release-', 'reports-inventory-');
+    release = JSON.parse(release);
+    release.name = release.name.replace(/^rc-quality \(/, 'inventory (');
+    release.needs = ['inventory-plan'];
+    release.if = `\${{ needs.inventory-plan.outputs.shards${k} != '[]' }}`;
+    const run = (job) => job.steps.find((s) => /pnpm ci:quality-full/.test(s.run ?? ''));
+    assert.match(run(own).run, /pnpm ci:quality-full "--shard=\$SHARD" \|\| status=\$\?/);
+    assert.deepEqual(run(own).env, run(release).env);
+    for (const job of [own, release]) {
+      const step = run(job);
+      delete step.run;
+      for (const each of job.steps) {
+        const upload = /^actions\/upload-artifact@/.test(each.uses ?? '');
+        if (upload) assert.equal(each.with['retention-days'], 3);
+      }
+    }
+    assert.deepEqual(own, release, `inventory-${k}`);
+  }
+  assert.deepEqual(
+    [1, 2, 3].map((k) => INVENTORY.jobs[`inventory-${k}`].strategy['max-parallel']),
+    [6, 5, 5],
+  );
+  // The plan: rc-quality-plan's count, by the inventory's scope file, and the worker count.
+  const plan = INVENTORY.jobs['inventory-plan'];
+  const count = plan.steps.find((s) => s.id === 'count');
+  assert.equal(count.run, 'pnpm exec tsx tests/quality/full-plan.ts');
+  assert.equal(count.env.QUALITY_RELEASE_SCOPE, 'quality/inventory/scope.json');
+  assert.match(plan.steps.find((s) => s.id === 'workers').run, /quality\/inventory\/workers\.json/);
+  // The summary: every shard's reports, however the shards ended, and the inventory's command.
+  const summary = INVENTORY.jobs['inventory-summary'];
+  assert.deepEqual(summary.needs, ['inventory-plan', 'inventory-1', 'inventory-2', 'inventory-3']);
+  assert.equal(summary.if, "${{ !cancelled() && needs.inventory-plan.result == 'success' }}");
+  const merge = summary.steps.find((s) => /ci:inventory-summary/.test(s.run ?? ''));
+  assert.equal(merge.run, 'pnpm ci:inventory-summary "$SHARDS" --shards "$SHARD_COUNT"');
+  assert.equal(merge.env.SHARD_COUNT, '${{ needs.inventory-plan.outputs.count }}');
+  assert.equal(merge.env.QUALITY_RELEASE_SCOPE, undefined, 'it gates on no records list');
+  const download = summary.steps.find((s) => /^actions\/download-artifact@/.test(s.uses ?? ''));
+  assert.equal(download.with.pattern, 'reports-inventory-*');
+  const { scripts } = read('package.json');
+  assert.equal(
+    scripts['ci:inventory-summary'],
+    'node ci/run.mjs inventory-summary -- tsx tests/quality/inventory.ts',
+  );
 });

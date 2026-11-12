@@ -48,6 +48,11 @@ test("release.yml's PR dry run, a finished release run, and a branch push don't 
 
 test('an inventory evidence run, any run of inventory.yml on any branch or event, pauses it', () => {
   assert.equal(bigRun.INVENTORY_WORKFLOW, '.github/workflows/inventory.yml');
+  // The inventory run is that file, under that name, so a run of it is found.
+  const inventoryFile = parse(
+    readFileSync(new URL(`../${bigRun.INVENTORY_WORKFLOW}`, import.meta.url), 'utf8'),
+  );
+  assert.equal(inventoryFile.name, 'inventory');
   const inventory = run({
     id: 7,
     path: bigRun.INVENTORY_WORKFLOW,
