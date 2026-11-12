@@ -43,6 +43,7 @@ function measured(): { id: string; gzip: number; budget: number }[] {
       id: string;
       budgets?: { css?: number };
       kitLayout?: boolean;
+      scrollReserve?: { blockEnd: string; media?: string };
     };
     const target = exportTarget(pkg, './styles.css');
     assert.ok(target, `${name} exports no ./styles.css`);
@@ -53,6 +54,8 @@ function measured(): { id: string; gzip: number; budget: number }[] {
       shared: manifest.kitLayout === false ? [] : hooks.shared,
       layerOrder: hooks.layerOrder,
       layer: hooks.layer,
+      // With the host's root scroll-padding, as registry generation writes it.
+      scrollReserve: manifest.scrollReserve,
     });
     assert.ok(result.ok, `${manifest.id}: ${JSON.stringify(!result.ok && result.problems)}`);
     assert.ok(manifest.budgets?.css, `${manifest.id} declares no css budget`);

@@ -47,6 +47,11 @@ import {
   RESERVED_SEGMENTS,
   viewShape,
 } from './segments';
+import {
+  SCROLL_RESERVE_MINOR,
+  scrollReserveMediaProblem,
+  scrollReserveProblem,
+} from './scroll-reserve';
 import { TRANSITIONS_MINOR, transitionNameProblem } from './transitions';
 import {
   CONTRACT_MAJOR,
@@ -534,6 +539,7 @@ function checkRules(
   checkControls(manifest, report);
   checkEnhancements(manifest, context, report, notChecked);
   checkTransitions(manifest, report);
+  checkScrollReserve(manifest, report);
 
   // One action per key in a region.
   const bound = new Set<string>();
@@ -1043,6 +1049,54 @@ function checkTransitions(manifest: VariantManifest, report: Report) {
     }
   });
   duplicates(transitions.names, ['transitions', 'names'], (name) => name, report, 'name');
+}
+
+/**
+ * A reserve at the window's block end (contract 2.1): only in a 2.1
+ * manifest, its blockEnd a length the root resolves, at most 8rem, and its
+ * media, if any, one width condition in rem or (hover: none).
+ */
+function checkScrollReserve(manifest: VariantManifest, report: Report) {
+  const reserve = manifest.scrollReserve;
+  if (!reserve) return;
+  const contract = parseContractVersion(manifest.contract);
+  if (contract && contract.minor < SCROLL_RESERVE_MINOR) {
+    report(
+      'manifest.invalid',
+      ['scrollReserve'],
+      `is a reserve at the window's block end, which contract 2.${SCROLL_RESERVE_MINOR} adds, and the manifest declares contract ${manifest.contract}.`,
+      `Declare contract 2.${SCROLL_RESERVE_MINOR}, or remove scrollReserve.`,
+      { expected: `contract 2.${SCROLL_RESERVE_MINOR} or later`, actual: manifest.contract },
+    );
+  }
+  const length = scrollReserveProblem(reserve.blockEnd);
+  if (length) {
+    report(
+      'manifest.invalid',
+      ['scrollReserve', 'blockEnd'],
+      length,
+      'Give it in rem, such as 5rem.',
+      {
+        expected: 'a rem or px length, or one calc(), min(), or max() of them, at most 8rem',
+        actual: reserve.blockEnd,
+      },
+    );
+  }
+  if (reserve.media !== undefined) {
+    const media = scrollReserveMediaProblem(reserve.media);
+    if (media) {
+      report(
+        'manifest.invalid',
+        ['scrollReserve', 'media'],
+        media,
+        'Name the width the bar is pinned below or above, in rem, or leave media out.',
+        {
+          expected: '(max-width: <n>rem), (min-width: <n>rem), or (hover: none)',
+          actual: reserve.media,
+        },
+      );
+    }
+  }
 }
 
 function checkEnhancements(

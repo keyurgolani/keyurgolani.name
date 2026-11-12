@@ -5,7 +5,7 @@
  * The variant contract this package defines. 2.1 (K-4) adds the render
  * input's resolved appearance packs, `input.appearance`, and K-4's motion
  * slots; a 2.0 manifest still registers. K-4 (a) and (d), and K-5's
- * kitLayout, add manifest fields under 2.1 too, which a 2.1 host built
+ * kitLayout, and scrollReserve, add manifest fields under 2.1 too, which a 2.1 host built
  * before them refuses, and so does K-3: the periodList and recordPlacement
  * control types, which a 2.1 host built before K-3 refuses as a schema
  * error on the control, and K-8: a contentRef of kinds ["media"], which one
