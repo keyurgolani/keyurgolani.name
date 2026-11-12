@@ -57,6 +57,9 @@ export const GOOD_RUN: PerfRun = {
   lcpMs: 900,
   cls: 0,
   tbtMs: 40,
+  // One 90 ms task after FCP, TBT's 40 ms, and a runner at the reference's speed (row 141).
+  blockingTasks: [90],
+  calibrationMs: 400,
   idleTaskMs: 12,
   heapMiB: 4,
   growthMiB: 0.1,

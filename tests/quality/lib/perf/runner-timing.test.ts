@@ -112,3 +112,31 @@ test("a load with no calibration fails closed: TBT and idle work don't come, and
     uncalibrated.map((run) => run.lcpMs),
   );
 });
+
+test('with no reference measured yet, every metric is read as measured, and the runner is still reported (row 141)', () => {
+  const unmeasured = {
+    ...thresholds,
+    timing: {
+      ...thresholds.timing,
+      calibration: { ...thresholds.timing.calibration, referenceMs: null },
+    },
+  } as Thresholds;
+  const runs = five(on(2, [150, 120], 300));
+  const result = timingResult(runs, 'medium', unmeasured);
+  const tbt = result.rows.find((each) => each.metric === 'tbtMs')!;
+  assert.equal(tbt.calibrated, false);
+  assert.equal(tbt.median, 440, 'TBT as this runner measured it');
+  assert.deepEqual(tbt.values, tbt.rawValues);
+  assert.deepEqual(result.runner, {
+    calibrationMs: [800, 800, 800, 800, 800],
+    factor: null,
+    referenceMs: null,
+  });
+  // The repository's own file: no reference until a CI run has measured one, and it says which.
+  const { referenceMs, measuredBy } = base.timing.calibration;
+  assert.equal(
+    referenceMs === null,
+    measuredBy === '',
+    'a reference names the run that measured it',
+  );
+});

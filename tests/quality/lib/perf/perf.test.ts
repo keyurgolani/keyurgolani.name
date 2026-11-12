@@ -438,7 +438,11 @@ test('the timing trend reports each median over its ceiling, and never fails a p
   ]);
   const markdown = timingMarkdown(trend);
   assert.match(markdown, /report only: a release run gates it/);
-  assert.match(markdown, /\| composition:fallback \| light \| tbtMs \| 260 \| 200 \| 0 \| over \|/);
+  // No reference measured yet (row 141), so the raw median column is empty.
+  assert.match(
+    markdown,
+    /\| composition:fallback \| light \| tbtMs \| 260 \| {2}\| 200 \| 0 \| over \|/,
+  );
   assert.match(timingMarkdown(timingTrend({ tests: [] })), /No perf test ran\./);
   // The release gate fails that one: 260 is 30% over.
   const first = { GITHUB_RUN_ATTEMPT: '1' };

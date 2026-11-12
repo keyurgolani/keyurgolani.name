@@ -68,6 +68,16 @@ export interface PerfRun {
   readonly cls: number | null;
   /** Total blocking time: long tasks' time over 50 ms, from FCP to 5 s after load. */
   readonly tbtMs: number | null;
+  /**
+   * Each long task TBT counted, as its length from FCP (a task FCP splits counted from FCP), in
+   * ms: what the gate recomputes TBT from at the reference runner's speed (row 141).
+   */
+  readonly blockingTasks: readonly number[] | null;
+  /**
+   * The calibration workload's TaskDuration on this runner, in ms, under the lab's CPU throttle,
+   * just before this load (row 141): the runner's speed, against timing.calibration.referenceMs.
+   */
+  readonly calibrationMs: number | null;
   /** TaskDuration over the idle window, in ms, less the harness's own garbage collection. */
   readonly idleTaskMs: number | null;
   /** JSHeapUsedSize at memory.sampleMs after load, after a garbage collection, in MiB. */
@@ -257,14 +267,49 @@ export function median(values: readonly number[]): number {
 
 const round = (value: number) => Math.round(value * 1000) / 1000;
 
+/** The metrics judged at the reference runner's speed (row 141); the rest are read as measured. */
+export const CALIBRATED_METRICS = [
+  'tbtMs',
+  'idleTaskMs',
+] as const satisfies readonly TimingMetric[];
+const calibrated = (metric: TimingMetric) =>
+  (CALIBRATED_METRICS as readonly TimingMetric[]).includes(metric);
+
+/**
+ * `run`'s value of `metric` at the reference runner's speed, or as measured where the metric
+ * isn't calibrated or no reference has been measured yet. Null where it can't be read: the
+ * metric didn't come, or the load has no calibration (or, for TBT, no long tasks) to scale by.
+ */
+export function atReference(
+  run: PerfRun,
+  metric: TimingMetric,
+  referenceMs: number | null,
+): number | null {
+  const measured = run[metric];
+  if (!calibrated(metric) || referenceMs === null) return measured;
+  if (measured === null || run.calibrationMs === null || !(run.calibrationMs > 0)) return null;
+  const scale = referenceMs / run.calibrationMs;
+  if (metric === 'idleTaskMs') return measured * scale;
+  // TBT: each long task at the reference speed, then its time over 50 ms.
+  if (run.blockingTasks === null) return null;
+  return run.blockingTasks.reduce((total, ms) => total + Math.max(0, ms * scale - 50), 0);
+}
+
 /** One metric over a cell's loads. */
 export interface TimingRow {
   readonly metric: TimingMetric;
   readonly ceiling: number;
   /** What the release run fails over: the ceiling plus timing.releaseTolerance of it. */
   readonly releaseLimit: number;
-  /** Each load's value, null where it didn't come. */
+  /**
+   * Each load's value, null where it didn't come: at the reference runner's speed for
+   * CALIBRATED_METRICS once a reference is measured (row 141), else as measured.
+   */
   readonly values: readonly (number | null)[];
+  /** Each load's value as measured on this runner. */
+  readonly rawValues: readonly (number | null)[];
+  /** The values are at the reference runner's speed. */
+  readonly calibrated: boolean;
   /** The median of the values that came, or null when none did. */
   readonly median: number | null;
   /** The spread, max less min, over the median: how steady the loads were. */
@@ -275,10 +320,20 @@ export interface TimingRow {
   readonly overRelease: boolean;
 }
 
+/** The runner's speed over a cell's loads (row 141). */
+export interface RunnerSpeed {
+  /** Each load's calibration workload, in ms. */
+  readonly calibrationMs: readonly (number | null)[];
+  /** Their median over the reference: 2 is a runner half the reference's speed. Null without both. */
+  readonly factor: number | null;
+  readonly referenceMs: number | null;
+}
+
 export interface TimingResult {
   readonly tier: PerformanceTier;
   readonly runs: number;
   readonly rows: readonly TimingRow[];
+  readonly runner: RunnerSpeed;
 }
 
 /** Each timing metric's median over `runs`, against its ceiling for `tier` and its release limit. */
@@ -288,13 +343,29 @@ export function timingResult(
   thresholds: Thresholds = loadThresholds(),
 ): TimingResult {
   const tolerance = thresholds.timing.releaseTolerance;
+  const referenceMs = thresholds.timing.calibration.referenceMs;
+  const calibrations = runs.map((run) => run.calibrationMs ?? null);
+  const measuredSpeeds = calibrations.filter((ms): ms is number => ms !== null && ms > 0);
   return {
     tier,
     runs: runs.length,
+    runner: {
+      calibrationMs: calibrations,
+      factor:
+        referenceMs !== null && measuredSpeeds.length > 0
+          ? round(median(measuredSpeeds) / referenceMs)
+          : null,
+      referenceMs,
+    },
     rows: TIMING_METRICS.map((metric): TimingRow => {
       const ceiling = ceilingFor(metric, tier, thresholds);
       const releaseLimit = round(ceiling * (1 + tolerance));
-      const values = runs.map((run) => run[metric]);
+      const rawValues = runs.map((run) => run[metric]);
+      const scaled = calibrated(metric) && referenceMs !== null;
+      const values = runs.map((run) => {
+        const value = atReference(run, metric, referenceMs);
+        return value === null ? null : round(value);
+      });
       const present = values.filter((value): value is number => value !== null);
       const middle = present.length > 0 ? round(median(present)) : null;
       const spread =
@@ -306,6 +377,8 @@ export function timingResult(
         ceiling,
         releaseLimit,
         values,
+        rawValues,
+        calibrated: scaled,
         median: middle,
         spread,
         overCeiling: middle !== null && middle > ceiling,

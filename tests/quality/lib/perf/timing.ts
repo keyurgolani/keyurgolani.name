@@ -23,7 +23,7 @@ import type { Summary, SummaryTest } from '../../reporter';
 import type { Failure } from '../verdict';
 import { loadReleaseScope, type ReportedTiming } from '../release-scope';
 import { PERF_KIND } from './plan';
-import { releaseProblems, type TimingResult } from './samples';
+import { median, releaseProblems, type TimingResult } from './samples';
 
 /** One perf test's timing, as summary.json's timing block lists it. */
 export interface TrendEntry {
@@ -81,17 +81,22 @@ export function timingMarkdown(trend: TimingTrend): string {
   ];
   if (trend.tests.length === 0) return `${lines.join('\n')}No perf test ran.\n`;
   lines.push(
-    '| Target | Tier | Metric | Median | Ceiling | Spread | |',
-    '| --- | --- | --- | --- | --- | --- | --- |',
+    '| Target | Tier | Metric | Median | Raw median | Ceiling | Spread | |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- |',
   );
   for (const entry of trend.tests) {
     if (!entry.timing) {
-      lines.push(`| ${entry.target ?? entry.title} | | no timing | | | | |`);
+      lines.push(`| ${entry.target ?? entry.title} | | no timing | | | | | |`);
       continue;
     }
+    // Row 141: the calibrated rows are at the reference runner's speed; the raw median is this runner's.
+    const runner = entry.timing.runner;
+    const speed = runner?.factor != null ? ` (runner ${runner.factor}x the reference)` : '';
     for (const row of entry.timing.rows) {
+      const raw = row.rawValues?.filter((value): value is number => value !== null) ?? [];
+      const rawMedian = row.calibrated && raw.length > 0 ? `${median(raw)}${speed}` : '';
       lines.push(
-        `| ${entry.target ?? entry.title} | ${entry.timing.tier} | ${row.metric} | ${row.median ?? 'none'} | ${row.ceiling} | ${row.spread ?? ''} | ${row.overCeiling ? 'over' : ''} |`,
+        `| ${entry.target ?? entry.title} | ${entry.timing.tier} | ${row.metric} | ${row.median ?? 'none'} | ${rawMedian} | ${row.ceiling} | ${row.spread ?? ''} | ${row.overCeiling ? 'over' : ''} |`,
       );
     }
   }

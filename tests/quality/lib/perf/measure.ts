@@ -253,6 +253,57 @@ export function cumulativeShift(shifts: ProbeRead['shifts']): number {
   return largest;
 }
 
+/** Each long task TBT counts, from FCP to `endMs`, as its length from FCP: what TBT sums over 50 ms of. */
+export function blockingTasks(
+  longTasks: ProbeRead['longTasks'],
+  fcp: number,
+  endMs: number,
+): number[] {
+  return longTasks
+    .filter((task) => task.startTime <= endMs)
+    .map((task) => task.startTime + task.duration - Math.max(task.startTime, fcp))
+    .filter((length) => length > 0);
+}
+
+/**
+ * Row 141's calibration workload: fixed DOM, style and layout work, then fixed script work, the
+ * same bytes every time, so its TaskDuration says how fast the runner is, not the page.
+ */
+export const CALIBRATION_WORKLOAD = String.raw`(() => {
+  const root = document.createElement('div');
+  document.body.append(root);
+  for (let i = 0; i < 2000; i += 1) {
+    const line = document.createElement('p');
+    line.textContent = 'calibration line ' + i;
+    line.style.width = (40 + (i % 300)) + 'px';
+    root.append(line);
+  }
+  let sink = root.offsetHeight;
+  let x = 0;
+  for (let i = 0; i < 3000000; i += 1) x = (x * 31 + i) % 1000003;
+  const text = JSON.stringify(Array.from({ length: 20000 }, (_, i) => ({ i, v: 'value ' + i })));
+  sink += JSON.parse(text).length + x;
+  root.remove();
+  return sink;
+})()`;
+
+/**
+ * The calibration workload's TaskDuration, in ms, in a blank page under the lab's CPU throttle
+ * (row 141), or null when it couldn't be read. The caller has set the throttle.
+ */
+export async function calibrate(page: Page, cdp: CDPSession): Promise<number | null> {
+  try {
+    await page.goto('about:blank');
+    const before = (await metrics(cdp)).TaskDuration;
+    await page.evaluate(CALIBRATION_WORKLOAD);
+    const after = (await metrics(cdp)).TaskDuration;
+    if (before === undefined || after === undefined || !(after > before)) return null;
+    return Math.round((after - before) * 1000 * 1000) / 1000;
+  } catch {
+    return null;
+  }
+}
+
 /** Total blocking time: each long task's time past 50 ms, from FCP to `endMs`, a task FCP splits counted from FCP. */
 export function totalBlockingTime(
   longTasks: ProbeRead['longTasks'],
@@ -353,8 +404,10 @@ export async function defaultLoad(
 ): Promise<PerfRun> {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLING_RATE });
-  await cdp.send('Network.emulateNetworkConditions', { ...LAB_NETWORK });
   try {
+    // The runner's speed, under the same throttle, just before the load (row 141).
+    const calibrationMs = await calibrate(page, cdp);
+    await cdp.send('Network.emulateNetworkConditions', { ...LAB_NETWORK });
     const { status, html, loadEnd, until, payload } = await load(page, cdp, path);
     const idleFrom = thresholds.idle.startMs;
     const idleTo = idleFrom + thresholds.idle.windowMs;
@@ -397,6 +450,11 @@ export async function defaultLoad(
         probe.fcp === null
           ? null
           : totalBlockingTime(probe.longTasks, probe.fcp, loadEnd + LONG_TASK_WINDOW_MS),
+      blockingTasks:
+        probe.fcp === null
+          ? null
+          : blockingTasks(probe.longTasks, probe.fcp, loadEnd + LONG_TASK_WINDOW_MS),
+      calibrationMs,
       idleTaskMs:
         idleStart === null || idleEnd === null
           ? null

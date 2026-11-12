@@ -153,6 +153,16 @@ export const ThresholdsSchema = z
         description: Description,
         runs: z.number().int().positive(),
         releaseTolerance: z.number().nonnegative().max(1),
+        // Row 141: the runner's speed, read by a fixed workload before each load, and the
+        // reference it's judged at. referenceMs is null until a CI run has measured it
+        // (measuredBy); until then every metric is read as measured.
+        calibration: z
+          .object({
+            description: Description,
+            referenceMs: Positive.nullable(),
+            measuredBy: z.string(),
+          })
+          .strict(),
       })
       .strict(),
     exceptions: z
