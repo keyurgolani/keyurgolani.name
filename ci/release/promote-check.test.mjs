@@ -176,14 +176,22 @@ test("promotion is refused while the candidate's quality scope is narrowed or it
   assert.deepEqual(narrowed.targets, []);
   assert.equal(
     narrowed.reasons.join(),
-    `quality/release/scope.json keeps the candidate from a final release: its scope is "default-packs", not full. A final needs the full matrix clean: scope full, an empty list and no timingReported, then a new candidate. The full matrix fits the release's 256-shard matrix only once RC2's sizing item (per-test cost, then splitting the release matrix across jobs) lands, so v1.0.0 waits on it (on ${SHA})`,
+    `quality/release/scope.json keeps the candidate from a final release: its scope is "default-packs", not full or reachable. A final needs a whole matrix clean: scope full or reachable, an empty list and no timingReported, then a new candidate (on ${SHA})`,
   );
   const listed = evaluatePromotion(
     input({ quality: { scope: { ...scope, scope: 'full' }, records: [{ cell: 'a' }] } }),
   );
   assert.match(listed.reasons.join(), /its records list names 1 failing cell test\./);
   const both = evaluatePromotion(input({ quality: { scope, records: [{}, {}] } }));
-  assert.match(both.reasons.join(), /not full, and its records list names 2 failing cell tests\./);
+  assert.match(
+    both.reasons.join(),
+    /not full or reachable, and its records list names 2 failing cell tests\./,
+  );
+  // The reachable scope (c′) promotes, with an empty list: v1.0.0's rule.
+  const reachable = evaluatePromotion(
+    input({ quality: { scope: { ...scope, scope: 'reachable' }, records: [] } }),
+  );
+  assert.equal(reachable.ok, true, reachable.reasons.join());
   // A scope that reports any timing instead of gating it can't promote either.
   const timed = evaluatePromotion(
     input({
