@@ -5132,11 +5132,14 @@ details[open] > summary .studio-info__chevron {
 }
 
 /* ---------------------------------------------------------------- the bottom bar */
+/* The sandbox line, and the sheet foot's and Appearance's save note, which share it, wrap in their
+   column (row 110): at 200% root text in 1024 the stage's column is about 432 px, and one line ran
+   past it under .studio-split's overflow: hidden. At 100% they stay one line, as they were. */
 .studio-split__sandbox {
   margin: 0;
   color: var(--st-ink-2);
   font-size: var(--st-t-s);
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .studio-split__status {
