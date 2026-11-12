@@ -117,3 +117,57 @@ for (const [width, height] of [
         },
       );
   });
+
+/** The aside's size against its own step (step 3) and the pitch of its lines, the gaps between their tops. */
+const readPitch = () => {
+  const aside = document.querySelector('.ss-poster__line .ss-poster__aside')!;
+  const probe = document.createElement('span');
+  probe.style.fontSize = 'var(--type-step-3)';
+  aside.parentElement!.appendChild(probe);
+  const step = parseFloat(getComputedStyle(probe).fontSize);
+  probe.remove();
+  const range = document.createRange();
+  range.selectNodeContents(aside);
+  const tops = [
+    ...new Set(
+      [...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)),
+    ),
+  ].sort((a, b) => a - b);
+  return {
+    text: (aside.textContent ?? '').trim(),
+    size: parseFloat(getComputedStyle(aside).fontSize),
+    step,
+    pitches: tops.slice(1).map((top, i) => top - tops[i]!),
+  };
+};
+
+// At 320 with 200% text the aside's size is held near its step where its words fit (at least 90% of it on home,
+// whose words are short), and its lines sit at its own pitch, at most 1.3 times its size, never the display
+// line's strut (lead A, after T3b's look packet on c7ab13453: home's aside at body size, a display line apart).
+test.describe('at 320, the aside on its own pitch', () => {
+  test.use({ viewport: { width: 320, height: 568 }, isMobile: true, hasTouch: true });
+  for (const [name, route, near] of [
+    ["the home hero's aside", '/', 0.9],
+    ["a case's aside", '/work/project-name', 0],
+  ] as const)
+    test(
+      `at 320 with the root text at 200%, ${name} keeps ${near ? 'at least 90% of its step and ' : ''}its own line pitch`,
+      { annotation: [{ type: 'route', description: route }] },
+      async ({ page }) => {
+        await page.goto(route, { waitUntil: 'networkidle' });
+        await rootAt200(page);
+        const read = await page.evaluate(readPitch);
+        if (near)
+          expect(
+            read.size,
+            `"${read.text}" at ${read.size}px against its step ${read.step}px`,
+          ).toBeGreaterThanOrEqual(read.step * near - 0.05);
+        expect(read.pitches.length, `"${read.text}" runs to more than one line`).toBeGreaterThan(0);
+        for (const pitch of read.pitches)
+          expect(
+            pitch,
+            `"${read.text}"'s line pitch against its ${read.size}px`,
+          ).toBeLessThanOrEqual(read.size * 1.3 + 0.5);
+      },
+    );
+});
