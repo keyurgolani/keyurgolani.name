@@ -2070,13 +2070,14 @@
 }
 
 /*
- * A part of an address breaks only after its slash, never at a hyphen inside
- * it (P2-2); a link's own child, it takes the link's underline, as an inline
- * block can't by propagation.
+ * A part of an address breaks only after its slash, at the <wbr> between
+ * parts, never at a hyphen inside it (P2-2). Inline, so a link's ring goes
+ * round the link's own box and its underline reaches it by propagation: an
+ * inline block stood taller than the link's box, and the ring went round it
+ * (row 97).
  */
 [data-variant='editorial-evidence'] .ee-url__part {
-  display: inline-block;
-  text-decoration: inherit;
+  white-space: nowrap;
 }
 
 [data-variant='editorial-evidence'] .ee-case__matter {

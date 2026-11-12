@@ -420,7 +420,12 @@ export function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
                       <span key="l" className="ee-links">
                         {links.map((link, index) => (
                           <a key={index} href={hrefFor(link.url, input)}>
-                            {link.text}
+                            {/* A bare address breaks after its slashes, as the back matter's do (row 98). */}
+                            {link.text === bare(link.url) ? (
+                              <Breakable url={link.url} />
+                            ) : (
+                              link.text
+                            )}
                           </a>
                         ))}
                       </span>,
