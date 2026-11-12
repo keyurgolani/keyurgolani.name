@@ -1591,6 +1591,18 @@ const COVER_GLYPHS_NOT_BOX = built(
   '<div class="bar"></div><p class="band">A paragraph a pixel tall, whose later lines the fixed bar covers.</p>',
 );
 
+/**
+ * A skip link out of sight until focused, as the kit's primitives set one (a pixel's box, overflow hidden,
+ * clip-path inset(50%)), at the page's top under a fixed bar (row 152's reach): its line runs past its box, but
+ * none of it paints, so no cover hides anything a visitor reads, and nothing is unresolved. The paragraph after it
+ * starts below the bar, so the skip link is the one thing the bar sits over.
+ */
+const COVER_CLIPPED_SKIP = built(
+  'A hidden skip link under the bar',
+  `${COVER_STYLE} .bar { inset: 0 0 auto; block-size: 40px; } #text { margin-block-start: 3rem; } .skip { position: absolute; inset: 0 auto auto 0; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; color: #222; }`,
+  '<a class="skip" href="#text">Skip to the content</a><div class="bar"></div><p class="band" id="text">A paragraph clear of the bar.</p>',
+);
+
 /** A block across the page whose short line is clear of a fixed bar over its box's empty top-right corner. */
 const COVER_EMPTY_CORNER = built(
   "A bar over a block's empty corner",
@@ -3212,6 +3224,15 @@ export const A11Y_CASES: readonly MetaCase[] = [
     expect: 'pass',
     browser: true,
     run: () => onPage(COVER_EMPTY_CORNER, contrast),
+  },
+  {
+    id: 'contrast/stuck-clipped-skip',
+    gate: 'contrast',
+    input:
+      "a skip link out of sight until focused, its line past its pixel box but clipped, under a fixed bar (row 152's reach)",
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(COVER_CLIPPED_SKIP, contrast),
   },
   // Text an on-scroll entrance slides into place is read once the slide has ended, where its
   // glyphs paint, and passes.
