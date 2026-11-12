@@ -1,0 +1,245 @@
+# Evidence only, never merged (runner-normalised timing): the calibration probe. Six jobs,
+# each on its own hosted runner in the pinned Playwright image, run every perf cell of the full
+# plan (their titles end "performance at 390x844 (<tier>)"), retries 0. Each perf load reads the
+# runner's speed first, the calibration workload's TaskDuration (lib/perf/measure.ts), and keeps
+# its long tasks. calibration-compare reads every job's summary.json (ci/evidence/
+# runner-calibration.mjs): the reference, the median calibration over every load of every job, which
+# timing.calibration.referenceMs takes with measuredBy naming this run; and per target, tbtMs and
+# idleTaskMs as each runner measured them and at the reference's speed, with how far apart the
+# runners read each. Runs on a push of its evidence branch alone, holds contents: read and no
+# secret, and reads no cache. Its six jobs run beside no other big run but its own directed cells.
+#
+# The directed cells: push CI's quality-pr set for this tip against the branch it lands on, run
+# here before the push brings them. directed-plan picks the [37] rule's base as quality-pr-plan
+# does on a push (ci/quality-base.mjs), with the landing branch's tip as the push's before, and
+# counts push CI's shards for the record (tests/quality/pr-count.ts). directed runs the same set in
+# 24 shards, six at a time, each planning the whole set and running its share of the groups
+# (tests/quality/lib/pr-shards.ts), and directed-verdict judges them whole, as quality-pr-verdict
+# does.
+name: runner-calibration
+
+on:
+  push:
+    branches: [kgn-a/runner-calibration-fbcca256b]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-calibration-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+
+jobs:
+  calibration:
+    name: calibration (runner ${{ matrix.job }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        job: [1, 2, 3, 4, 5, 6]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Every perf cell, retries 0
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+        run: |
+          status=0
+          pnpm ci:quality-full '--grep=performance at 390x844 \(' --retries=0 || status=$?
+          echo "the perf cells ended $status on runner ${{ matrix.job }}"
+      - name: Read the run
+        if: ${{ always() }}
+        run: node ci/evidence/runner-calibration.mjs one reports/quality/summary.json "runner-${{ matrix.job }}" "calibration-${{ matrix.job }}.json"
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Upload the run's readings
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: calibration-${{ matrix.job }}
+          path: calibration-${{ matrix.job }}.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-calibration-${{ matrix.job }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  calibration-compare:
+    name: calibration-compare
+    needs: [calibration]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ci/evidence/
+      - name: Download the runs' readings
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: calibration-*
+          path: ${{ runner.temp }}/calibration
+          merge-multiple: true
+      - name: Compare
+        run: node ci/evidence/runner-calibration.mjs compare "$RUNNER_TEMP/calibration"
+
+  directed-plan:
+    name: directed-plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      base: ${{ steps.base.outputs.base }}
+      diff: ${{ steps.base.outputs.diff }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: The quality host's registry
+        run: pnpm --filter @portfolio/web build:registry --modules-only
+        env:
+          QUALITY_FIXTURES: '1'
+          APPEARANCE_FIXTURES: '1'
+          BUDGET_FIXTURES: '1'
+      # The landing branch's tip as the push's before: every commit this tip brings directs its cells.
+      - name: The directed cells' base
+        id: base
+        env:
+          EVENT_NAME: push
+          EVENT_BEFORE: 5c05b4ab7403aa78a15875f1fe29331a2be6c3bd
+          EVENT_FORCED: 'false'
+        run: node ci/quality-base.mjs
+      - name: Push CI's shard count, for the record
+        env:
+          QUALITY_WEB: apps/web
+          QUALITY_CHANGED_BASE: ${{ steps.base.outputs.base }}
+          QUALITY_CHANGED_DIFF: ${{ steps.base.outputs.diff }}
+        run: pnpm exec tsx tests/quality/pr-count.ts
+
+  directed:
+    name: directed (${{ matrix.shard }}/24)
+    needs: [directed-plan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: The directed cells' base
+        env:
+          PLAN_BASE: ${{ needs.directed-plan.outputs.base }}
+          PLAN_DIFF: ${{ needs.directed-plan.outputs.diff }}
+        run: node ci/quality-base.mjs --from-plan
+      - name: pnpm ci:quality-pr --shard=${{ matrix.shard }}/24
+        run: pnpm ci:quality-pr "--shard=$SHARD"
+        env:
+          SHARD: ${{ matrix.shard }}/24
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_CHANGED_BASE: ${{ needs.directed-plan.outputs.base }}
+          QUALITY_CHANGED_DIFF: ${{ needs.directed-plan.outputs.diff }}
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-directed-shard-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  directed-verdict:
+    name: directed-verdict
+    needs: [directed-plan, directed]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Download the shards' reports
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: reports-directed-shard-*
+          path: ${{ runner.temp }}/quality-shards
+      - name: pnpm ci:quality-pr-verdict
+        env:
+          SHARDS: ${{ runner.temp }}/quality-shards
+          SHARD_JOBS: ${{ needs.directed.result }}
+        run: pnpm ci:quality-pr-verdict "$SHARDS" --shards 24 --mode pr --jobs "$SHARD_JOBS"
+      - name: Upload the verdict's reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-directed-verdict
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 7
