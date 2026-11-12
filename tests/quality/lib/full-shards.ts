@@ -171,16 +171,18 @@ export interface ReleasePace {
 }
 
 /**
- * The pace RELEASE_CEILING is fitted at. Until r5c evidence's CI Linux times are read
- * (release-fit.ts prints them for a times file), it holds the plan's own assumptions: FULL_FIXED,
- * and the release's weights at face value. Fitting a measured pace sets these two numbers and
- * nothing else.
+ * The pace RELEASE_CEILING is fitted at: rc.2's release run, 42966517304, fitted to its slowest
+ * shard (lib/release-fit.ts's fitShardPace over tests/quality/fixtures/release-run-42966517304.json,
+ * which release-fit.test.ts holds this to). Its 89 shards were each estimated at about 3,521 s and
+ * ran 5.9 to 40.1 minutes, 23.4 on the mean, against the 80 the old 4,800 s ceiling allowed, so
+ * the weights run about twice high on the mean and 1.3x high for the slowest. Fitting a newer run
+ * sets these numbers and nothing else.
  */
 export const RELEASE_PACE: ReleasePace = {
   source:
-    "The plan's own assumptions, not a measurement: FULL_FIXED, and the release block's p90 weights (shard-durations.json) at face value.",
-  overheadSeconds: FULL_FIXED,
-  pace: 1,
+    "rc.2's release run 42966517304 (14c88446e, scope default-packs), its slowest shard: 2,407 s for a 3,521 s estimate, past a 51 s fixed part (each job's time outside its run step, on the mean, from the Actions API's step times); every shard's estimate as rc-quality-plan gave it, worked out again at 14c88446e.",
+  overheadSeconds: 51,
+  pace: 0.76,
 };
 
 /**
@@ -208,7 +210,8 @@ export function fitReleaseCeiling(
  * The slowest a release shard may be estimated at, in seconds, its fixed part included: the release
  * plan's per-shard target, which rc-quality-plan counts its shards by (releaseFor). It's
  * fitReleaseCeiling(RELEASE_PACE), the 120-minute cap (RELEASE_TIMEOUT_MINUTES) over
- * TIMEOUT_MARGIN at the pace measured on CI Linux, and 4,800 s at the plan's own assumptions.
+ * TIMEOUT_MARGIN at the pace measured on CI Linux: 6,668 s at rc.2's (4,800 s at the plan's own
+ * assumptions, a pace of 1).
  */
 export const RELEASE_CEILING = fitReleaseCeiling(RELEASE_PACE);
 
