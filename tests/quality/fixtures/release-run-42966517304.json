@@ -1,0 +1,541 @@
+{
+  "source": "rc.2's release run 42966517304 (v1.0.0-rc.2, 14c88446e), scope default-packs: each rc-quality shard's job time and its run step's time, read from the run's jobs (the Actions API, no artifact or log), beside the estimate rc-quality-plan gave it, the sum of its tests' per-key p90 weights, worked out again at 14c88446e by tests/quality/full-plan.ts with the run's scope (89 shards, as the run had).",
+  "run": "42966517304",
+  "commit": "14c88446e431d88bff050f18716385146a3c0b2c",
+  "shards": [
+    {
+      "shard": 1,
+      "estimate": 3521,
+      "jobSeconds": 1640,
+      "runSeconds": 1590
+    },
+    {
+      "shard": 2,
+      "estimate": 3521,
+      "jobSeconds": 1518,
+      "runSeconds": 1470
+    },
+    {
+      "shard": 3,
+      "estimate": 3521,
+      "jobSeconds": 1927,
+      "runSeconds": 1869
+    },
+    {
+      "shard": 4,
+      "estimate": 3521,
+      "jobSeconds": 1763,
+      "runSeconds": 1719
+    },
+    {
+      "shard": 5,
+      "estimate": 3521,
+      "jobSeconds": 2020,
+      "runSeconds": 1959
+    },
+    {
+      "shard": 6,
+      "estimate": 3521,
+      "jobSeconds": 1741,
+      "runSeconds": 1699
+    },
+    {
+      "shard": 7,
+      "estimate": 3521,
+      "jobSeconds": 2407,
+      "runSeconds": 2350
+    },
+    {
+      "shard": 8,
+      "estimate": 3521,
+      "jobSeconds": 1527,
+      "runSeconds": 1479
+    },
+    {
+      "shard": 9,
+      "estimate": 3521,
+      "jobSeconds": 1383,
+      "runSeconds": 1330
+    },
+    {
+      "shard": 10,
+      "estimate": 3521,
+      "jobSeconds": 1181,
+      "runSeconds": 1139
+    },
+    {
+      "shard": 11,
+      "estimate": 3521,
+      "jobSeconds": 2047,
+      "runSeconds": 1998
+    },
+    {
+      "shard": 12,
+      "estimate": 3521,
+      "jobSeconds": 2400,
+      "runSeconds": 2342
+    },
+    {
+      "shard": 13,
+      "estimate": 3521,
+      "jobSeconds": 1238,
+      "runSeconds": 1191
+    },
+    {
+      "shard": 14,
+      "estimate": 3521,
+      "jobSeconds": 1820,
+      "runSeconds": 1771
+    },
+    {
+      "shard": 15,
+      "estimate": 3521,
+      "jobSeconds": 1654,
+      "runSeconds": 1601
+    },
+    {
+      "shard": 16,
+      "estimate": 3521,
+      "jobSeconds": 1667,
+      "runSeconds": 1621
+    },
+    {
+      "shard": 17,
+      "estimate": 3521,
+      "jobSeconds": 389,
+      "runSeconds": 343
+    },
+    {
+      "shard": 18,
+      "estimate": 3521,
+      "jobSeconds": 674,
+      "runSeconds": 537
+    },
+    {
+      "shard": 19,
+      "estimate": 3521,
+      "jobSeconds": 573,
+      "runSeconds": 526
+    },
+    {
+      "shard": 20,
+      "estimate": 3521,
+      "jobSeconds": 750,
+      "runSeconds": 703
+    },
+    {
+      "shard": 21,
+      "estimate": 3521,
+      "jobSeconds": 414,
+      "runSeconds": 372
+    },
+    {
+      "shard": 22,
+      "estimate": 3521,
+      "jobSeconds": 397,
+      "runSeconds": 352
+    },
+    {
+      "shard": 23,
+      "estimate": 3521,
+      "jobSeconds": 1836,
+      "runSeconds": 1787
+    },
+    {
+      "shard": 24,
+      "estimate": 3521,
+      "jobSeconds": 1042,
+      "runSeconds": 994
+    },
+    {
+      "shard": 25,
+      "estimate": 3521,
+      "jobSeconds": 1581,
+      "runSeconds": 1532
+    },
+    {
+      "shard": 26,
+      "estimate": 3521,
+      "jobSeconds": 1525,
+      "runSeconds": 1470
+    },
+    {
+      "shard": 27,
+      "estimate": 3521,
+      "jobSeconds": 1719,
+      "runSeconds": 1665
+    },
+    {
+      "shard": 28,
+      "estimate": 3521,
+      "jobSeconds": 1271,
+      "runSeconds": 1224
+    },
+    {
+      "shard": 29,
+      "estimate": 3521,
+      "jobSeconds": 1514,
+      "runSeconds": 1460
+    },
+    {
+      "shard": 30,
+      "estimate": 3521,
+      "jobSeconds": 1185,
+      "runSeconds": 1140
+    },
+    {
+      "shard": 31,
+      "estimate": 3521,
+      "jobSeconds": 1439,
+      "runSeconds": 1378
+    },
+    {
+      "shard": 32,
+      "estimate": 3521,
+      "jobSeconds": 2048,
+      "runSeconds": 1985
+    },
+    {
+      "shard": 33,
+      "estimate": 3521,
+      "jobSeconds": 1340,
+      "runSeconds": 1290
+    },
+    {
+      "shard": 34,
+      "estimate": 3521,
+      "jobSeconds": 2262,
+      "runSeconds": 2209
+    },
+    {
+      "shard": 35,
+      "estimate": 3521,
+      "jobSeconds": 1162,
+      "runSeconds": 1114
+    },
+    {
+      "shard": 36,
+      "estimate": 3521,
+      "jobSeconds": 1172,
+      "runSeconds": 1126
+    },
+    {
+      "shard": 37,
+      "estimate": 3521,
+      "jobSeconds": 1236,
+      "runSeconds": 1191
+    },
+    {
+      "shard": 38,
+      "estimate": 3521,
+      "jobSeconds": 1315,
+      "runSeconds": 1274
+    },
+    {
+      "shard": 39,
+      "estimate": 3521,
+      "jobSeconds": 1987,
+      "runSeconds": 1931
+    },
+    {
+      "shard": 40,
+      "estimate": 3521,
+      "jobSeconds": 1227,
+      "runSeconds": 1182
+    },
+    {
+      "shard": 41,
+      "estimate": 3521,
+      "jobSeconds": 2184,
+      "runSeconds": 2127
+    },
+    {
+      "shard": 42,
+      "estimate": 3521,
+      "jobSeconds": 1613,
+      "runSeconds": 1567
+    },
+    {
+      "shard": 43,
+      "estimate": 3521,
+      "jobSeconds": 989,
+      "runSeconds": 943
+    },
+    {
+      "shard": 44,
+      "estimate": 3521,
+      "jobSeconds": 1577,
+      "runSeconds": 1531
+    },
+    {
+      "shard": 45,
+      "estimate": 3521,
+      "jobSeconds": 1858,
+      "runSeconds": 1803
+    },
+    {
+      "shard": 46,
+      "estimate": 3521,
+      "jobSeconds": 2336,
+      "runSeconds": 2282
+    },
+    {
+      "shard": 47,
+      "estimate": 3521,
+      "jobSeconds": 2083,
+      "runSeconds": 2029
+    },
+    {
+      "shard": 48,
+      "estimate": 3521,
+      "jobSeconds": 1374,
+      "runSeconds": 1326
+    },
+    {
+      "shard": 49,
+      "estimate": 3521,
+      "jobSeconds": 2249,
+      "runSeconds": 2197
+    },
+    {
+      "shard": 50,
+      "estimate": 3521,
+      "jobSeconds": 1954,
+      "runSeconds": 1885
+    },
+    {
+      "shard": 51,
+      "estimate": 3521,
+      "jobSeconds": 1652,
+      "runSeconds": 1587
+    },
+    {
+      "shard": 52,
+      "estimate": 3521,
+      "jobSeconds": 1671,
+      "runSeconds": 1624
+    },
+    {
+      "shard": 53,
+      "estimate": 3521,
+      "jobSeconds": 2056,
+      "runSeconds": 1997
+    },
+    {
+      "shard": 54,
+      "estimate": 3521,
+      "jobSeconds": 1751,
+      "runSeconds": 1691
+    },
+    {
+      "shard": 55,
+      "estimate": 3521,
+      "jobSeconds": 1803,
+      "runSeconds": 1715
+    },
+    {
+      "shard": 56,
+      "estimate": 3521,
+      "jobSeconds": 1997,
+      "runSeconds": 1940
+    },
+    {
+      "shard": 57,
+      "estimate": 3521,
+      "jobSeconds": 1308,
+      "runSeconds": 1266
+    },
+    {
+      "shard": 58,
+      "estimate": 3521,
+      "jobSeconds": 1373,
+      "runSeconds": 1323
+    },
+    {
+      "shard": 59,
+      "estimate": 3521,
+      "jobSeconds": 1356,
+      "runSeconds": 1304
+    },
+    {
+      "shard": 60,
+      "estimate": 3521,
+      "jobSeconds": 1393,
+      "runSeconds": 1346
+    },
+    {
+      "shard": 61,
+      "estimate": 3521,
+      "jobSeconds": 1016,
+      "runSeconds": 970
+    },
+    {
+      "shard": 62,
+      "estimate": 3521,
+      "jobSeconds": 2127,
+      "runSeconds": 2063
+    },
+    {
+      "shard": 63,
+      "estimate": 3521,
+      "jobSeconds": 1711,
+      "runSeconds": 1664
+    },
+    {
+      "shard": 64,
+      "estimate": 3521,
+      "jobSeconds": 1184,
+      "runSeconds": 1139
+    },
+    {
+      "shard": 65,
+      "estimate": 3521,
+      "jobSeconds": 1185,
+      "runSeconds": 1138
+    },
+    {
+      "shard": 66,
+      "estimate": 3521,
+      "jobSeconds": 1647,
+      "runSeconds": 1592
+    },
+    {
+      "shard": 67,
+      "estimate": 3521,
+      "jobSeconds": 1135,
+      "runSeconds": 1096
+    },
+    {
+      "shard": 68,
+      "estimate": 3521,
+      "jobSeconds": 940,
+      "runSeconds": 896
+    },
+    {
+      "shard": 69,
+      "estimate": 3521,
+      "jobSeconds": 2196,
+      "runSeconds": 2129
+    },
+    {
+      "shard": 70,
+      "estimate": 3521,
+      "jobSeconds": 1996,
+      "runSeconds": 1948
+    },
+    {
+      "shard": 71,
+      "estimate": 3521,
+      "jobSeconds": 2009,
+      "runSeconds": 1958
+    },
+    {
+      "shard": 72,
+      "estimate": 3521,
+      "jobSeconds": 1477,
+      "runSeconds": 1432
+    },
+    {
+      "shard": 73,
+      "estimate": 3521,
+      "jobSeconds": 1596,
+      "runSeconds": 1540
+    },
+    {
+      "shard": 74,
+      "estimate": 3521,
+      "jobSeconds": 1843,
+      "runSeconds": 1795
+    },
+    {
+      "shard": 75,
+      "estimate": 3521,
+      "jobSeconds": 354,
+      "runSeconds": 312
+    },
+    {
+      "shard": 76,
+      "estimate": 3521,
+      "jobSeconds": 473,
+      "runSeconds": 427
+    },
+    {
+      "shard": 77,
+      "estimate": 3521,
+      "jobSeconds": 546,
+      "runSeconds": 501
+    },
+    {
+      "shard": 78,
+      "estimate": 3521,
+      "jobSeconds": 625,
+      "runSeconds": 583
+    },
+    {
+      "shard": 79,
+      "estimate": 3521,
+      "jobSeconds": 470,
+      "runSeconds": 426
+    },
+    {
+      "shard": 80,
+      "estimate": 3521,
+      "jobSeconds": 371,
+      "runSeconds": 328
+    },
+    {
+      "shard": 81,
+      "estimate": 3521,
+      "jobSeconds": 519,
+      "runSeconds": 475
+    },
+    {
+      "shard": 82,
+      "estimate": 3521,
+      "jobSeconds": 478,
+      "runSeconds": 430
+    },
+    {
+      "shard": 83,
+      "estimate": 3521,
+      "jobSeconds": 377,
+      "runSeconds": 331
+    },
+    {
+      "shard": 84,
+      "estimate": 3521,
+      "jobSeconds": 407,
+      "runSeconds": 364
+    },
+    {
+      "shard": 85,
+      "estimate": 3521,
+      "jobSeconds": 735,
+      "runSeconds": 686
+    },
+    {
+      "shard": 86,
+      "estimate": 3521,
+      "jobSeconds": 875,
+      "runSeconds": 825
+    },
+    {
+      "shard": 87,
+      "estimate": 3521,
+      "jobSeconds": 1505,
+      "runSeconds": 1455
+    },
+    {
+      "shard": 88,
+      "estimate": 3521,
+      "jobSeconds": 1315,
+      "runSeconds": 1273
+    },
+    {
+      "shard": 89,
+      "estimate": 3521,
+      "jobSeconds": 1363,
+      "runSeconds": 1320
+    }
+  ]
+}

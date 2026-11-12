@@ -238,7 +238,7 @@ function shippingCounts(meta: BuildMeta): Record<string, number> {
 
 /** The model's cycle, and its release shard count in the checked-in release scope. */
 const CATALOG_NIGHTS = 28;
-const CATALOG_SHARDS = 39;
+const CATALOG_SHARDS = 20;
 
 /** The scope file release.yml's and rc-preflight.yml's quality jobs name, and the env that names it. */
 const SCOPE_FILE = 'quality/release/scope.json';
@@ -253,6 +253,11 @@ const scoped = (each: Plan): Plan => scopePlan(each, loadReleaseScope(SCOPE)!.sc
  */
 const NIGHTS = NIGHT_COUNTS[0]!;
 const RELEASE_SHARDS = 32;
+/**
+ * The release ceiling at the plan's own assumptions (a pace of 1), 4,800 s, which the synthetic
+ * release plans here are sized to, so their arithmetic stays whatever RELEASE_PACE measures.
+ */
+const ASSUMED_CEILING = fitReleaseCeiling({ overheadSeconds: FULL_FIXED, pace: 1 });
 
 /**
  * The full plan the nightly and release runs plan: this checkout's, with the
@@ -373,17 +378,18 @@ function fewestNights(groups: readonly ShardGroup[]): NightlyPlan {
 function fewestShards(
   groups: readonly ShardGroup[],
   durations: Pick<ShardDurations, 'group'> = loadDurations(),
+  ceiling: number = RELEASE_CEILING,
 ): ReturnType<typeof releaseFor> {
-  const release = releaseFor(groups, durations);
-  assert.ok(release.count >= releaseFloor(groups, durations), String(release.count));
+  const release = releaseFor(groups, durations, ceiling);
+  assert.ok(release.count >= releaseFloor(groups, durations, ceiling), String(release.count));
   assert.ok(release.count <= MAX_RELEASE_PLAN);
   assert.equal(release.shards.length, release.count);
-  assert.ok(release.slowest <= RELEASE_CEILING);
-  for (const shard of release.shards) assert.ok(fullEstimate(shard) <= RELEASE_CEILING);
+  assert.ok(release.slowest <= ceiling);
+  for (const shard of release.shards) assert.ok(fullEstimate(shard) <= ceiling);
   const before = release.count - 1;
   if (before > 0) {
     assert.throws(
-      () => releasePlan(groups, durations, before),
+      () => releasePlan(groups, durations, before, ceiling),
       new RegExp(`^Error: The release plan in ${before} shards leaves a shard at about \\d+s`),
     );
   }
@@ -891,19 +897,19 @@ test('a night over its budget fails before any test, naming the night, its load,
   // A release shard holds two such groups on each worker; one more is over.
   const release = 4 * RELEASE_SHARDS;
   assert.equal(
-    releasePlan(synthetic(release, 2000), durations, RELEASE_SHARDS).shards.length,
+    releasePlan(synthetic(release, 2000), durations, RELEASE_SHARDS, ASSUMED_CEILING).shards.length,
     RELEASE_SHARDS,
   );
   assert.throws(
-    () => releasePlan(synthetic(release + 1, 2000), durations, RELEASE_SHARDS),
+    () => releasePlan(synthetic(release + 1, 2000), durations, RELEASE_SHARDS, ASSUMED_CEILING),
     new RegExp(
-      `^Error: The release plan in ${RELEASE_SHARDS} shards leaves a shard at about ${FULL_FIXED + 6000}s, over the ${RELEASE_CEILING}s ceiling\\. Its heaviest group is chromium s\\d+ cells\\.spec\\.ts, at about 2000s\\.$`,
+      `^Error: The release plan in ${RELEASE_SHARDS} shards leaves a shard at about ${FULL_FIXED + 6000}s, over the ${ASSUMED_CEILING}s ceiling\\. Its heaviest group is chromium s\\d+ cells\\.spec\\.ts, at about 2000s\\.$`,
     ),
   );
   // It names the heaviest group of the slowest shard, not the last or the lightest.
   const mixed = [...synthetic(6, 1900), { ...synthetic(1, 100)[0]!, project: 'chromium light' }];
   assert.throws(
-    () => releasePlan(mixed, durations, 1),
+    () => releasePlan(mixed, durations, 1, ASSUMED_CEILING),
     /about 6220s, over the 4800s ceiling\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 1900s\.$/,
   );
   // A group too heavy for one worker that can't split fails, by name.
@@ -1305,15 +1311,15 @@ test('N and the release shard count are the fewest that fit, a doubling only spl
     [4 * 256 + 1, 257],
     [4 * 768, 768],
   ] as const) {
-    const release = fewestShards(synthetic(count, 2000), durations);
+    const release = fewestShards(synthetic(count, 2000), durations, ASSUMED_CEILING);
     assert.equal(release.count, shards, String(count));
   }
   // Past 768, three jobs of the 256 a GitHub matrix makes, it fails, naming the heaviest group.
   assert.equal(MAX_RELEASE_PLAN, 768);
   assert.throws(
-    () => releaseFor(synthetic(4 * 768 + 1, 2000), durations),
+    () => releaseFor(synthetic(4 * 768 + 1, 2000), durations, ASSUMED_CEILING),
     new RegExp(
-      `^Error: Even 768 release shards don't fit \\(MAX_RELEASE_PLAN, 3 jobs of 256\\): The release plan in 768 shards leaves a shard at about \\d+s, over the ${RELEASE_CEILING}s ceiling\\. Its heaviest group is chromium s\\d+ cells\\.spec\\.ts, at about 2000s\\.$`,
+      `^Error: Even 768 release shards don't fit \\(MAX_RELEASE_PLAN, 3 jobs of 256\\): The release plan in 768 shards leaves a shard at about \\d+s, over the ${ASSUMED_CEILING}s ceiling\\. Its heaviest group is chromium s\\d+ cells\\.spec\\.ts, at about 2000s\\.$`,
     ),
   );
   // Each cycle is the last doubled, and a group's night at 2N is its night at N, or that plus N.
@@ -1464,7 +1470,9 @@ test("a release shard runs the count it's handed, and a count too small for the 
   // Two shards can't hold today's plan within the ceiling: the shard fails, naming its heaviest group.
   assert.throws(
     () => fullShard(own, ENGINES, '1/2', null),
-    /^Error: The release plan in 2 shards leaves a shard at about \d+s, over the 4800s ceiling\. Its heaviest group is /,
+    new RegExp(
+      `^Error: The release plan in 2 shards leaves a shard at about \\d+s, over the ${RELEASE_CEILING}s ceiling\\. Its heaviest group is `,
+    ),
   );
 });
 

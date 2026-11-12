@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   FULL_FIXED,
@@ -25,6 +26,9 @@ import {
   type TimedTest,
 } from './lib/release-fit';
 import { runReleaseFit } from './release-fit';
+import * as releaseFit from './lib/release-fit';
+
+const RC2_RUN = fileURLToPath(new URL('./fixtures/release-run-42966517304.json', import.meta.url));
 
 /** A CI Linux run's times, made up: twelve servers' cell tests, a cell's three viewports, and one harness spec. */
 function times(overheadSeconds: number, pace?: number): ReleaseTimes {
@@ -48,16 +52,67 @@ function times(overheadSeconds: number, pace?: number): ReleaseTimes {
   return { source: 'a made-up run', overheadSeconds, tests };
 }
 
-test('the release cap stays 120 minutes, 16 at a time across its three jobs, and the per-shard target is the one a pace fits to it: 4,800 s at the plan’s own assumptions', () => {
+test("the release cap stays 120 minutes, 16 at a time across its three jobs, and the per-shard target is the one rc.2's release run measured fits to it: 6,668 s", () => {
   assert.equal(RELEASE_TIMEOUT_MINUTES, 120);
   assert.equal(releaseTimeoutMinutes(), RELEASE_TIMEOUT_MINUTES);
   assert.equal(RELEASE_PARALLEL, 16);
   assert.ok(RELEASE_PACE.source.trim().length > 0, 'RELEASE_PACE names its source');
   assert.equal(RELEASE_CEILING, fitReleaseCeiling(RELEASE_PACE));
-  assert.deepEqual([RELEASE_PACE.overheadSeconds, RELEASE_PACE.pace], [FULL_FIXED, 1]);
-  assert.equal(RELEASE_CEILING, 4800);
-  // At the plan's assumptions the fitted target gives back the cap, as the 1.5x margin did.
-  assert.equal(timeoutMinutes(RELEASE_CEILING), RELEASE_TIMEOUT_MINUTES);
+  assert.equal(RELEASE_CEILING, 6668);
+});
+
+test("RELEASE_PACE is rc.2's release run 42966517304, fitted to its slowest shard: every shard's fixed part and estimate at that pace cover its measured job, and a shard at the ceiling keeps the 1.5x margin under 120 minutes", () => {
+  const run = releaseFit.loadShardRun(RC2_RUN);
+  assert.equal(run.run, '42966517304');
+  assert.equal(run.shards.length, 89);
+  const fitted = releaseFit.fitShardPace(run);
+  // The fixed part is what each job took outside its run step, on the mean; the pace is the
+  // slowest shard's measured time past it, per second of its estimate past FULL_FIXED, rounded up.
+  assert.deepEqual(fitted, { overheadSeconds: 51, pace: 0.76 });
+  assert.deepEqual(
+    { overheadSeconds: RELEASE_PACE.overheadSeconds, pace: RELEASE_PACE.pace },
+    fitted,
+  );
+  assert.match(RELEASE_PACE.source, /42966517304/);
+  assert.match(RELEASE_PACE.source, /slowest/);
+  // Fitted to the slowest, so it covers every shard the run had.
+  for (const shard of run.shards) {
+    const predicted =
+      RELEASE_PACE.overheadSeconds + RELEASE_PACE.pace * (shard.estimate - FULL_FIXED);
+    assert.ok(
+      predicted >= shard.jobSeconds,
+      `shard ${shard.shard}: ${predicted} < ${shard.jobSeconds}`,
+    );
+  }
+  // A shard estimated at the ceiling takes, at that pace, no more than the cap over the margin.
+  const usable = Math.floor((RELEASE_TIMEOUT_MINUTES * 60) / TIMEOUT_MARGIN);
+  const atCeiling =
+    RELEASE_PACE.overheadSeconds + RELEASE_PACE.pace * (RELEASE_CEILING - FULL_FIXED);
+  assert.ok(atCeiling <= usable, `${atCeiling} > ${usable}`);
+  assert.ok(atCeiling * TIMEOUT_MARGIN <= RELEASE_TIMEOUT_MINUTES * 60);
+  // rc.2's own shards ran at most 40.1 minutes against the 80 its ceiling allowed.
+  assert.equal(Math.max(...run.shards.map((shard) => shard.jobSeconds)), 2407);
+});
+
+test('a run file without its shards, or a shard without its estimate, fails to fit', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'release-run-'));
+  try {
+    const file = path.join(dir, 'run.json');
+    writeFileSync(file, JSON.stringify({ source: 'x', run: '1', commit: 'a', shards: [] }));
+    assert.throws(() => releaseFit.loadShardRun(file), /has its shards/);
+    writeFileSync(
+      file,
+      JSON.stringify({
+        source: 'x',
+        run: '1',
+        commit: 'a',
+        shards: [{ shard: 1, jobSeconds: 9, runSeconds: 8 }],
+      }),
+    );
+    assert.throws(() => releaseFit.loadShardRun(file), /shard 1 needs its estimate/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('a pace fits the target to the cap over the margin: a slower pace or a longer fixed part lowers it, and one that leaves no time throws', () => {
