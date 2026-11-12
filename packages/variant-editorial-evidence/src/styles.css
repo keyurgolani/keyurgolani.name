@@ -2095,6 +2095,16 @@
   padding-block: max(0px, calc((24px - 1lh) / 2));
 }
 
+/*
+ * And the back matter's lists keep a ring's reach between their items, so a focused link's ring
+ * clears the next link's box: flush, block on block, the ring ran over its neighbour and the focus
+ * check's perimeter failed it (EE targets T1, the second Links item in all 36 cells).
+ */
+[data-variant='editorial-evidence'] .ee-case__matter ul {
+  display: grid;
+  gap: var(--layout-ee-ring);
+}
+
 [data-variant='editorial-evidence'] .ee-case__matter {
   display: grid;
   grid-column: 1 / -1;
