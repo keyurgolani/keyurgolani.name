@@ -918,6 +918,92 @@ test('a 2.1 manifest may opt in to cross-document view transitions, with up to 8
   ]);
 });
 
+test("a 2.1 manifest may reserve the window's block end for a bar pinned there, in lengths the root resolves, and a 2.0 one may not", () => {
+  // A bar fixed or stuck at the window's foot covers what sits under it, and focus that lands
+  // there without scrolling stays under it: a control's scroll-margin acts only when focus
+  // scrolls. The scroller is the document's root, so the host gives the root the reserve as its
+  // scroll-padding-block-end. The packs' tokens sit on the boundary, not the root, so the reserve
+  // is a length the root resolves: rem or px, alone or in calc(), min() or max() of them.
+  const withReserve = (scrollReserve: unknown, contract = '2.1') =>
+    manifest((m) => {
+      m.contract = contract;
+      m.scrollReserve = scrollReserve;
+    });
+  for (const reserve of [
+    { blockEnd: '5rem', media: '(max-width: 39.99rem)' },
+    { blockEnd: '5rem' },
+    { blockEnd: '64px', media: '(min-width: 40rem)' },
+    { blockEnd: '4.5rem', media: '(hover: none)' },
+    { blockEnd: 'calc(4rem + 12px)' },
+    { blockEnd: 'max(4rem, 60px)' },
+    { blockEnd: 'min(8rem, 100px)' },
+    { blockEnd: '8rem' },
+  ]) {
+    assert.deepEqual(records(withReserve(reserve)), [], JSON.stringify(reserve));
+  }
+  // The 2.1-only check.
+  const older = validateManifest(withReserve({ blockEnd: '5rem' }, '2.0'), CONTEXT).diagnostics;
+  assert.deepEqual(
+    older.map(({ code, pointer }) => [code, pointer]),
+    [['manifest.invalid', '/scrollReserve']],
+  );
+  assert.match(older[0]!.message, /contract 2\.1 adds, and the manifest declares contract 2\.0/);
+  // A token, a viewport or percentage length, nothing, a negative, more than 8rem (128px at 16px),
+  // or a nested function: each refused on blockEnd.
+  for (const blockEnd of [
+    'var(--ui-control-height)',
+    'calc(var(--ui-control-height) + 1rem)',
+    '10vh',
+    '10%',
+    '0',
+    '0rem',
+    '-1rem',
+    '9rem',
+    '130px',
+    'calc(6rem + 40px)',
+    'calc(1rem + max(1rem, 2px))',
+    '5em',
+    '5 rem',
+  ]) {
+    const result = validateManifest(withReserve({ blockEnd }), CONTEXT).diagnostics;
+    assert.deepEqual(
+      result.map(({ code, pointer }) => [code, pointer]),
+      [['manifest.invalid', '/scrollReserve/blockEnd']],
+      blockEnd,
+    );
+  }
+  assert.match(
+    validateManifest(withReserve({ blockEnd: 'var(--ui-control-height)' }), CONTEXT).diagnostics[0]!
+      .message,
+    /the root resolves/,
+  );
+  // One width condition in rem, or (hover: none): nothing else.
+  for (const media of [
+    '(max-width: 40em)',
+    '(max-width: 640px)',
+    '(max-width: 39.99rem) and (hover: none)',
+    'screen',
+    '(prefers-reduced-motion: reduce)',
+    '',
+  ]) {
+    assert.deepEqual(
+      records(withReserve({ blockEnd: '5rem', media })),
+      [['manifest.invalid', '/scrollReserve/media']],
+      media,
+    );
+  }
+  // The shape is strict, and blockEnd is required.
+  assert.deepEqual(records(withReserve({ blockEnd: '5rem', blockStart: '3rem' })), [
+    ['manifest.unknown-key', '/scrollReserve/blockStart'],
+  ]);
+  assert.deepEqual(records(withReserve({ media: '(max-width: 39.99rem)' })), [
+    ['manifest.missing', '/scrollReserve/blockEnd'],
+  ]);
+  assert.deepEqual(records(withReserve({ blockEnd: 80 })), [
+    ['manifest.invalid', '/scrollReserve/blockEnd'],
+  ]);
+});
+
 test("a composition that renders every core kind may leave the kit's layout out, and kitLayout true is the default (K-5)", () => {
   const everyKind = (kitLayout: boolean) =>
     manifest((m) => {
