@@ -21,6 +21,9 @@
 //   crossfade at --ui-motion-fast, the variant's named groups as it styles
 //   them; under reduced motion, an opacity crossfade at --ui-motion-fast for
 //   every image, root or named; under the pause, an instant cut.
+// - For a variant whose manifest sets scrollReserve, the host's
+//   root scroll-padding-block-end follows, in its media query, in this
+//   variant's file and no other's (hostScrollReserveCss(), ../scroll-reserve).
 //
 // Nothing here throws for a stylesheet's sake: what can't compile is a
 // problem naming the file, line, and column.
@@ -29,6 +32,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { stripCssComments } from '../css-text';
+import { hostScrollReserveCss, type ScrollReserve } from '../scroll-reserve';
 import { HOST_VIEW_TRANSITION_CSS } from '../transitions';
 
 /** Where the host serves compiled variant stylesheets from: public/_portfolio/variant/. */
@@ -77,6 +81,12 @@ export interface VariantStylesheetOptions {
    * (a)): the host's view-transition rules follow the layer, unlayered.
    */
   readonly crossDocumentTransitions?: boolean;
+  /**
+   * The manifest's reserve at the window's block end: the host's
+   * root scroll-padding follows the layer, and the view-transition rules,
+   * unlayered.
+   */
+  readonly scrollReserve?: ScrollReserve;
 }
 
 /** Why a stylesheet can't compile, at a place in one of its files. */
@@ -143,6 +153,7 @@ export function compileVariantStylesheet(options: VariantStylesheetOptions): Var
       ...bodies.map((body) => body.trim()),
       '}',
       ...(options.crossDocumentTransitions ? [HOST_VIEW_TRANSITION_CSS] : []),
+      ...(options.scrollReserve ? [hostScrollReserveCss(options.id, options.scrollReserve)] : []),
       '',
     ].join('\n'),
   );

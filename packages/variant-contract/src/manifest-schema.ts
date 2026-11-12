@@ -6,6 +6,7 @@
 import * as z from '@portfolio/schema/zod';
 import { ALL_SECTION_KINDS, parseExtensionKind, REGISTRY_ID_PATTERN } from '@portfolio/schema';
 import { BudgetsSchema } from './budgets';
+import { MAX_SCROLL_RESERVE_LENGTH } from './scroll-reserve';
 import { MAX_TRANSITION_NAME_LENGTH, MAX_TRANSITION_NAMES } from './transitions';
 
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
@@ -311,6 +312,14 @@ const Transitions = z
   })
   .strict();
 
+/** The window's block end a bar pinned there reserves (./scroll-reserve). */
+const ScrollReserve = z
+  .object({
+    blockEnd: z.string().max(MAX_SCROLL_RESERVE_LENGTH),
+    media: z.string().max(MAX_SCROLL_RESERVE_LENGTH).optional(),
+  })
+  .strict();
+
 const Provenance = z
   .object({
     provisional: z.boolean(),
@@ -388,6 +397,7 @@ export const ManifestSchema = z
     enhancements: z.array(Enhancement).max(8).optional(),
     keyBindings: z.array(KeyBinding).max(16).optional(),
     transitions: Transitions.optional(),
+    scrollReserve: ScrollReserve.optional(),
     visitorControl: z.object({ placement: z.enum(PLACEMENTS) }).strict(),
     textDirection: TextDirection,
     provenance: Provenance,
