@@ -461,16 +461,18 @@
   pointer-events: auto;
 }
 
-/* A long name ellipsizes at every width, so the destinations and the call keep their room. */
+/*
+ * The name is never cut and never splits a word (row 150): short of room for one line, it wraps
+ * between its words, and its box is never narrower than its longest one. The capsule folds its
+ * destinations into the Index before the name runs short (the ag-chrome container, below).
+ */
 [data-variant='aurora-glass'] .ag-capsule__name {
-  min-inline-size: 0;
+  min-inline-size: min-content;
   margin-inline-end: var(--space-s);
-  overflow: hidden;
   font-size: var(--type-step-0);
   color: var(--color-text-primary);
   text-decoration: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 [data-variant='aurora-glass'] .ag-capsule__dest {
@@ -2653,7 +2655,8 @@
    * Too narrow to centre the capsule beside the ornament (at 1024 Pause
    * met the call): the capsule takes the row's start and its full width,
    * Pause follows it directly, the destinations, the Index and the call keep
-   * their size at its end, and the name has what's left, ellipsized when long.
+   * their size at its end, and the name has what's left, down to its longest
+   * word (row 150: never cut, never a word split).
    */
   [data-variant='aurora-glass'] .ag-chrome {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -2677,19 +2680,19 @@
   }
 
   /*
-   * A long Contact title gives way too, after the name has: it shrinks and
-   * ellipsizes, its accessible name whole, so the destinations, the Index
-   * and Pause keep their place in the capsule (the delta review's low 6).
+   * A long Contact title gives way too, after the name has: it wraps between
+   * its words, never narrower than its longest one and never cut, so the
+   * destinations, the Index and Pause keep their place in the capsule (the
+   * delta review's low 6; row 150).
    */
   [data-variant='aurora-glass'] .ag-capsule > .ag-capsule__cta {
     flex: 0 1 auto;
-    min-inline-size: 0;
   }
 
   [data-variant='aurora-glass'] .ag-capsule__cta-text {
-    min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-inline-size: min-content;
+    white-space: normal;
+    overflow-wrap: normal;
   }
 }
 
@@ -3000,14 +3003,20 @@
 }
 
 /*
- * The capsule at enlarged text (the root-text check): the media queries read the initial text
- * size, so the chrome's own width, in its text's em, folds the destinations into the Index under
- * 52em and the capsule to the phone's under 44em, about the chrome's width at the 56rem and 48rem
- * screens, so at the initial size the media queries still decide. On screen only: paper keeps its
- * destinations.
+ * The capsule's folds, by the chrome's own width in its text's em, so enlarged text folds it as a
+ * narrower screen does (the root-text check; the media queries read the initial text size): the
+ * destinations fold into the Index under 64em, and the capsule to the phone's under 44em.
+ * 64em is what the capsule needs beside the ornament with its destinations, plus a margin (row 150).
+ * Measured on c3998257b at 1440 at 1x, where every track holds its content (T1 v2's probe): the
+ * capsule, the ornament and the two 15px gaps come to 722.3 + 258.4 + 30 = 1010.7px on Humanist UI,
+ * 63.2em of its 16px, and 829.4 + 277.7 + 30 = 1137.1px on Accessible Reading, 63.2em of its 18px;
+ * 64em leaves 0.8em over that. At 1024 the chrome is 59.7em on the default pack (Humanist UI) and
+ * 53em on Accessible Reading, so the destinations fold there; at 1440, 80em and 71.1em, they show.
+ * The 52em this replaces was under the need, and the name and the call ellipsized between the two.
+ * On screen only: paper keeps its destinations.
  */
 @media screen {
-  @container ag-chrome (max-width: 52em) {
+  @container ag-chrome (max-width: 64em) {
     [data-variant='aurora-glass'] .ag-capsule .ag-capsule__dest {
       display: none;
     }
@@ -3025,17 +3034,10 @@
 }
 
 /*
- * At 320 nothing clips its own words (the reflow check): the capsule's name wraps (a fold's first
- * line always does), and the name steps down a size so the Menu's word keeps its place.
+ * At 320 nothing clips its own words (the reflow check): the capsule's name wraps between its
+ * words, as at every width, and steps down a size so the Menu's word keeps its place.
  */
 @media (max-width: 20rem) {
-  [data-variant='aurora-glass'] .ag-capsule__name {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    overflow-wrap: break-word;
-  }
-
   /* The name steps down a size, so the Menu's word keeps its place beside it (one name, "Menu"). */
   [data-variant='aurora-glass'] .ag-capsule__name {
     font-size: var(--type-step--1);

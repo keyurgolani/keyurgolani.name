@@ -392,7 +392,7 @@ test.describe('with JavaScript off', () => {
 test.describe('between 48 and 64rem', () => {
   test.use({ viewport: { width: 800, height: 900 } });
   test(
-    'a long name ellipsizes in the capsule; the Index (holding the destinations) and the call keep their room',
+    'a long name wraps between its words in the capsule, never cut; the Index (holding the destinations) and the call keep their room',
     { annotation },
     async ({ page }) => {
       await page.goto('/', { waitUntil: 'networkidle' });
@@ -408,7 +408,8 @@ test.describe('between 48 and 64rem', () => {
           left: rect.left,
           right: rect.right,
           vw: document.documentElement.clientWidth,
-          clipped: name.scrollWidth > name.clientWidth,
+          clipped:
+            name.scrollWidth > name.clientWidth + 1 || name.scrollHeight > name.clientHeight + 1,
           ellipsis: getComputedStyle(name).textOverflow,
           inside: kids.every(
             (kid) => kid.width === 0 || (kid.left >= rect.left - 1 && kid.right <= rect.right + 1),
@@ -417,8 +418,9 @@ test.describe('between 48 and 64rem', () => {
       });
       expect(box.left).toBeGreaterThanOrEqual(0);
       expect(box.right).toBeLessThanOrEqual(box.vw);
-      expect(box.clipped).toBe(true);
-      expect(box.ellipsis).toBe('ellipsis');
+      // Row 150: the name is never cut and never splits a word; it wraps between its words.
+      expect(box.clipped).toBe(false);
+      expect(box.ellipsis).toBe('clip');
       expect(box.inside).toBe(true);
       // At 800px the destinations fold into the Index, as on a phone.
       await expect(page.locator('.ag-capsule__dest')).toBeHidden();
@@ -521,19 +523,20 @@ test.describe('between 56 and 64rem', () => {
     { annotation },
     async ({ page }) => {
       await page.goto('/', { waitUntil: 'networkidle' });
-      // The words go in the call's own text span, so its ellipsis is what's tested.
+      // The words go in the call's own text span, so its wrap is what's tested (row 150: between
+      // its words, never cut).
       const words = page.locator('.ag-capsule__cta-text');
       await words.evaluate((el) => {
         el.textContent = "Let's build something careful together";
       });
       const fit = await words.evaluate((el) => ({
-        clipped: el.scrollWidth > el.clientWidth,
+        clipped: el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1,
         ellipsis: getComputedStyle(el).textOverflow,
         cta: el.closest('a')!.getBoundingClientRect().right,
         pause: document.querySelector('.ag-capsule .ag-orn--capsule')!.getBoundingClientRect().left,
       }));
-      expect(fit.clipped).toBe(true);
-      expect(fit.ellipsis).toBe('ellipsis');
+      expect(fit.clipped).toBe(false);
+      expect(fit.ellipsis).toBe('clip');
       expect(fit.cta).toBeLessThanOrEqual(fit.pause);
       const box = await page.locator('.ag-capsule').evaluate((el) => {
         const rect = el.getBoundingClientRect();
@@ -552,7 +555,8 @@ test.describe('between 56 and 64rem', () => {
       const pause = page.locator('.ag-capsule .ag-orn--capsule');
       await expect(pause).toBeVisible();
       await expect(pause).toHaveAccessibleName('Pause the sky');
-      await expect(page.locator('.ag-capsule__dest')).toBeVisible();
+      // Under the chrome's 64em the destinations are in the Index (row 150).
+      await expect(page.locator('.ag-capsule__dest')).toBeHidden();
       const ornament = await page
         .locator('.ag-ornament')
         .evaluate((el) => el.getBoundingClientRect().left);

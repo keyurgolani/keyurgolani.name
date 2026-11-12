@@ -608,9 +608,10 @@ test('under forced colors the sky goes and every frosted surface takes Canvas', 
   assert.match(forced, /\.ag-capsule a:focus-visible \{ position: relative; z-index: 1; \}/);
 });
 
-// The default recipe's reflow at 320 and root text at 1024: at 320 nothing clips its own words
-// (the capsule's name wraps there, a fold's first line everywhere, and the Menu's word steps aside for its mark,
-// its name kept), and at enlarged text the capsule folds as a narrow screen's does, never past the page.
+// The default recipe's reflow at 320 and root text at 1024: nothing clips its own words (the capsule's
+// name and call wrap between their words at every width, row 150, a fold's first line everywhere, and the
+// Menu's word steps aside for its mark, its name kept), and at enlarged text the capsule folds as a narrow
+// screen's does, never past the page.
 test('at 320 nothing in the capsule or a fold clips its words, and the capsule folds when the text grows', () => {
   const css = readFileSync(
     path.join(REPO_ROOT, 'packages/variant-aurora-glass/src/styles.css'),
@@ -618,11 +619,19 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
   ).replace(/\s+/g, ' ');
   const narrow = css.slice(css.indexOf('@media (max-width: 20rem) {'));
   assert.ok(narrow.length > 0 && css.includes('@media (max-width: 20rem) {'));
-  assert.ok(
-    narrow.includes(
-      '.ag-capsule__name { overflow: visible; text-overflow: clip; white-space: normal;',
-    ),
-  );
+  // The name and the call are never cut and never split a word, at every width (row 150): no ellipsis,
+  // no clip, no one-line hold, a box never narrower than the longest word, and no break inside one.
+  for (const rule of [/\.ag-capsule__name \{([^}]*)\}/, /\.ag-capsule__cta-text \{([^}]*)\}/]) {
+    const body = rule.exec(css)?.[1] ?? '';
+    assert.ok(body.includes('min-inline-size: min-content;'), body);
+    assert.ok(body.includes('overflow-wrap: normal;'), body);
+    assert.doesNotMatch(
+      body,
+      /white-space: nowrap|text-overflow|overflow: hidden|anywhere|break-word/,
+    );
+  }
+  assert.doesNotMatch(css, /\.ag-capsule__(?:name|cta-text) \{[^}]*text-overflow/);
+  assert.doesNotMatch(css, /\.ag-capsule > \.ag-capsule__cta \{[^}]*min-inline-size: 0;/);
   // A fold's first line wraps at every width and text size, not only at 320 (row 62).
   const first = /\.ag-fold__first \{([^}]*)\}/.exec(css)?.[1] ?? '';
   assert.ok(
@@ -633,11 +642,13 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
   // The Menu's word stays on screen (one name, "Menu"); the name steps down a size to make room.
   assert.ok(!narrow.includes('.ag-capsule .ag-narrow { position: absolute;'));
   assert.ok(narrow.includes('.ag-capsule__name { font-size: var(--type-step--1); }'));
-  // The capsule never wraps (a long name or call ellipsizes); at enlarged text it folds as it
-  // does on a narrow screen, by the chrome's own width in its text's em.
+  // The capsule never wraps (its name and call wrap inside it, between words); it folds its
+  // destinations into the Index under the chrome's 64em in its text's em, what it needs beside the
+  // ornament plus a margin (row 150), and to the phone's under 44em.
   assert.doesNotMatch(css, /\.ag-capsule \{[^}]*flex-wrap: wrap;/);
   assert.match(css, /\.ag-chrome \{[^}]*container: ag-chrome \/ inline-size;/);
-  assert.ok(css.includes('@container ag-chrome (max-width: 52em) {'));
+  assert.ok(css.includes('@container ag-chrome (max-width: 64em) {'));
+  assert.ok(!css.includes('@container ag-chrome (max-width: 52em) {'));
   assert.ok(css.includes('@container ag-chrome (max-width: 44em) {'));
 });
 
