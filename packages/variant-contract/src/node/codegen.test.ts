@@ -712,6 +712,39 @@ test("only a composition whose manifest opts in to cross-document view transitio
   }
 });
 
+test("only a composition whose manifest reserves the window's block end gets the host's root scroll-padding, after its layer", async () => {
+  const docked = variantPackage('@acme/docked', 'acme-docked', {
+    manifest: manifestFor('acme-docked', {
+      contract: '2.1',
+      scrollReserve: { blockEnd: '5rem', media: '(max-width: 39.99rem)' },
+    }),
+  });
+  const plain = variantPackage('@acme/plain', 'acme-plain', {
+    manifest: manifestFor('acme-plain', { contract: '2.1' }),
+  });
+  const result = await readRegistry({
+    hostDir: testHost([FALLBACK, TILED, docked, plain, ...TEST_FALLBACK_PACKS, SERIF]),
+    packs: TEST_PACK_HOOKS,
+    stylesheets: LAYERS,
+  });
+  assert.ok(result.ok, JSON.stringify(result.diagnostics));
+  const css = (id: string) =>
+    new TextDecoder().decode(
+      result.variants.find(({ manifest }) => manifest.id === id)!.stylesheet!.bytes,
+    );
+  const ownCss = css('acme-docked');
+  const rule =
+    '@media (max-width: 39.99rem) {\n  :root:has([data-variant="acme-docked"]) {\n    scroll-padding-block-end: 5rem;\n  }\n}\n';
+  assert.ok(ownCss.endsWith(rule), ownCss);
+  // After the variant-layout block closes: nothing before it is left open.
+  const before = ownCss.slice(0, ownCss.length - rule.length);
+  assert.ok(before.includes('@layer variant-layout {'));
+  assert.equal(before.split('{').length, before.split('}').length);
+  for (const id of ['acme-tiles', 'acme-plain', 'fallback']) {
+    assert.doesNotMatch(css(id), /scroll-padding/, id);
+  }
+});
+
 test("a composition that renders every core kind and sets kitLayout: false compiles without the kit's layout (K-5)", async () => {
   const kit = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-layout-'));
   try {
