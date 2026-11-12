@@ -1,0 +1,6 @@
+{
+  "release": "1.0.0",
+  "scope": "reachable",
+  "unswept": "The inventory run's scope: the release scope (c′), what a visitor or the owner can reach. Out of it only what no one reaches: the fallback composition, acme-reference, and the fixture and tier packs.",
+  "records": "records.json"
+}
