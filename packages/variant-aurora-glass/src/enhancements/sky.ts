@@ -73,6 +73,104 @@ export function liveIndex(
   };
 }
 
+/** What the chrome's row needs, read with the two-line and inner-wrap states' own styles off. */
+export interface ChromeNeed {
+  /** The chrome's width. */
+  readonly width: number;
+  /** The capsule at its longest words, on one line. */
+  readonly capsule: number;
+  /** The capsule, the gap and the ornament at its content's width, or the capsule alone with no ornament shown. */
+  readonly row: number;
+}
+
+/**
+ * What the chrome's row needs (row 150, the coordinator's (iii) and (2)): the capsule at its
+ * min-content on one line, the chrome's gap and the ornament at its max-content, against the
+ * chrome's width. Each is read with inline styles that set aside whatever the marks below put on
+ * the capsule and the ornament (the capsule's own line, its inner wrap), then put back, in one
+ * synchronous read, so the marks can never move what decides them.
+ */
+export function chromeNeed(
+  chrome: HTMLElement,
+  capsule: HTMLElement,
+  ornament: HTMLElement | null,
+): ChromeNeed {
+  const keep = [capsule.style.cssText, ornament?.style.cssText ?? ''] as const;
+  const set = (el: HTMLElement, props: Record<string, string>) => {
+    for (const [name, value] of Object.entries(props))
+      el.style.setProperty(name, value, 'important');
+  };
+  try {
+    set(capsule, {
+      'flex-wrap': 'nowrap',
+      flex: 'none',
+      'inline-size': 'min-content',
+      'min-inline-size': '0',
+      'max-inline-size': 'none',
+    });
+    const width = chrome.getBoundingClientRect().width;
+    const cap = capsule.getBoundingClientRect().width;
+    let orn = 0;
+    if (ornament && [...ornament.getClientRects()].some((r) => r.width > 0 && r.height > 0)) {
+      set(ornament, { flex: 'none', 'inline-size': 'max-content', 'margin-inline-start': '0' });
+      orn =
+        ornament.getBoundingClientRect().width +
+        (parseFloat(getComputedStyle(chrome).columnGap) || 0);
+    }
+    return { width, capsule: cap, row: cap + orn };
+  } finally {
+    capsule.style.cssText = keep[0];
+    if (ornament) ornament.style.cssText = keep[1];
+  }
+}
+
+/**
+ * Marks the chrome with how many lines its row takes, data-ag-rows "1" or "2", so it sticks on one
+ * and scrolls with the page on two, exactly, on every pack, and data-ag-wrap where the capsule alone
+ * is wider than the chrome (the stylesheet's em and rem rule is the page's without script). Only
+ * where the row can take two lines (the chrome lays out as a flex line, under 75rem); wider, one.
+ * Read now, on any resize of the page's box, the capsule or the ornament, once the fonts load, and
+ * when the boundary's pack or the root's size changes. Returns the undo.
+ */
+export function fitChrome(root: HTMLElement): () => void {
+  const chrome = root.querySelector<HTMLElement>('.ag-chrome');
+  const capsule = chrome?.querySelector<HTMLElement>('.ag-capsule');
+  if (!chrome || !capsule) return () => undefined;
+  const ornament = chrome.querySelector<HTMLElement>('.ag-ornament');
+  const measure = () => {
+    const flexes = getComputedStyle(chrome).display === 'flex';
+    const need = flexes ? chromeNeed(chrome, capsule, ornament) : null;
+    const rows = need && need.row > need.width + 0.5 ? '2' : '1';
+    if (chrome.dataset.agRows !== rows) chrome.dataset.agRows = rows;
+    const wrap = need !== null && need.capsule > need.width + 0.5;
+    if (wrap && !('agWrap' in chrome.dataset)) chrome.dataset.agWrap = '';
+    if (!wrap && 'agWrap' in chrome.dataset) delete chrome.dataset.agWrap;
+  };
+  measure();
+  const resized = new ResizeObserver(measure);
+  for (const box of [root.querySelector('.ag-page') ?? root, capsule, ornament])
+    if (box) resized.observe(box);
+  let live = true;
+  void document.fonts?.ready.then(() => {
+    if (live) measure();
+  });
+  const changed = new MutationObserver(measure);
+  changed.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['style', 'class'],
+  });
+  const boundary = root.closest('[data-typography]');
+  if (boundary && boundary !== document.documentElement)
+    changed.observe(boundary, { attributes: true });
+  return () => {
+    live = false;
+    resized.disconnect();
+    changed.disconnect();
+    delete chrome.dataset.agRows;
+    delete chrome.dataset.agWrap;
+  };
+}
+
 /**
  * Whether a fragment that lands in a fold scrolls to the fold (the code
  * review's low 3): only when it names the fold's section, its frame (the
@@ -431,6 +529,8 @@ function attach(root: HTMLElement, prefix: string): () => void {
   // 3. The Index is a popover from here on, where popovers work, and closes when one of its links is followed.
   const index = document.getElementById(`${prefix}ag--index`);
   off.push(liveIndex(root, index));
+  // The chrome's lines: one sticks, two scroll with the page (row 150).
+  off.push(fitChrome(root));
   // Live, the open Index holds focus: in on opening, and Tab wraps inside it.
   if (supportsPopover()) off.push(holdFocus(index, () => document.activeElement));
 

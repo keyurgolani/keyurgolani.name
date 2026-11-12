@@ -642,6 +642,10 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
   // The Menu's word stays on screen (one name, "Menu"); the name steps down a size to make room.
   assert.ok(!narrow.includes('.ag-capsule .ag-narrow { position: absolute;'));
   assert.ok(narrow.includes('.ag-capsule__name { font-size: var(--type-step--1); }'));
+  // And the rest of its room comes from its spacing (row 150, the 320 probe), its end padding kept.
+  assert.ok(narrow.includes('.ag-capsule { padding-inline-start: var(--space-s); }'));
+  assert.ok(narrow.includes('.ag-chrome { column-gap: var(--space-3xs); }'));
+  assert.ok(narrow.includes('.ag-capsule .ag-capsule__index { padding-inline: var(--space-xs); }'));
   // The capsule never wraps (its name and call wrap inside it, between words); it folds its
   // destinations into the Index under the chrome's 64em in its text's em, what it needs beside the
   // ornament plus a margin (row 150), and to the phone's under 44em.
@@ -650,6 +654,12 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
   assert.ok(css.includes('@container ag-chrome (max-width: 64em) {'));
   assert.ok(!css.includes('@container ag-chrome (max-width: 52em) {'));
   assert.ok(css.includes('@container ag-chrome (max-width: 44em) {'));
+  // Above 75rem and under 70em in its own em, the capsule takes the row's start and fills it to
+  // the ornament, by its own properties (row 150's look ruling).
+  assert.match(
+    css,
+    /@media screen and \(width > 75rem\) \{\s*@container ag-chrome \(max-width: 70em\) \{\s*\[data-variant='aurora-glass'\] \.ag-capsule \{\s*inline-size: 100cqi;/,
+  );
 });
 
 // The default recipe's print cells (8c3919e02): the capsule's plain link to the Index prints,

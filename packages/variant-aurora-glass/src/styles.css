@@ -428,13 +428,25 @@
 
 /* ── chrome: the capsule, centred, and the ornament on the page's end line ── */
 
+/*
+ * The page's box (row 150, the coordinator's (iii)): the chrome sticks to the viewport's top while
+ * its row fits on one line, as the fixed bar did, and scrolls with the page once it takes two. A
+ * container here, never on .ag, which holds the fixed sky: a size container holds its fixed boxes
+ * to itself. The chrome is sticky in it, so the page's box is the one it sticks in.
+ */
+[data-variant='aurora-glass'] .ag-page {
+  container: ag-page / inline-size;
+}
+
 [data-variant='aurora-glass'] .ag-chrome {
   /* Its own width, in its text's em, folds the capsule at enlarged text as a narrow screen does. */
   container: ag-chrome / inline-size;
-  position: fixed;
+  /* Stuck, it takes no room in the flow, as the fixed bar took none: a box 0 px tall at the page's
+     top, held a step below the viewport's, its row hanging below it. */
+  position: sticky;
   z-index: 10;
   inset-block-start: var(--space-s);
-  inset-inline: 0;
+  block-size: 0;
   inline-size: var(--layout-page);
   margin-inline: auto;
   display: grid;
@@ -2662,12 +2674,30 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  /*
+   * One line while the capsule, at its longest words, and the ornament fit beside each other, as
+   * the two tracks laid them; when they don't, the ornament takes a line of its own below, at the
+   * line's end (row 150, the coordinator's (c)): the name, the Menu, then Appearance, in reading
+   * and Tab order. A flex line breaks at the capsule's min-content, its basis.
+   */
+  [data-variant='aurora-glass'] .ag-chrome {
+    display: flex;
+    flex-wrap: wrap;
+    /* Its lines from the top, whatever room its box keeps (scrolling, never less than the stuck offset's). */
+    align-content: flex-start;
+    row-gap: var(--space-2xs);
+  }
+
   [data-variant='aurora-glass'] .ag-capsule {
     grid-column: 1;
+    flex: 1 1 0%;
+    min-inline-size: min-content;
   }
 
   [data-variant='aurora-glass'] .ag-ornament {
     grid-column: 2;
+    flex: none;
+    margin-inline-start: auto;
   }
 
   [data-variant='aurora-glass'] .ag-capsule > * {
@@ -3034,13 +3064,172 @@
 }
 
 /*
+ * Two lines, the chrome scrolls with the page (row 150, the coordinator's (iii) and (2)): in the
+ * flow, a step below the page's top, and the opening's own offset for it goes. Its box is never
+ * shorter than the room the stuck chrome's offset keeps, so on one line what follows starts where
+ * it does under the stuck chrome, to the pixel, and a page whose enhancement turns it sticky moves
+ * nothing. With the enhancement, data-ag-rows says it, from what the row needs against the chrome's
+ * width, read with these states' own styles off (fitChrome), and the capsule then takes its line
+ * whole, so the ornament's stays the second; data-ag-wrap says the capsule alone is wider than the
+ * chrome, and it wraps inside, the name between its words, the Menu its word. Without the
+ * enhancement (or before it), the chrome's width in its text's em and rem does, from the 15 packs'
+ * measured need (fit probe v4): the fit and its worst pack's residual over it, 14.476em + 4.235rem
+ * + 1.288rem over 20rem and 14.480em + 2.539rem + 1.268rem under for the row, 9.243em + 2.078rem
+ * + 0.957rem and 9.248em + 0.945rem + 0.941rem for the capsule alone, and the page's margins
+ * (--space-s-l, written out: a query can't read a property). So it never sticks on two lines, and
+ * only a pack's window, at most 3.3ch, scrolls on one. A target or a focused control lands clear of
+ * the bar while it sticks, and at its own top when the chrome scrolls away.
+ */
+[data-variant='aurora-glass'] .ag-page :is([id], a[href], button, summary, [tabindex]) {
+  scroll-margin-block-start: var(--layout-sticky-offset);
+}
+
+[data-variant='aurora-glass'] .ag-chrome[data-ag-rows='2'] {
+  position: relative;
+  inset-block-start: auto;
+  block-size: auto;
+  min-block-size: calc(var(--layout-sticky-offset) - var(--space-s));
+  margin-block-start: var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-page:has(> .ag-chrome[data-ag-rows='2']) .ag-opening-frame {
+  padding-block-start: var(--space-2xs);
+}
+
+[data-variant='aurora-glass']
+  .ag-page:has(> .ag-chrome[data-ag-rows='2'])
+  :is([id], a[href], button, summary, [tabindex]) {
+  scroll-margin-block-start: 0;
+}
+
+[data-variant='aurora-glass'] .ag-chrome[data-ag-rows='2'] .ag-capsule {
+  flex-basis: 100%;
+}
+
+[data-variant='aurora-glass'] .ag-chrome[data-ag-wrap] .ag-capsule {
+  flex-wrap: wrap;
+  row-gap: var(--space-2xs);
+}
+
+[data-variant='aurora-glass'] .ag-chrome[data-ag-wrap] .ag-capsule > .ag-capsule__name {
+  flex: 1 0 min-content;
+}
+
+@media screen and (width > 20rem) {
+  @container ag-page (width < calc(14.476em + 5.523rem + 2 * clamp(1.125rem, 0.5625rem + 2.5vw, 2.5rem))) {
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) {
+      position: relative;
+      inset-block-start: auto;
+      block-size: auto;
+      min-block-size: calc(var(--layout-sticky-offset) - var(--space-s));
+      margin-block-start: var(--space-s);
+    }
+
+    [data-variant='aurora-glass'] .ag-page:has(> .ag-chrome:not([data-ag-rows])) .ag-opening-frame {
+      padding-block-start: var(--space-2xs);
+    }
+
+    [data-variant='aurora-glass']
+      .ag-page:has(> .ag-chrome:not([data-ag-rows]))
+      :is([id], a[href], button, summary, [tabindex]) {
+      scroll-margin-block-start: 0;
+    }
+  }
+
+  @container ag-page (width < calc(9.243em + 3.035rem + 2 * clamp(1.125rem, 0.5625rem + 2.5vw, 2.5rem))) {
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) .ag-capsule {
+      flex-wrap: wrap;
+      row-gap: var(--space-2xs);
+    }
+
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) .ag-capsule > .ag-capsule__name {
+      flex: 1 0 min-content;
+    }
+  }
+}
+
+/* Under 20rem the capsule's spacing steps down (below), and its need with it. */
+@media screen and (width <= 20rem) {
+  @container ag-page (width < calc(14.48em + 3.806rem + 2 * clamp(1.125rem, 0.5625rem + 2.5vw, 2.5rem))) {
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) {
+      position: relative;
+      inset-block-start: auto;
+      block-size: auto;
+      min-block-size: calc(var(--layout-sticky-offset) - var(--space-s));
+      margin-block-start: var(--space-s);
+    }
+
+    [data-variant='aurora-glass'] .ag-page:has(> .ag-chrome:not([data-ag-rows])) .ag-opening-frame {
+      padding-block-start: var(--space-2xs);
+    }
+
+    [data-variant='aurora-glass']
+      .ag-page:has(> .ag-chrome:not([data-ag-rows]))
+      :is([id], a[href], button, summary, [tabindex]) {
+      scroll-margin-block-start: 0;
+    }
+  }
+
+  @container ag-page (width < calc(9.248em + 1.887rem + 2 * clamp(1.125rem, 0.5625rem + 2.5vw, 2.5rem))) {
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) .ag-capsule {
+      flex-wrap: wrap;
+      row-gap: var(--space-2xs);
+    }
+
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) .ag-capsule > .ag-capsule__name {
+      flex: 1 0 min-content;
+    }
+  }
+}
+
+/*
+ * Above 75rem, under 70em in the chrome's own em (about what 75rem gives the default pack), the
+ * capsule takes the row's start and fills it to the ornament, as below 75rem (row 150, the
+ * coordinator's look ruling). On Accessible Reading's larger text the fold (64em) falls above 75rem,
+ * in the centred layout, where the folded capsule shrank to its content and sat off the header's
+ * start; either side of the fold it now starts where it does at 1024. The chrome is the container,
+ * so its tracks stay; the capsule asks for the chrome's whole width (100cqi), its track grows to
+ * all the ornament leaves, and it reaches back over the empty first track's gap. Pause stays in
+ * the ornament, its own cell. Only the capsule's own properties change, on screen.
+ */
+@media screen and (width > 75rem) {
+  @container ag-chrome (max-width: 70em) {
+    [data-variant='aurora-glass'] .ag-capsule {
+      inline-size: 100cqi;
+      max-inline-size: calc(100% + var(--space-xs));
+      margin-inline-start: calc(-1 * var(--space-xs));
+    }
+
+    [data-variant='aurora-glass'] .ag-capsule > .ag-capsule__name {
+      margin-inline-end: auto;
+    }
+  }
+}
+
+/*
  * At 320 nothing clips its own words (the reflow check): the capsule's name wraps between its
- * words, as at every width, and steps down a size so the Menu's word keeps its place.
+ * words, as at every width, and steps down a size so the Menu's word keeps its place. And the
+ * capsule finds the rest of its room in its spacing (row 150, the 320 probe): with the name at its
+ * longest word the Menu ran 13.4px past the capsule on the default pack. The capsule's start
+ * padding steps from m to s, the chrome's gap from xs to 3xs and the Menu's inline padding from s
+ * to xs, 27px at 320 between them; the capsule's end padding, the band's room, stays.
  */
 @media (max-width: 20rem) {
   /* The name steps down a size, so the Menu's word keeps its place beside it (one name, "Menu"). */
   [data-variant='aurora-glass'] .ag-capsule__name {
     font-size: var(--type-step--1);
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule {
+    padding-inline-start: var(--space-s);
+  }
+
+  [data-variant='aurora-glass'] .ag-chrome {
+    column-gap: var(--space-3xs);
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule .ag-capsule__index {
+    padding-inline: var(--space-xs);
   }
 }
 
@@ -3096,6 +3285,7 @@
   [data-variant='aurora-glass'] .ag-chrome {
     position: static;
     display: block;
+    block-size: auto;
     inline-size: auto;
     margin-block-end: var(--space-s);
   }

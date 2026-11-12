@@ -137,18 +137,21 @@ function HomePage({ input, outline }: HomePageProps) {
   return (
     <div className="ag">
       <Sky input={input} />
-      <Chrome input={input} bands={bands} />
-      <main id={input.ids.main} className="ag-main" tabIndex={-1}>
-        {opening ?? (
-          <section className="ag-opening-frame" aria-labelledby={openingHeading(input)}>
-            <Opening input={input} />
-          </section>
-        )}
-        {bands.map((band) => (
-          <BandView key={band.id} band={band} input={input} render={render} />
-        ))}
-      </main>
-      <Footer input={input} />
+      {/* The page in a box of its own: its width, in its text's em, is what the chrome asks to stick (row 150). */}
+      <div className="ag-page">
+        <Chrome input={input} bands={bands} />
+        <main id={input.ids.main} className="ag-main" tabIndex={-1}>
+          {opening ?? (
+            <section className="ag-opening-frame" aria-labelledby={openingHeading(input)}>
+              <Opening input={input} />
+            </section>
+          )}
+          {bands.map((band) => (
+            <BandView key={band.id} band={band} input={input} render={render} />
+          ))}
+        </main>
+        <Footer input={input} />
+      </div>
       {/* Last, after the footer: with no script it's the contents list, and when the page goes live
           and it leaves the flow for the top layer, nothing it sat above moves. With no band to
           list there's no Index at all (row 62). */}

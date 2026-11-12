@@ -148,7 +148,9 @@ function readNeed(page: Page) {
     const style = document.createElement('style');
     style.textContent =
       "[data-variant='aurora-glass'] .ag-chrome { grid-template-columns: repeat(3, max-content) !important; }" +
-      "[data-variant='aurora-glass'] .ag-capsule .ag-capsule__dest { display: flex !important; }";
+      "[data-variant='aurora-glass'] .ag-capsule .ag-capsule__dest { display: flex !important; }" +
+      // Its content's width, not the row the capsule fills above 75rem under 70em (row 150).
+      "[data-variant='aurora-glass'] .ag-capsule { inline-size: auto !important; max-inline-size: none !important; margin-inline-start: 0 !important; }";
     document.head.append(style);
     try {
       const s = getComputedStyle(chrome);
