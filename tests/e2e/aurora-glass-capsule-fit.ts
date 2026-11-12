@@ -16,7 +16,11 @@ import { expect, test } from '../harness/fixtures';
 //   - at the widths just below and just above the fold, the chrome's em either side of FOLD_EM, the
 //     destinations fold and show, and nothing in the capsule is cut either way;
 //   - at 1024 at 1x the Index is Tab's next stop after the name, as the Menu is at 2x, it lists Work,
-//     Writing, Record and About in that order, and its keyboard path, in and back, is the one at 2x.
+//     Writing, Record and About in that order, and its keyboard path, in and back, is the one at 2x;
+//   - just below and just above the fold the name starts where it does at 1024, the capsule at the
+//     header's inset and filling its row to the ornament, as at 1024 (the coordinator's look ruling:
+//     on Accessible Reading the fold fell in the wide layout, where the folded capsule shrank to its
+//     content and sat off the header's start).
 // "Cut" is any of the name, a destination, the Index, the call or its text whose own box holds less
 // than its content (a tolerance of 1px, as the harness's reflow probe), that runs past the capsule's
 // box, or a word of the name or the call laid out over two lines; and a capsule that runs into the
@@ -157,6 +161,38 @@ function readNeed(page: Page) {
   });
 }
 
+/**
+ * Where the capsule sits in the header: the name's start from the chrome's start, and the gap
+ * from the capsule's end to what follows it in the row, the ornament if it shows or else the
+ * chrome's end, less the chrome's column gap when it's the ornament. In the inline direction.
+ */
+function readAnchor(page: Page) {
+  return page.evaluate(() => {
+    const chrome = document.querySelector('.ag-chrome')!;
+    const capsule = chrome.querySelector('.ag-capsule')!;
+    const name = capsule.querySelector('.ag-capsule__name')!;
+    const ornament = chrome.querySelector('.ag-ornament')!;
+    const rtl = getComputedStyle(chrome).direction === 'rtl';
+    const start = (r: DOMRect) => (rtl ? -r.right : r.left);
+    const end = (r: DOMRect) => (rtl ? -r.left : r.right);
+    const h = chrome.getBoundingClientRect();
+    const c = capsule.getBoundingClientRect();
+    const o = ornament.getBoundingClientRect();
+    const orn = o.width > 0 && o.height > 0;
+    const row = getComputedStyle(capsule.parentElement!);
+    const gap = parseFloat(row.columnGap) || 0;
+    const cs = getComputedStyle(capsule);
+    return {
+      nameStart: start(name.getBoundingClientRect()) - start(h),
+      nameInset:
+        parseFloat(rtl ? cs.borderRightWidth : cs.borderLeftWidth) +
+        parseFloat(cs.paddingInlineStart),
+      capsuleStart: start(c) - start(h),
+      endGap: orn ? start(o) - end(c) - gap : end(h) - end(c),
+    };
+  });
+}
+
 /** The chrome's em at a viewport width (the page at 1x). */
 async function chromeEmAt(page: Page, width: number) {
   await page.setViewportSize({ width, height: 768 });
@@ -268,6 +304,42 @@ export function capsuleFit(pack: Pack) {
           expect(need.em, `the capsule's need is under ${FOLD_EM}em`).toBeLessThan(FOLD_EM);
         }
         expect(read.cut, `${width}: nothing in the capsule is cut`).toEqual([]);
+      }
+    },
+  );
+
+  test(
+    `on ${pack}, just below and just above the fold the name starts where it does at 1024, at the header's inset, and the capsule fills the row`,
+    { annotation },
+    async ({ page }) => {
+      await open(page, 1024);
+      const at1024 = await readAnchor(page);
+      // At 1024 the name sits at the capsule's own inset from the header's start; the inset's padding
+      // is fluid, so either side of the fold it's read at that width.
+      expect(
+        Math.abs(at1024.nameStart - at1024.nameInset),
+        "1024: the name starts at the capsule's inset from the header's start",
+      ).toBeLessThanOrEqual(1);
+      const at = await widthFor(page, FOLD_EM);
+      for (const [side, width] of [
+        ['below', at - 8],
+        ['above', at + 8],
+      ] as const) {
+        await page.setViewportSize({ width, height: 768 });
+        await twoFrames(page);
+        const read = await readAnchor(page);
+        console.log(
+          `r150 ${pack} anchor ${side} ${width}: name at ${read.nameStart.toFixed(1)}px, its inset ${read.nameInset.toFixed(1)}px (1024: ${at1024.nameStart.toFixed(1)}px of ${at1024.nameInset.toFixed(1)}px), capsule at ${read.capsuleStart.toFixed(1)}px, ${read.endGap.toFixed(1)}px short of the row's end`,
+        );
+        expect(
+          Math.abs(read.nameStart - read.nameInset),
+          `${width}: the name starts where it does at 1024, at the capsule's inset from the header's start`,
+        ).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs(read.capsuleStart),
+          `${width}: the capsule starts at the header's inset`,
+        ).toBeLessThanOrEqual(1);
+        expect(Math.abs(read.endGap), `${width}: the capsule fills the row`).toBeLessThanOrEqual(1);
       }
     },
   );
