@@ -955,11 +955,14 @@
   gap: var(--space-2xs);
 }
 
+/* A figure's caption reads in its ground's own quiet ink (row 106): in an inverse panel the page's
+   secondary is the panel's own colour, nearly, so the caption takes --layout-sg-ink-2, which every
+   ground sets (canvas: the page's secondary, as before; inverse; accent). */
 [data-variant='singular']
   :is(.sg-gallery, .sg-album, .sg-rec__figure, .sg-gallery__frames)
   figcaption,
 [data-variant='singular'] .sg-gallery__where {
-  color: var(--color-text-secondary);
+  color: var(--layout-sg-ink-2);
 }
 
 [data-variant='singular'] .sg-album {
