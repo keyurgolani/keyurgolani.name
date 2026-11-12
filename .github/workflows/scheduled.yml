@@ -137,14 +137,49 @@ jobs:
         id: night
         run: echo "night=$(date -u +%F)" >> "$GITHUB_OUTPUT"
 
-  # #11's complete quality matrix, a night at a time: quality:full over
-  # every cell, viewport, and preference row, the covering array's
-  # appearance rows, every pair the [37] change-directed rule could plan,
-  # and the visual cells, against a worktree with the reference variant
+  # Whether a big run is in flight on the repository (ci/big-run.mjs): a
+  # release-tag run of release.yml, or an inventory evidence run over the
+  # release scope (c′), any run of .github/workflows/inventory.yml. When one
+  # is, quality-full and quality-verdict skip the night, so the nightly's 16
+  # shards never stand beside its 16 past the account's 20 job slots (row
+  # 151, the coordinator's ruling), and the job summary says which run it
+  # found; report counts their skip as expected. It holds actions: read to
+  # list the runs, and nothing else.
+  big-run:
+    name: big-run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # check out the check
+      actions: read # list the repository's runs in flight
+    outputs:
+      busy: ${{ steps.check.outputs.busy }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ci/big-run.mjs
+            ci/release/github.mjs
+          sparse-checkout-cone-mode: false
+      - name: Look for a release or inventory run in flight
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node ci/big-run.mjs
+
+  # The nightly's scope of #11's quality matrix (tests/quality/lib/nightly-scope.ts,
+  # row 151): quality:full -- --night, cut from the release scope (c′),
+  # every public composition on its default packs in each of its 114
+  # scheme and display mode pairs at 390 and 1440, and the whole pairwise
+  # array at 1440, in the default row, with the harness's specs and the perf
+  # and visual cells every night, against a worktree with the reference variant
   # installed from its tarball (--external-variant), in the pinned
-  # Playwright image the variants job uses. It's more than one night's work,
+  # Playwright image the variants job uses. The whole of (c′) is the release
+  # run's, and `full` the harness's own. It's more than one night's work,
   # so it runs over a cycle of 7, 14, 28, or 56 nights, the fewest whose
-  # every night fits this timeout (rotationFor, tests/quality/lib/full-shards.ts),
+  # every night fits this timeout at the release's measured weights and pace
+  # (rotationFor, tests/quality/lib/full-shards.ts), 7 today,
   # which each shard works out from the plan and prints:
   # the harness and the perf cells every night, and each server's cell
   # tests in four buckets, each on one night of the cycle from a hash of the
@@ -153,25 +188,27 @@ jobs:
   # number modulo the cycle's length. Each shard prints the night, its
   # cells, and its groups, and fails before any test, and before the host's
   # build, when a night is over this timeout's budget, naming that night.
-  # Eight shards, the cap (FULL_SHARDS), and never more at once, so PR CI
-  # keeps the rest of the account's job slots. Each shard's reports are
+  # Sixteen shards, the cap (FULL_SHARDS), and never more at once, so PR CI
+  # keeps the other 4 of the account's job slots; it skips while big-run
+  # finds a big run in flight. Each shard's reports are
   # scrubbed of cookies, Authorization, and CSRF values however the run
   # ended, and upload only when that scrub succeeds. A shard judges only
   # what a shard can; quality-verdict judges the night whole. Every shard's
   # reports hold quality/fonts.observed.txt, the image's fonts, for
   # fonts.txt's bootstrap (CONTRIBUTING.md).
   quality-full:
-    name: quality-full (${{ matrix.shard }}/8)
-    needs: [quality-night]
+    name: quality-full (${{ matrix.shard }}/16)
+    needs: [quality-night, big-run]
+    if: ${{ needs.big-run.outputs.busy == 'false' }}
     runs-on: ubuntu-24.04
-    # NIGHTLY_TIMEOUT_MINUTES (tests/quality/lib/full-shards.ts): the lead's
-    # bound for a night, which the cycle's length is sized to, with a 1.5x margin.
-    timeout-minutes: 90
+    # NIGHTLY_TIMEOUT_MINUTES (tests/quality/lib/full-shards.ts): the bound
+    # for a night, which the cycle's length is sized to, with a 1.5x margin.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 8
+      max-parallel: 16
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
@@ -187,11 +224,11 @@ jobs:
         uses: ./.github/actions/install # zizmor: ignore[self-repository]
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/8 --night=${{ needs.quality-night.outputs.night }}
+      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/16 --night=${{ needs.quality-night.outputs.night }}
         env:
-          SHARD: ${{ matrix.shard }}/8
+          SHARD: ${{ matrix.shard }}/16
           NIGHT: ${{ needs.quality-night.outputs.night }}
-          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/8 --night=${{ needs.quality-night.outputs.night }}
+          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/16 --night=${{ needs.quality-night.outputs.night }}
           QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
         run: pnpm ci:quality-full "--shard=$SHARD" "--night=$NIGHT"
@@ -231,8 +268,9 @@ jobs:
   # it instead, which is no proof that it passed.
   quality-verdict:
     name: quality-verdict
-    needs: [quality-full]
-    if: ${{ always() }}
+    needs: [big-run, quality-full]
+    # However the shards ended, but not on a night big-run paused.
+    if: ${{ always() && needs.big-run.outputs.busy == 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -255,7 +293,7 @@ jobs:
       - name: pnpm ci:quality-verdict
         env:
           SHARDS: ${{ runner.temp }}/quality-shards
-        run: pnpm ci:quality-verdict "$SHARDS" --shards 8 --mode full
+        run: pnpm ci:quality-verdict "$SHARDS" --shards 16 --mode full
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
@@ -387,6 +425,7 @@ jobs:
       [
         links,
         catalog-provenance,
+        big-run,
         quality-night,
         quality-full,
         quality-verdict,
@@ -422,7 +461,9 @@ jobs:
           NEEDS_JSON: ${{ toJSON(needs) }}
           # The jobs this run skips by design: links and catalog-provenance,
           # on every night but Monday.
-          EXPECTED_SKIPS: ${{ github.event.schedule != '23 6 * * 1' && 'links catalog-provenance' || '' }}
+          # Links and catalog-provenance skip but on Mondays, and quality-full and quality-verdict
+          # on a night big-run paused.
+          EXPECTED_SKIPS: ${{ format('{0} {1}', github.event.schedule != '23 6 * * 1' && 'links catalog-provenance' || '', needs.big-run.outputs.busy == 'true' && 'quality-full quality-verdict' || '') }}
           GITHUB_TOKEN: ${{ github.token }}
           REPORTS: ${{ runner.temp }}/reports
         run: node ci/report-issue.mjs --records "$REPORTS"

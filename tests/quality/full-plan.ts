@@ -98,13 +98,21 @@ export async function runFullPlan({
 } = {}): Promise<number> {
   try {
     const plan = await loadPlan({ ...env, QUALITY_WEB: host.web, QUALITY_MODE: 'full' });
-    // The release sizes its shards by its own measured weights (releaseOf); the nightly by the PR's.
+    // The release and the nightly both size by the release's measured weights (releaseOf, row 151).
     const release = releaseOf(plan);
-    const groups = fullGroups(plan, RUN_ENGINES.full);
     const seconds = Math.round(release.groups.reduce((sum, group) => sum + group.weight, 0));
-    const rotation = rotationFor(groups);
+    // The nightly's cycle is this plan's for the record: a night past its longest cycle is the
+    // nightly's failure, not the release's, so it's printed, and the count stands.
+    let rotation: { nights: number; slowest: number } | null = null;
+    let nightly: string;
+    try {
+      rotation = rotationFor(release.groups, releaseDurations());
+      nightly = `the nightly a ${rotation.nights}-night cycle of ${FULL_SHARDS} shards, the slowest about ${Math.round(rotation.slowest)}s of ${NIGHTLY_CEILING}s`;
+    } catch (error) {
+      nightly = `the nightly fits no cycle: ${(error as Error).message}`;
+    }
     log(
-      `[quality-full-plan] ${plan.tests.length} tests, about ${seconds}s: the release in ${release.count} shards, the slowest about ${Math.round(release.slowest)}s of ${RELEASE_CEILING}s; the nightly a ${rotation.nights}-night cycle of ${FULL_SHARDS} shards, the slowest about ${Math.round(rotation.slowest)}s of ${NIGHTLY_CEILING}s`,
+      `[quality-full-plan] ${plan.tests.length} tests, about ${seconds}s: the release in ${release.count} shards, the slowest about ${Math.round(release.slowest)}s of ${RELEASE_CEILING}s; ${nightly}`,
     );
     // Each release shard's estimate, the sum of its tests' per-key p90 weights, for the run's real
     // times to be read against.
@@ -116,7 +124,7 @@ export async function runFullPlan({
     const summary = releaseSummary(release.count);
     log(`[quality-full-plan] ${summary}`);
     if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${summary}\n`);
-    const outputs = fullOutputs(release.count, rotation.nights);
+    const outputs = fullOutputs(release.count, rotation?.nights ?? 0);
     if (env.GITHUB_OUTPUT) {
       appendFileSync(
         env.GITHUB_OUTPUT,

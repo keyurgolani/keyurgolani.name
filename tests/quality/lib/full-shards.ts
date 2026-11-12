@@ -5,15 +5,17 @@
 //
 // The caps. A night holds no more than FULL_SHARDS of the account's 20 job
 // slots at once, and a release candidate no more than RELEASE_PARALLEL (its
-// rc-quality jobs' max-parallel together), so PR CI keeps the rest: 12 a
-// night, and 4 while a candidate runs (the coordinator's sizing ruling for
-// v1.0.0, 2026-11-11: 16 at once, so the reachable scope's run ends in about
-// a day).
+// rc-quality jobs' max-parallel together), so PR CI keeps the rest: 4 a
+// night and 4 while a candidate runs (the coordinator's rulings for v1.0.0,
+// 2026-11-11: 16 at once for each, the nightly's (b1) scope in a 7-night
+// cycle, lib/nightly-scope.ts). The nightly pauses while a release or an
+// inventory run is in flight (ci/big-run.mjs), so the two never hold 32.
 //
 // The nightly rotation. The complete plan is more than one night of
 // FULL_SHARDS shards can run, so it runs over a cycle of N nights, the
 // smallest of NIGHT_COUNTS (7, 14, 28, 56) whose every night fits
-// NIGHTLY_CEILING at FULL_SHARDS shards (rotationFor); each shard works N
+// NIGHTLY_CEILING at FULL_SHARDS shards (rotationFor), by the release's
+// measured weights at its measured pace (row 151); each shard works N
 // out from the plan, the same way, and prints it. The harness's specs and
 // every perf cell run every night: the canary probe proves each night's
 // scrub, and the timing trend stays whole. Every other test has a night of
@@ -71,8 +73,11 @@ import { visualCells, VISUAL_VIEWPORTS } from './visual';
 
 export const VISUAL_SPEC = 'visual.spec.ts';
 
-/** The nightly's cap: the most shard jobs of a night at once, and the nightly's shard count. */
-export const FULL_SHARDS = 8;
+/**
+ * The nightly's cap: the most shard jobs of a night at once, and the nightly's shard count: 16, so
+ * the nightly's scope runs in a 7-night cycle (row 151, (b1)); 12 still fits 7.
+ */
+export const FULL_SHARDS = 16;
 /**
  * The release's rc-quality matrix jobs, by job id, each with its max-parallel: three, since one
  * matrix makes at most MAX_RELEASE_SHARDS jobs, at 6, 5 and 5 at once, 16 together (the
@@ -146,12 +151,11 @@ export const VISUAL_SECONDS = 10;
 export const TIMEOUT_MARGIN = 1.5;
 /** The longest GitHub lets a job on a hosted runner run. */
 export const JOB_LIMIT_MINUTES = 360;
-/** quality-full's timeout-minutes: the lead's bound for a night, which the cycle length is sized to. */
-export const NIGHTLY_TIMEOUT_MINUTES = 90;
-/** The slowest a nightly shard may be estimated at, in seconds, its fixed part included. */
-export const NIGHTLY_CEILING = Math.floor((NIGHTLY_TIMEOUT_MINUTES * 60) / TIMEOUT_MARGIN);
-/** The most one group may weigh: it runs on one worker, after the shard's fixed part. */
-export const FULL_GROUP_BUDGET = NIGHTLY_CEILING - FULL_FIXED;
+/**
+ * quality-full's timeout-minutes: the bound for a night, which the cycle length is sized to: 120,
+ * as rc-quality's (row 151, (b1)); it was 90.
+ */
+export const NIGHTLY_TIMEOUT_MINUTES = 120;
 /**
  * rc-quality's and rc-preflight's preflight-quality's timeout-minutes, the release shard's cap. It
  * stays at 120 (the coordinator's release-path ruling, 2026-11-07): the shard target,
@@ -214,6 +218,21 @@ export function fitReleaseCeiling(
  * assumptions, a pace of 1).
  */
 export const RELEASE_CEILING = fitReleaseCeiling(RELEASE_PACE);
+/**
+ * The slowest a nightly shard may be estimated at, in seconds, its fixed part included: the night's
+ * 120 minutes over TIMEOUT_MARGIN at the release's measured pace, as RELEASE_CEILING is fitted to
+ * rc-quality's (row 151). A night is sized by the release's weights (releaseDurations()), the same
+ * tests in the same image as a release shard; the PR's weights, which sized it before, run about
+ * 4.5 times light for the full plan, so every night from 11-04 ran past its 90 minutes.
+ */
+export const NIGHTLY_CEILING = fitReleaseCeiling(RELEASE_PACE, NIGHTLY_TIMEOUT_MINUTES);
+/**
+ * The most one group may weigh, in seconds: it runs on one worker, after the shard's fixed part.
+ * 3,180 s, what a 90-minute night's ceiling left one worker before row 151. It stays when the
+ * nights' ceiling rose to 6,668 s: parts that size deal the nights and the release's shards
+ * evenly, and parts of a whole worker's time leave nights lumpy past every cycle.
+ */
+export const FULL_GROUP_BUDGET = 3180;
 
 /** A shard job's timeout-minutes, for a shard estimated at up to `ceiling` seconds. */
 export const timeoutMinutes = (ceiling: number) => Math.ceil((ceiling * TIMEOUT_MARGIN) / 60);
@@ -632,8 +651,7 @@ export interface FullShard {
  * The shard `shard` (<n>/<m>, or null for all of them on one machine) of the
  * full plan on `engines`: the night's slice's with `night`, in m shards,
  * else the release plan's, in m shards. Each throws when its plan is over
- * its budget. With no `durations`, a release shard sizes by releaseDurations(),
- * a night by the PR weights.
+ * its budget. With no `durations`, both size by releaseDurations().
  */
 export function fullShard(
   plan: Pick<Plan, 'cells' | 'tests' | 'targets' | 'mode'>,
@@ -643,9 +661,9 @@ export function fullShard(
   durations?: ShardDurations,
 ): FullShard {
   const parsed = shard ? (parseShard(shard) as { index: number; count: number }) : null;
-  // A release shard plans by the release's measured weights (releaseDurations()), a night by the
-  // PR's, unless the caller hands it its own.
-  const weights = durations ?? (night === null ? releaseDurations() : loadDurations());
+  // A release shard and a night both plan by the release's measured weights (releaseDurations(),
+  // row 151 for the night), unless the caller hands them their own.
+  const weights = durations ?? releaseDurations();
   const groups = fullGroups(plan, engines, weights);
   const pick = (shards: readonly PrShard[]): PrShard =>
     parsed
