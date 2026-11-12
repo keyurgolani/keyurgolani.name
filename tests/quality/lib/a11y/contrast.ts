@@ -2271,8 +2271,9 @@ export async function batchFindings(
  * Text no contrast result names that a stuck cover sits over (row 152): axe matches and judges a text by its
  * element's box, so text whose lines paint past a box too small for them (one a pixel tall, say) can go unmatched,
  * and the sampler, which reads what axe calls incomplete, never sees it. One read of the page names each element
- * with text of its own whose line boxes run more than a pixel past its border box, that no contrast result of
- * axe's names, and that a stuck cover sits over by those line boxes (stuckCoverScript); each joins the sampler's
+ * with text of its own whose line boxes, as far as they paint, run more than a pixel past its border box (cut to
+ * every box on the way up that clips its overflow; text under a clip-path or clip is axe's alone), that no contrast
+ * result of axe's names, and that a stuck cover sits over by those line boxes (stuckCoverScript); each joins the sampler's
  * items by a path of its own, so the sampler clears it of the cover and reads it, or says why it can't. A page that
  * can't be read (a test's stand-in) adds none.
  */
@@ -2308,14 +2309,37 @@ export async function coveredUnmatchedText(
       if (own.length === 0) continue;
       const box = el.getBoundingClientRect();
       if (!(box.width > 0 && box.height > 0)) continue;
-      const past = own.some((n) => {
+      const lines = own.flatMap((n) => {
         const range = document.createRange();
         range.selectNodeContents(n);
-        return [...range.getClientRects()].some(
-          (r) => r.width >= 1 && r.height >= 1 &&
-            (r.top < box.top - 1 || r.bottom > box.bottom + 1 || r.left < box.left - 1 || r.right > box.right + 1),
-        );
+        return [...range.getClientRects()];
       });
+      const outside = (r) => r.right - r.left >= 1 && r.bottom - r.top >= 1 &&
+        (r.top < box.top - 1 || r.bottom > box.bottom + 1 || r.left < box.left - 1 || r.right > box.right + 1);
+      if (!lines.some(outside)) continue;
+      // What of a line paints: the line box cut to every box on the way up that clips (overflow other than visible),
+      // the element's own among them. A clip-path or clip leaves a shape this can't read, so text under one is
+      // left to axe, as it was (a skip link out of sight until focused, row 152's reach).
+      let cut = { left: -Infinity, top: -Infinity, right: Infinity, bottom: Infinity };
+      let shaped = false;
+      for (let up = el; up && up !== document.documentElement; up = up.parentElement) {
+        const cs = getComputedStyle(up);
+        if (cs.clipPath !== 'none' || (cs.clip && cs.clip !== 'auto')) shaped = true;
+        if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') {
+          const u = up.getBoundingClientRect();
+          cut = {
+            left: Math.max(cut.left, u.left), top: Math.max(cut.top, u.top),
+            right: Math.min(cut.right, u.right), bottom: Math.min(cut.bottom, u.bottom),
+          };
+        }
+      }
+      if (shaped) continue;
+      const past = lines.some((line) =>
+        outside({
+          left: Math.max(line.left, cut.left), top: Math.max(line.top, cut.top),
+          right: Math.min(line.right, cut.right), bottom: Math.min(line.bottom, cut.bottom),
+        }),
+      );
       if (past && cover(el, 0)) out.push(path(el));
     }
     return out;
