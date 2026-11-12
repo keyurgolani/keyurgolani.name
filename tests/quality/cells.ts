@@ -241,8 +241,11 @@ export interface Plan {
   readonly reasons: readonly string[];
   /** The changed variants and languages the [37] rule planned cells for. */
   readonly changes: readonly Change[];
-  /** `reachable` when the plan is narrowed to what a person can reach (PlanInput's scope). */
-  readonly scope?: PlanScope;
+  /**
+   * `reachable` when the plan is narrowed to what a person can reach (PlanInput's scope), and
+   * `nightly` when it's cut from that to a night's scope (lib/nightly-scope.ts).
+   */
+  readonly scope?: PlanScope | 'nightly';
 }
 
 /** A tuple for `variant` with the platform's default packs, in `displayMode`. */

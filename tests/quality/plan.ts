@@ -8,6 +8,7 @@ import { planCells, readBuildMeta, type Plan, type RunMode } from './cells';
 import { readChanges } from './lib/changes';
 import { qualityWeb } from './lib/env';
 import { loadRegistrations } from './lib/registration';
+import { nightlyScope } from './lib/nightly-scope';
 import { loadReleaseScope, plannedScope, scopePlan } from './lib/release-scope';
 
 export const RUN_MODES: readonly RunMode[] = ['pr', 'full'];
@@ -23,10 +24,13 @@ export function runMode(env: NodeJS.ProcessEnv = process.env): RunMode {
 export async function loadPlan(env: NodeJS.ProcessEnv = process.env): Promise<Plan> {
   const meta = readBuildMeta(qualityWeb(env));
   const mode = runMode(env);
+  // A night (QUALITY_NIGHT) plans the nightly's scope, cut from the reachable plan (row 151,
+  // lib/nightly-scope.ts); a release run refuses a night, so no release scope cuts it.
+  const night = mode === 'full' && Boolean(env.QUALITY_NIGHT);
   // A release candidate's scope (lib/release-scope.ts), which its jobs name: full mode stays full
   // without one. The reachable scope is planned (cells.ts), any other cut from the full plan.
-  const release = mode === 'full' ? loadReleaseScope(env) : null;
-  const scope = plannedScope(release?.scope);
+  const release = mode === 'full' && !night ? loadReleaseScope(env) : null;
+  const scope = night ? 'reachable' : plannedScope(release?.scope);
   const plan = planCells({
     meta,
     registrations: await loadRegistrations(),
@@ -35,5 +39,6 @@ export async function loadPlan(env: NodeJS.ProcessEnv = process.env): Promise<Pl
     changes: mode === 'pr' ? readChanges(meta, env).changes : [],
     ...(scope ? { scope } : {}),
   });
+  if (night) return nightlyScope(plan);
   return release ? scopePlan(plan, release.scope) : plan;
 }
