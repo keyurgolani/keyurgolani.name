@@ -2268,6 +2268,67 @@ export async function batchFindings(
 }
 
 /**
+ * Text no contrast result names that a stuck cover sits over (row 152): axe matches and judges a text by its
+ * element's box, so text whose lines paint past a box too small for them (one a pixel tall, say) can go unmatched,
+ * and the sampler, which reads what axe calls incomplete, never sees it. One read of the page names each element
+ * with text of its own whose line boxes run more than a pixel past its border box, that no contrast result of
+ * axe's names, and that a stuck cover sits over by those line boxes (stuckCoverScript); each joins the sampler's
+ * items by a path of its own, so the sampler clears it of the cover and reads it, or says why it can't. A page that
+ * can't be read (a test's stand-in) adds none.
+ */
+export async function coveredUnmatchedText(
+  page: Page,
+  results: Partial<Pick<AxeResults, 'violations' | 'incomplete' | 'passes'>>,
+): Promise<{ target: string[] }[]> {
+  const named = [
+    ...(results.violations ?? []),
+    ...(results.incomplete ?? []),
+    ...(results.passes ?? []),
+  ]
+    .filter((rule) => rule.id === CONTRAST_RULE || rule.id === ENHANCED_CONTRAST_RULE)
+    .flatMap((rule) => rule.nodes)
+    .map(nodeSelector)
+    .filter((selector): selector is string => selector !== null);
+  const script = `((named) => {
+    const cover = ${stuckCoverScript};
+    const seen = new Set();
+    for (const selector of named) {
+      try { for (const el of document.querySelectorAll(selector)) seen.add(el); } catch {}
+    }
+    const path = (el) => {
+      const parts = [];
+      for (let node = el; node && node !== document.documentElement; node = node.parentElement)
+        parts.unshift(node.localName + ':nth-child(' + ([...node.parentElement.children].indexOf(node) + 1) + ')');
+      return ['html', ...parts].join(' > ');
+    };
+    const out = [];
+    for (const el of document.body.querySelectorAll('*')) {
+      if (seen.has(el)) continue;
+      const own = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim());
+      if (own.length === 0) continue;
+      const box = el.getBoundingClientRect();
+      if (!(box.width > 0 && box.height > 0)) continue;
+      const past = own.some((n) => {
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        return [...range.getClientRects()].some(
+          (r) => r.width >= 1 && r.height >= 1 &&
+            (r.top < box.top - 1 || r.bottom > box.bottom + 1 || r.left < box.left - 1 || r.right > box.right + 1),
+        );
+      });
+      if (past && cover(el, 0)) out.push(path(el));
+    }
+    return out;
+  })(${JSON.stringify(named)})`;
+  const found = await page.evaluate(script).catch(() => undefined);
+  return Array.isArray(found)
+    ? found
+        .filter((each): each is string => typeof each === 'string')
+        .map((selector) => ({ target: [selector] }))
+    : [];
+}
+
+/**
  * Each incomplete contrast element resolved against its worst background
  * pixel, at the ratios its own mode needs. With `framed`, for a surface
  * whose frame's document other cells cover, the items inside a frame are
@@ -2275,23 +2336,31 @@ export async function batchFindings(
  * stays. The elements the batch path can take (batchFindings()) are read
  * there, viewport by viewport, unless `batch` is false; every other one,
  * and every one with it off, is read on its own, as each was before it,
- * and the findings come in the items' order either way.
+ * and the findings come in the items' order either way. Text no contrast
+ * result names that a stuck cover sits over joins the items after axe's
+ * (coveredUnmatchedText(), row 152).
  */
 export async function incompleteContrastFindings(
   page: Page,
-  results: Pick<AxeResults, 'incomplete'>,
+  results: Pick<AxeResults, 'incomplete'> & Partial<Pick<AxeResults, 'violations' | 'passes'>>,
   framed = false,
   { batch = true }: SamplerOptions = {},
 ): Promise<Finding[]> {
-  const incomplete = incompleteContrastNodes(results);
+  // tsx names a script's inner functions with a helper the page doesn't have.
+  await page.evaluate('globalThis.__name ??= (f) => f');
+  const incomplete = [
+    ...incompleteContrastNodes(results),
+    ...((await coveredUnmatchedText(
+      page,
+      results,
+    )) as unknown as AxeResults['incomplete'][number]['nodes']),
+  ];
   const nodes = framed ? incomplete.filter((node) => !inFrame(node)) : incomplete;
   if (nodes.length === 0) return [];
   const findings: Finding[] = [];
   // This call's key: its style, its marks, and the texts the page keeps between calls carry it.
   const key = randomBytes(6).toString('hex');
   const near = `__qualityNearTexts_${key}`;
-  // tsx names a script's inner functions with a helper the page doesn't have.
-  await page.evaluate('globalThis.__name ??= (f) => f');
   await page.evaluate(
     ({ css, key }) => {
       const style = document.createElement('style');
