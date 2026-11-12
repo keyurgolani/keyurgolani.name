@@ -1570,6 +1570,34 @@ const STUCK_FOR_GOOD = built(
   '<header></header><p class="band">A paragraph the fixed header always covers.</p>',
 );
 
+/** Row 152's plants: a page too short to scroll, line boxes 24 px tall, a 20ch measure, a fixed bar. */
+const COVER_STYLE =
+  'body { margin: 0; font: 16px/24px Arial, sans-serif; } main { padding: 0; } h1 { margin: 0; font-size: 16px; line-height: 24px; } .band { margin: 0; inline-size: 20ch; background: linear-gradient(90deg, #fff, #f6f6f6); color: #222; } .bar { position: fixed; background: #222; }';
+
+/** A fixed bar over a paragraph's first line (the header's 40 px reach the paragraph's 24 px to 48 px). */
+const COVER_FIRST_LINE = built(
+  'A bar over the first line',
+  `${COVER_STYLE} .bar { inset: 0 0 auto; block-size: 40px; }`,
+  '<div class="bar"></div><p class="band">A paragraph whose first line the fixed bar covers, three lines long.</p>',
+);
+
+/**
+ * A paragraph whose box is a pixel tall, its lines painting below it, and a fixed bar from 60 px to 100 px over
+ * its second and third lines: its glyphs are under the bar, its box's corners aren't.
+ */
+const COVER_GLYPHS_NOT_BOX = built(
+  'Glyphs under the bar, the box clear of it',
+  `${COVER_STYLE} .band { block-size: 1px; overflow: visible; } .bar { inset: 60px 0 auto; block-size: 40px; }`,
+  '<div class="bar"></div><p class="band">A paragraph a pixel tall, whose later lines the fixed bar covers.</p>',
+);
+
+/** A block across the page whose short line is clear of a fixed bar over its box's empty top-right corner. */
+const COVER_EMPTY_CORNER = built(
+  "A bar over a block's empty corner",
+  `${COVER_STYLE} .band { inline-size: auto; } .bar { inset: 0 0 auto auto; inline-size: 120px; block-size: 30px; }`,
+  '<div class="bar"></div><p class="band">Short text.</p>',
+);
+
 /** contrast-rotated.html with a second sticker whose line is its own background's color. */
 const ROTATED_FAINT = withFixture(
   'contrast-rotated.html',
@@ -3157,6 +3185,34 @@ export const A11Y_CASES: readonly MetaCase[] = [
     /^contrast text: unresolved: /,
     contrast,
   ),
+  // What a cover hides is a text's glyphs, not its element's box (row 152): a fixed bar over a paragraph's first
+  // line leaves its text unresolved; so does one over its later lines where its box, a pixel tall, is clear of it;
+  // a block whose short line is clear of a bar over its box's empty corner is read, and passes.
+  builtCase(
+    'stuck-first-line',
+    'contrast',
+    'text whose first line a fixed bar covers, on a page too short to scroll it clear (row 152)',
+    COVER_FIRST_LINE,
+    /^contrast text: unresolved: /,
+    contrast,
+  ),
+  builtCase(
+    'stuck-glyphs-not-box',
+    'contrast',
+    'text whose later lines a fixed bar covers while its box, a pixel tall, is clear of it (row 152)',
+    COVER_GLYPHS_NOT_BOX,
+    /^contrast text: unresolved: /,
+    contrast,
+  ),
+  {
+    id: 'contrast/stuck-empty-corner',
+    gate: 'contrast',
+    input:
+      "a block whose short line is clear of a fixed bar over its box's empty top-right corner (row 152)",
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(COVER_EMPTY_CORNER, contrast),
+  },
   // Text an on-scroll entrance slides into place is read once the slide has ended, where its
   // glyphs paint, and passes.
   goodFile('arrival', 'contrast-arrival.html', 'contrast', contrast),
