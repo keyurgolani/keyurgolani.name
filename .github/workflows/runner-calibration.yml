@@ -1,0 +1,107 @@
+# Evidence only, never merged (runner-normalised timing): the calibration probe. Six jobs,
+# each on its own hosted runner in the pinned Playwright image, run every perf cell of the full
+# plan (their titles end "performance at 390x844 (<tier>)"), retries 0. Each perf load reads the
+# runner's speed first, the calibration workload's TaskDuration (lib/perf/measure.ts), and keeps
+# its long tasks. calibration-compare reads every job's summary.json (ci/evidence/
+# runner-calibration.mjs): the reference, the median calibration over every load of every job, which
+# timing.calibration.referenceMs takes with measuredBy naming this run; and per target, tbtMs and
+# idleTaskMs as each runner measured them and at the reference's speed, with how far apart the
+# runners read each. Runs on a push of its evidence branch alone, holds contents: read and no
+# secret, and reads no cache. Its six jobs run beside no other big run.
+name: runner-calibration
+
+on:
+  push:
+    branches: [kgn-a/runner-calibration-evidence]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-calibration
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+
+jobs:
+  calibration:
+    name: calibration (runner ${{ matrix.job }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        job: [1, 2, 3, 4, 5, 6]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Every perf cell, retries 0
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+        run: |
+          status=0
+          pnpm ci:quality-full '--grep=performance at 390x844 \(' --retries=0 || status=$?
+          echo "the perf cells ended $status on runner ${{ matrix.job }}"
+      - name: Read the run
+        if: ${{ always() }}
+        run: node ci/evidence/runner-calibration.mjs one reports/quality/summary.json "runner-${{ matrix.job }}" "calibration-${{ matrix.job }}.json"
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Upload the run's readings
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: calibration-${{ matrix.job }}
+          path: calibration-${{ matrix.job }}.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-calibration-${{ matrix.job }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  calibration-compare:
+    name: calibration-compare
+    needs: [calibration]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ci/evidence/
+      - name: Download the runs' readings
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: calibration-*
+          path: ${{ runner.temp }}/calibration
+          merge-multiple: true
+      - name: Compare
+        run: node ci/evidence/runner-calibration.mjs compare "$RUNNER_TEMP/calibration"
