@@ -488,3 +488,35 @@ test("a stylesheet the package doesn't have is a problem, not a throw", () => {
   assert.equal(found.length, 1);
   assert.equal(found[0]!.message, "names styles.css, which the package doesn't have.");
 });
+
+test("a variant that reserves the window's block end gets the host's root scroll-padding after its layer, in its media query, and any other gets the same file as before", () => {
+  const dir = packageDir({ 'styles.css': "[data-variant='acme'] { display: block; }\n" });
+  const layered = `${LAYER_ORDER}\n@layer variant-layout {\n[data-variant='acme'] { display: block; }\n}\n`;
+  // Under a width: the root, while it holds this variant's boundary, scrolls focus clear of the bar.
+  assert.equal(
+    compiled(dir, { scrollReserve: { blockEnd: '5rem', media: '(max-width: 39.99rem)' } }).css,
+    `${layered}@media (max-width: 39.99rem) {\n  :root:has([data-variant="acme"]) {\n    scroll-padding-block-end: 5rem;\n  }\n}\n`,
+  );
+  // With no media, at every width.
+  assert.equal(
+    compiled(dir, { scrollReserve: { blockEnd: 'calc(4rem + 12px)' } }).css,
+    `${layered}:root:has([data-variant="acme"]) {\n  scroll-padding-block-end: calc(4rem + 12px);\n}\n`,
+  );
+  // After the view-transition rules when both are on, and outside every layer.
+  const both = compiled(dir, {
+    crossDocumentTransitions: true,
+    scrollReserve: { blockEnd: '5rem' },
+  }).css;
+  assert.ok(
+    both.endsWith(
+      `${HOST_TRANSITIONS}:root:has([data-variant="acme"]) {\n  scroll-padding-block-end: 5rem;\n}\n`,
+    ),
+  );
+  // Left out, the file is byte for byte what it was: no rule, no hash change.
+  const before = compiled(dir, {});
+  assert.equal(before.css, layered);
+  assert.equal(
+    compiled(dir, { scrollReserve: undefined }).stylesheet.sha256,
+    before.stylesheet.sha256,
+  );
+});
