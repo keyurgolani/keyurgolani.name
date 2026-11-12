@@ -85,6 +85,7 @@
     "ci:workflows": "node ci/run.mjs workflows -- pnpm check:workflows",
     "ci:unit": "node ci/run.mjs unit -- pnpm test",
     "ci:big-run": "node ci/big-run.mjs",
+    "ci:inventory-summary": "node ci/run.mjs inventory-summary -- tsx tests/quality/inventory.ts",
     "ci:build": "node ci/run.mjs build -- pnpm build",
     "ci:source-maps": "node ci/run.mjs source-maps -- pnpm check:source-maps",
     "ci:standalone": "node ci/run.mjs standalone -- pnpm check:standalone",

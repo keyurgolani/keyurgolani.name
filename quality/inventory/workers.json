@@ -1,0 +1,4 @@
+{
+  "workers": 2,
+  "source": "SHARD_WORKERS (tests/quality/lib/pr-shards.ts): the Playwright workers a quality shard runs, which the planner sizes every shard by. The worker probe (row 151's lever (a)) settles it; the release run and the inventory run keep this one setting, which inventory.test.ts holds equal to SHARD_WORKERS."
+}
