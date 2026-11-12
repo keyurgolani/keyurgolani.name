@@ -100,7 +100,9 @@ test("quality-night takes the night's UTC date once, for every shard to read its
 test('quality-full shards quality:full in the pinned image, scrubs however it ended, and uploads only a clean scrub', () => {
   const job = SCHEDULED.jobs['quality-full'];
   assert.ok(job, 'the scheduled workflow has quality-full');
-  assert.deepEqual(job.needs, ['quality-night']);
+  // It waits on big-run, and skips the night a big run is in flight (ci/big-run.mjs).
+  assert.deepEqual(job.needs, ['quality-night', 'big-run']);
+  assert.equal(job.if, "${{ needs.big-run.outputs.busy == 'false' }}");
   assert.equal(job.container?.image, VISUAL_IMAGE);
   assert.equal(job.env?.QUALITY_CONTAINER, VISUAL_IMAGE);
   assert.equal(job.permissions, undefined, "it keeps the workflow's contents: read");
@@ -149,8 +151,9 @@ test('quality-full shards quality:full in the pinned image, scrubs however it en
 test('quality-verdict judges every shard whole, however they ended, from their own directory', () => {
   const job = SCHEDULED.jobs['quality-verdict'];
   assert.ok(job, 'the scheduled workflow has quality-verdict');
-  assert.deepEqual(job.needs, ['quality-full']);
-  assert.equal(job.if, '${{ always() }}');
+  // However the shards ended, but not on a night big-run paused.
+  assert.deepEqual(job.needs, ['big-run', 'quality-full']);
+  assert.equal(job.if, "${{ always() && needs.big-run.outputs.busy == 'false' }}");
   assert.equal(job.permissions, undefined);
   const total = SCHEDULED.jobs['quality-full']!.strategy!.matrix!.shard!.length;
   const download = step(

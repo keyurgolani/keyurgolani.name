@@ -129,14 +129,14 @@ test('EXPECTED_SKIPS naming a job report does not need is an error, through the 
   );
 });
 
-test("the workflow's EXPECTED_SKIPS names only the Monday jobs, and only on the nights they don't run", () => {
+test("the workflow's EXPECTED_SKIPS names the Monday jobs on the nights they don't run, and the nightly's quality jobs on a night big-run pauses", () => {
   const workflow = readFileSync(
     path.join(HERE, '..', '.github', 'workflows', 'scheduled.yml'),
     'utf8',
   );
   assert.ok(
     workflow.includes(
-      "EXPECTED_SKIPS: ${{ github.event.schedule != '23 6 * * 1' && 'links catalog-provenance' || '' }}",
+      "EXPECTED_SKIPS: ${{ format('{0} {1}', github.event.schedule != '23 6 * * 1' && 'links catalog-provenance' || '', needs.big-run.outputs.busy == 'true' && 'quality-full quality-verdict' || '') }}",
     ),
   );
   assert.deepEqual(parseExpectedSkips('links catalog-provenance'), ['links', 'catalog-provenance']);
