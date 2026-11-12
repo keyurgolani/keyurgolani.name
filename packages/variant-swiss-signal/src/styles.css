@@ -2455,12 +2455,20 @@
     );
   }
 
-  /* Its aside the same way, from its own longest word (asideFit, its parentheses counted), at its step or under. */
+  /*
+   * Its aside the same way, from its own longest word (asideFit, its parentheses counted), at its step or
+   * under, at 0.5em a letter, an italic lowercase's measure rather than the capitals': a short word keeps near
+   * its step, and "(software," keeps room on a fallback face. A block of its own, on its own pitch, so its lines
+   * aren't a display line apart.
+   */
   [data-variant='swiss-signal'] .ss-poster__line .ss-poster__aside {
+    display: block;
+    margin-inline-start: 0;
     font-size: max(
       var(--type-body-font-size),
-      min(var(--type-step-3), calc(100cqi / (var(--layout-ss-aside-word, 8) * 0.85)))
+      min(var(--type-step-3), calc(100cqi / (var(--layout-ss-aside-word, 8) * 0.5)))
     );
+    line-height: 1.2;
     overflow-wrap: normal;
   }
 }
