@@ -14,6 +14,7 @@ import {
   MAX_FLAKY,
   recordsProblems,
 } from './release-records.mjs';
+import * as releaseRecords from './release-records.mjs';
 
 const CANDIDATE = { release: '1.0.0-rc.1', scope: 'default-packs' };
 const CELL =
@@ -224,6 +225,18 @@ test(`at most ${MAX_FLAKY} flaky entries: a sixth is refused, and a final releas
     "6 flaky entries, over the 5 a list holds without the coordinator's word",
   ]);
   assert.deepEqual(shapeProblems([flaky('#a')], { release: '1.0.0', scope: 'full' }), [
+    '1.0.0 is a final release: its records list must be empty',
+  ]);
+});
+
+test("a final release's list is for a whole matrix's scope: full or reachable, never a narrowed one", () => {
+  assert.deepEqual(releaseRecords.FINAL_SCOPES, ['full', 'reachable']);
+  assert.deepEqual(shapeProblems([], { release: '1.0.0', scope: 'reachable' }), []);
+  assert.deepEqual(shapeProblems([], { release: '1.0.0', scope: 'full' }), []);
+  assert.deepEqual(shapeProblems([], { release: '1.0.0', scope: 'default-packs' }), [
+    '1.0.0 is a final release: its scope must be full or reachable',
+  ]);
+  assert.deepEqual(shapeProblems([strict('#a')], { release: '1.0.0', scope: 'reachable' }), [
     '1.0.0 is a final release: its records list must be empty',
   ]);
 });

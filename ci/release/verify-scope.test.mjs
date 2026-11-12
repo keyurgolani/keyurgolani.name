@@ -97,6 +97,21 @@ test("rc-verify's scripts import only what its sparse checkout holds: ci/release
   ]);
 });
 
+test("a final promotes on a whole matrix, full or reachable (the coordinator's (c′)), and on no narrowed scope", () => {
+  const scope = (kind) => ({ release: '1.0.0-rc.4', scope: kind, records: 'records.json' });
+  assert.equal(finalScopeRefusal(scope('full'), []), null);
+  assert.equal(finalScopeRefusal(scope('reachable'), []), null);
+  assert.match(
+    finalScopeRefusal(scope('default-packs'), []) ?? '',
+    /its scope is "default-packs", not full or reachable\. A final needs a whole matrix clean: scope full or reachable, an empty list and no timingReported, then a new candidate$/,
+  );
+  // Reachable takes no failing cell either.
+  assert.match(
+    finalScopeRefusal(scope('reachable'), [{ cell: 'a' }]) ?? '',
+    /its records list names 1 failing cell test\./,
+  );
+});
+
 test("a final's scope refuses any timingReported that isn't an empty list, and takes an empty one", () => {
   const full = { release: '1.0.0-rc.2', scope: 'full', records: 'records.json' };
   assert.equal(finalScopeRefusal({ ...full, timingReported: [] }, []), null);
