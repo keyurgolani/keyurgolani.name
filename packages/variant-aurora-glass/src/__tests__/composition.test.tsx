@@ -409,7 +409,7 @@ test('Pause: the ornament holds it above 75rem, the capsule as its last item bel
     /<nav class="ag-capsule ag-frost" aria-label="Primary">([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? '';
   assert.match(
     capsule,
-    /<button type="button" class="ag-orn ag-orn--capsule" id="ag--pause-capsule" aria-pressed="false" aria-describedby="ag--pause-capsule-held" data-ag-pause="" hidden=""><span class="ag-orn__mark" aria-hidden="true"><\/span><span class="ag-orn__word">Pause the sky<\/span><\/button><span class="ag-orn__held" id="ag--pause-capsule-held" data-ag-held="" hidden=""><\/span>$/,
+    /<button type="button" class="ag-orn ag-orn--capsule" id="ag--pause-capsule" aria-pressed="false" aria-describedby="ag--pause-capsule-held" data-ag-pause="" data-ag-waiting=""><span class="ag-orn__mark" aria-hidden="true"><\/span><span class="ag-orn__word">Pause the sky<\/span><\/button><span class="ag-orn__held" id="ag--pause-capsule-held" data-ag-held="" hidden=""><\/span>$/,
   );
   assert.equal(count(html, /data-ag-pause=""/g), 2);
   assert.match(CSS, /\.ag-capsule \.ag-orn--capsule \{\s*display: none;/);
@@ -467,10 +467,10 @@ test('two loops, each gated on the ambient state, and none without the enhanceme
   // Both start only once the enhancement marks the root.
   assert.equal(count(CSS, /\.ag\[data-ag-sky\] [^{]*\{\s*animation: aurora-glass-/g), 2);
   assert.match(CSS, /--layout-motion-ambient: 36s;/);
-  // The Pause ships hidden, as a toggle.
+  // The Pause ships waiting, as a toggle.
   assert.match(
     sample(),
-    /<button type="button" class="ag-orn" id="ag--pause" aria-pressed="false" aria-describedby="ag--pause-held" data-ag-pause="" hidden="">/,
+    /<button type="button" class="ag-orn" id="ag--pause" aria-pressed="false" aria-describedby="ag--pause-held" data-ag-pause="" data-ag-waiting="">/,
   );
 });
 

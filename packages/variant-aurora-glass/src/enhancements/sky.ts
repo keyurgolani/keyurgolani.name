@@ -517,6 +517,8 @@ function attach(root: HTMLElement, prefix: string): () => void {
       queries[0]!.matches || (boundary?.dataset.motion ?? 'full') !== 'full' ? 'reduced' : 'touch';
     for (const pause of pauses) {
       pause.hidden = state === 'gone';
+      // Decided: the place a waiting Pause kept goes to it, or to nothing (styles.css).
+      delete pause.dataset.agWaiting;
       pause.setAttribute('aria-pressed', String(live && pressed));
       if (state === 'still') pause.setAttribute('aria-disabled', 'true');
       else pause.removeAttribute('aria-disabled');
@@ -635,7 +637,10 @@ function attach(root: HTMLElement, prefix: string): () => void {
   return () => {
     off.forEach((undo) => undo());
     delete root.dataset.agSky;
-    for (const pause of pauses) pause.hidden = true;
+    for (const pause of pauses) {
+      pause.hidden = true;
+      pause.dataset.agWaiting = '';
+    }
   };
 }
 
@@ -650,6 +655,11 @@ export default function SkyEnhancement({ input }: { readonly input: VariantRende
     if (!root) return undefined;
     // Inside a plate (an inert boundary) nothing attaches, so nothing waits on its first pass.
     if (root.closest('[inert]')) {
+      // Nothing will decide Pause here: withdrawn, it keeps no place.
+      for (const pause of root.querySelectorAll<HTMLElement>('[data-ag-pause]')) {
+        pause.hidden = true;
+        delete pause.dataset.agWaiting;
+      }
       settleSky(root);
       return undefined;
     }

@@ -5,10 +5,13 @@ import { ownId, uiLang, Words } from '../parts';
 // The ornament (brief §5.2, step 4; AG-S2; M2): one group on the page's end
 // column line, beside the capsule: "Pause the sky", which stops both loops
 // (the curtains and the bead's breath), and the visitor's appearance
-// control. Pause ships hidden: the sky only moves once the enhancement has
-// started it, and the enhancement shows Pause then, so it never offers to
-// stop motion that isn't there (no script, reduced motion, a static page,
-// touch and narrow screens, or the owner's drift off with no Lens).
+// control. Pause ships waiting (data-ag-waiting), not hidden: the sky only
+// moves once the enhancement has started it, and the enhancement shows Pause
+// then, so it never offers to stop motion that isn't there (no script,
+// reduced motion, a static page, touch and narrow screens, or the site's
+// drift off with no Lens). Waiting, it has no box, or where script runs and
+// would show it, its place kept unseen (styles.css); the enhancement takes the
+// mark off as it decides, and hides it with hidden where it's withdrawn.
 //
 // Below 75rem there's no room for the ornament beside a centred capsule,
 // so Pause is the capsule's last item instead (the design review, G1/S2).
@@ -34,7 +37,7 @@ export function PauseButton({
         aria-pressed="false"
         aria-describedby={held}
         data-ag-pause=""
-        hidden
+        data-ag-waiting=""
       >
         <span className="ag-orn__mark" aria-hidden="true" />
         <span className="ag-orn__word">

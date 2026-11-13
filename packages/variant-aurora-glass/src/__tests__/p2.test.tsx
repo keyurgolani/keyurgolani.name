@@ -675,14 +675,15 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
     '.ag-chrome:not([data-ag-rows])',
     '.ag-chrome:not([data-ag-rows])',
   ]);
-  // Where script runs, before it does, from 48rem to 75rem where the sky would move, the capsule's
-  // Pause keeps its own box, unseen, so the row breaks where it does once the script has run; with
-  // no script, no empty room for it. And the rules that say a row takes two lines count it, its
-  // mark below 64rem and its word from 64rem.
-  const keep = (from: string, sky: string) =>
-    `@media screen and (scripting: enabled) and (min-width: ${from}) and (max-width: 75rem) { [data-variant='aurora-glass'] .ag:has(${sky}) .ag-chrome:not([data-ag-rows]) .ag-capsule .ag-orn--capsule[hidden] { display: inline-flex; visibility: hidden; } }`;
-  assert.ok(css.includes(keep('48rem', ".ag-sky[data-ag-drift='on']")));
-  assert.ok(css.includes(keep('56.01rem', '.ag-lens')));
+  // A waiting Pause keeps its place unseen only where script runs and the script would show that
+  // copy (composition.test.tsx pins each rule); and the rules that say a row takes two lines count
+  // the capsule's copy, its mark below 64rem and its word from 64rem.
+  assert.ok(!css.includes('.ag-orn--capsule[hidden] { display: inline-flex;'));
+  assert.ok(
+    css.includes(
+      '.ag-capsule .ag-orn--capsule[data-ag-waiting] { display: inline-flex; visibility: hidden; }',
+    ),
+  );
   const mark =
     'clamp(0.2813rem, 0.2685rem + 0.0568vw, 0.3125rem) + 2 * clamp(1.125rem, 1.0739rem + 0.2273vw, 1.25rem) + 0.625rem';
   const margins = '2 * clamp(1.125rem, 0.5625rem + 2.5vw, 2.5rem)';
