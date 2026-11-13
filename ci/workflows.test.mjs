@@ -729,7 +729,7 @@ test('each sharded suite runs as many shards as ci/shards.mjs splits it into, an
   assert.match(block, /\n {8}shard: \[1, 2, 3, 4\]\n/);
 });
 
-test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/inventory-* pushes alone, with no release job, and its summary reports", () => {
+test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/inventory-* pushes alone, with no release job, and its summary reports, or resumes an earlier run's unfinished shards at 12", () => {
   const INVENTORY = read('.github/workflows/inventory.yml');
   // A push of an inventory branch: no tag, no dispatch, no other branch.
   assert.deepEqual(INVENTORY.on, { push: { branches: ['kgn-a/inventory-*'] } });
@@ -739,6 +739,7 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
     'inventory-1',
     'inventory-2',
     'inventory-3',
+    'inventory-resume',
     'inventory-summary',
   ]);
   const text = JSON.stringify(INVENTORY.jobs);
@@ -787,16 +788,73 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
     [1, 2, 3].map((k) => INVENTORY.jobs[`inventory-${k}`].strategy['max-parallel']),
     [6, 5, 5],
   );
+  // A resume (ci/inventory-resume.mjs): inventory-1, but for its name, one matrix of the resume's
+  // entries at 12 at a time, a split shard's part's projects, and the label its artifact takes.
+  const shardStep = (job) => job.steps.find((s) => /pnpm ci:quality-full/.test(s.run ?? ''));
+  const resumeJob = structuredClone(INVENTORY.jobs['inventory-resume']);
+  const firstJob = structuredClone(INVENTORY.jobs['inventory-1']);
+  assert.equal(
+    resumeJob.name,
+    'inventory (${{ matrix.label }}/${{ needs.inventory-plan.outputs.count }})',
+  );
+  assert.equal(resumeJob.if, "${{ needs.inventory-plan.outputs.resume != '' }}");
+  assert.deepEqual(resumeJob.strategy, {
+    'fail-fast': false,
+    'max-parallel': 12,
+    matrix: '${{ fromJSON(needs.inventory-plan.outputs.resume) }}',
+  });
+  const resumeRun = shardStep(resumeJob);
+  assert.equal(resumeRun.name, '${{ matrix.repro }}');
+  assert.equal(resumeRun.env.PROJECTS, '${{ matrix.projects }}');
+  assert.equal(resumeRun.env.CI_REPRO_COMMAND, '${{ matrix.repro }}');
+  assert.match(
+    resumeRun.run,
+    /\n\s*for project in \$PROJECTS; do set -- "\$@" "--project=\$project"; done\n/,
+  );
+  assert.match(resumeRun.run, /\npnpm ci:quality-full "\$@" \|\| status=\$\?\n/);
+  const upload = (job) => job.steps.find((s) => /^actions\/upload-artifact@/.test(s.uses ?? ''));
+  assert.equal(upload(resumeJob).with.name, 'reports-inventory-${{ matrix.label }}');
+  for (const job of [resumeJob, firstJob]) {
+    delete job.name;
+    delete job.if;
+    delete job.strategy;
+    const step = shardStep(job);
+    delete step.name;
+    delete step.run;
+    delete step.env.PROJECTS;
+    delete step.env.CI_REPRO_COMMAND;
+    delete upload(job).with.name;
+  }
+  assert.deepEqual(resumeJob, firstJob, 'inventory-resume');
   // The plan: rc-quality-plan's count, by the inventory's scope file, and the worker count.
   const plan = INVENTORY.jobs['inventory-plan'];
   const count = plan.steps.find((s) => s.id === 'count');
   assert.equal(count.run, 'pnpm exec tsx tests/quality/full-plan.ts');
   assert.equal(count.env.QUALITY_RELEASE_SCOPE, 'quality/inventory/scope.json');
   assert.match(plan.steps.find((s) => s.id === 'workers').run, /quality\/inventory\/workers\.json/);
+  // A resume's step, after the count: its matrix, and the three whole-run lists emptied.
+  const at = (id) => plan.steps.findIndex((s) => s.id === id);
+  assert.ok(at('count') < at('resume'), 'the resume step reads the count');
+  const resumeStep = plan.steps[at('resume')];
+  assert.equal(resumeStep.env.COUNT, '${{ steps.count.outputs.count }}');
+  assert.equal(
+    resumeStep.run,
+    'node ci/inventory-resume.mjs quality/inventory/resume.json "$COUNT" >> "$GITHUB_OUTPUT"',
+  );
+  for (const k of [1, 2, 3]) {
+    assert.equal(
+      plan.outputs[`shards${k}`],
+      `\${{ steps.resume.outputs.shards${k} || steps.count.outputs.shards${k} }}`,
+    );
+  }
+  assert.equal(plan.outputs.resume, '${{ steps.resume.outputs.matrix }}');
   // The summary: every shard's reports, however the shards ended, and the inventory's command.
   const summary = INVENTORY.jobs['inventory-summary'];
   assert.deepEqual(summary.needs, ['inventory-plan', 'inventory-1', 'inventory-2', 'inventory-3']);
-  assert.equal(summary.if, "${{ !cancelled() && needs.inventory-plan.result == 'success' }}");
+  assert.equal(
+    summary.if,
+    "${{ !cancelled() && needs.inventory-plan.result == 'success' && needs.inventory-plan.outputs.resume == '' }}",
+  );
   const merge = summary.steps.find((s) => /ci:inventory-summary/.test(s.run ?? ''));
   assert.equal(merge.run, 'pnpm ci:inventory-summary "$SHARDS" --shards "$SHARD_COUNT"');
   assert.equal(merge.env.SHARD_COUNT, '${{ needs.inventory-plan.outputs.count }}');
