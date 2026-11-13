@@ -52,7 +52,7 @@ test('on a phone the full record’s rows have room around and between their lin
 
 test('on a laptop’s short window the strip steps its spacing down and widens two-section scenes, never its type (HOR-1)', () => {
   const short = blocks(
-    '(min-width: 64rem) and (min-height: 44rem) and (max-height: 56rem) and (hover: hover) and (pointer: fine)',
+    'screen and (min-width: 64rem) and (min-height: 44rem) and (max-height: 56rem) and (hover: hover) and (pointer: fine)',
   );
   assert.equal(short.length, 1);
   const block = short[0]!;
@@ -71,7 +71,7 @@ test('on a laptop’s short window the strip steps its spacing down and widens t
 
 test('a scene that still overflows in a wider face opens a width wider, never shrinking its type', () => {
   const strip = blocks(
-    '(min-width: 64rem) and (min-height: 44rem) and (hover: hover) and (pointer: fine)',
+    'screen and (min-width: 64rem) and (min-height: 44rem) and (hover: hover) and (pointer: fine)',
   ).join('\n');
   const room = (scene: string) =>
     declared(
@@ -314,4 +314,22 @@ test('on paper the rail prints as a plain list of its chapters and Strip | List 
     /background-color: transparent;/,
   );
   assert.doesNotMatch(print, /\.hc-scrub,/);
+});
+
+test('the strip is a screen’s: on paper, landscape included, the scenes run top to bottom, so none is cut at the page’s side', () => {
+  const strip = [...CSS.matchAll(/@media ([^{]+) \{/g)]
+    .map(([, query]) => query!)
+    .filter(
+      (query) =>
+        query.includes('(min-width: 64rem) and (min-height: 44rem)') &&
+        query.includes('(hover: hover) and (pointer: fine)') &&
+        !query.includes('not ('),
+    );
+  assert.equal(strip.length, 5, strip.join(' | '));
+  for (const query of strip) assert.match(query, /^screen and /, query);
+  // A shell the controller pinned on screen keeps no strip's length on paper.
+  assert.match(
+    declared(at('.hc-shell[data-pin]'), blocks('print').join('\n')),
+    /block-size: auto;/,
+  );
 });
