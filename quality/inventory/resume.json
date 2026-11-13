@@ -1,0 +1,19 @@
+{
+  "of": 614,
+  "source": "Run 43166869592, a push of kgn-a/inventory-v1-f5212ef at f5212efb5: 486 of its 614 shards finished; it was cancelled with these 128 left, shard 309 cut off at the 120-minute job limit with 143 of its 144 tests done. Each runs here under its number in the same plan, longest first by the finished shards' measured test times. Shard 309 runs as two parts of its six cell servers, three to a part.",
+  "shards": [
+    413, 585, 420, 388, 598, 423, 230, 593, 589, 224, 398, 189, 212, 213, 608, 383, 226, 309, 421,
+    604, 419, 394, 406, 404, 207, 405, 590, 402, 219, 186, 201, 221, 209, 600, 231, 416, 596, 610,
+    200, 218, 387, 220, 223, 603, 601, 613, 415, 377, 599, 418, 386, 384, 197, 192, 614, 215, 211,
+    205, 190, 408, 403, 592, 193, 187, 591, 395, 606, 410, 196, 228, 195, 612, 587, 376, 390, 380,
+    401, 202, 391, 379, 378, 397, 373, 588, 375, 414, 411, 594, 396, 203, 199, 399, 409, 184, 422,
+    417, 385, 374, 208, 382, 602, 188, 412, 198, 400, 389, 214, 191, 605, 609, 222, 194, 607, 210,
+    217, 216, 229, 393, 204, 381, 392, 407, 597, 595, 225, 611, 206, 227
+  ],
+  "split": {
+    "309": [
+      ["chromium 125becc693", "chromium 39f5a248fb", "chromium 694c4b2a40"],
+      ["chromium 98cc0a2055", "chromium c7c5a88854", "chromium f706d7c5a8"]
+    ]
+  }
+}
