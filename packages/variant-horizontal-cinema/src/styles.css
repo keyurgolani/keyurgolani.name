@@ -3111,6 +3111,21 @@
     > :is(.hc-section + .hc-section, .hc-section:has(+ .hc-section)) {
     grid-column: span 5;
   }
+
+  /* Room with no script: nothing measures a picture then, so here, where the cards are
+     their tightest, an intertitle authored four columns wide opens to six, the width the controller
+     gives one whose picture runs past its frame (data-room, below). Not hydrated is the site's own
+     no-script mark, the scrubber not yet live (not a scripting query: the no-JavaScript rows audit
+     with script on), and a plate's inert scrubber is a picture, not a page, so it keeps its cards.
+     With script, these render at six until hydration, then back to four, the controller opening any
+     that overflows; that reflow is held off the screen, the peek included
+     (tests/e2e/horizontal-cinema-hydrate-shift.spec.ts). */
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over']):not(:has(.hc-scrub:is([data-live], [inert])))
+    .hc-scene[data-kind='intertitle'][data-w='4'] {
+    --layout-cols: 6;
+  }
 }
 
 /*
