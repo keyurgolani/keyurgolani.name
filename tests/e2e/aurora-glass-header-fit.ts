@@ -18,7 +18,11 @@ import { readHeader } from './aurora-glass-capsule-fit';
 //     no-JS window sticky);
 //   - (f) at root 100%, from 300 to 440 px in 4 px steps, the row's lines never go back up as the window widens (on
 //     Humanist UI they went 2, 1, 2, 1 between 304 and 336), and at a turn that changes them the opening's first
-//     line moves by the second line's height, within 1 px, and no more.
+//     line moves by the second line's height, within 1 px, and no more;
+//   - (d) at 768, root 100% and 200%, with motion allowed and reduced, the chrome on two lines is never sticky, and
+//     data-ag-rows says the lines it lays out (Multilingual System at 768 at 200% with motion allowed: the row
+//     needed 693.7 px of the chrome's 693.6, the enhancement's half-pixel slack read it as one line, and it wrapped
+//     stuck).
 
 export type HeaderPack =
   'accessible-reading' | 'geometric-display' | 'technical-sans-mono' | 'humanist-ui';
@@ -170,4 +174,50 @@ export function headerFit(
         expect(moves, 'a turn moves the first line by its second line alone').toEqual([]);
       },
     );
+
+  if (pins.wrong)
+    for (const motion of ['no-preference', 'reduce'] as const)
+      test(
+        `at 768 on ${pack}, with motion ${motion === 'reduce' ? 'reduced' : 'allowed'}, the chrome on two lines is never sticky`,
+        { annotation },
+        async ({ page }) => {
+          await page.emulateMedia({ reducedMotion: motion });
+          const reads: string[] = [];
+          for (const root of ['100%', '200%']) {
+            await page.setViewportSize({ width: 768, height: 900 });
+            await page.goto('/', { waitUntil: 'networkidle' });
+            expect(
+              await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),
+              "the page's reduced motion",
+            ).toBe(motion === 'reduce');
+            await expect(page.locator('.ag-chrome[data-ag-rows]')).toHaveCount(1);
+            if (root !== '100%')
+              await page.evaluate(
+                (r) => document.documentElement.style.setProperty('font-size', r, 'important'),
+                root,
+              );
+            await twoFrames(page);
+            await page.waitForTimeout(150);
+            await twoFrames(page);
+            const at = await page.evaluate(() => {
+              const chrome = document.querySelector<HTMLElement>('.ag-chrome')!;
+              const c = chrome.querySelector('.ag-capsule')!.getBoundingClientRect();
+              const o = chrome.querySelector('.ag-ornament')!.getBoundingClientRect();
+              return {
+                lines: o.height > 0 && o.top >= c.bottom - 1 ? 2 : 1,
+                rows: chrome.dataset.agRows ?? null,
+                position: getComputedStyle(chrome).position,
+              };
+            });
+            console.log(`r150 fix ${pack} 768 ${root} ${motion}: ${JSON.stringify(at)}`);
+            if (at.lines === 2 && at.position === 'sticky')
+              reads.push(`${root}: two lines, sticky`);
+            if (at.rows !== String(at.lines))
+              reads.push(`${root}: data-ag-rows ${at.rows}, ${at.lines} lines`);
+          }
+          expect(reads, 'the chrome on two lines scrolls, and data-ag-rows says its lines').toEqual(
+            [],
+          );
+        },
+      );
 }
