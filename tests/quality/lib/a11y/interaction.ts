@@ -1168,20 +1168,29 @@ export async function hoverFindings(page: Page, limit = HOVER_LIMIT): Promise<Fi
     resting = null;
     await frames(page, HOVER_WAIT_MS);
     await page.keyboard.press('Shift+Tab');
-    const how = await page.evaluate((path) => {
-      const el = document.querySelector(path) as HTMLElement | null;
-      const focusable =
-        'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])';
-      const to = el?.matches(focusable)
-        ? el
-        : (el?.querySelector<HTMLElement>(focusable) ?? el?.closest<HTMLElement>(focusable));
-      if (to) {
-        to.focus();
-        return 'focus';
-      }
-      el?.click();
-      return 'a tap';
-    }, target);
+    const how = await page.evaluate(
+      ({ path, x, y }) => {
+        const el = document.querySelector(path) as HTMLElement | null;
+        const focusable =
+          'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])';
+        // The stop the pointer was on, when it's the subject or inside it: a nav of links that each
+        // reveal their own, hovered at its centre, is held to that link's focus, not its first's.
+        const under = document.elementFromPoint(x, y)?.closest<HTMLElement>(focusable);
+        const to =
+          under && el && (el === under || el.contains(under))
+            ? under
+            : el?.matches(focusable)
+              ? el
+              : (el?.querySelector<HTMLElement>(focusable) ?? el?.closest<HTMLElement>(focusable));
+        if (to) {
+          to.focus();
+          return 'focus';
+        }
+        el?.click();
+        return 'a tap';
+      },
+      { path: target, x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
     await frames(page, HOVER_WAIT_MS);
     const after = await shownNow();
     const missing = revealed.filter((path) => !after.has(path));
