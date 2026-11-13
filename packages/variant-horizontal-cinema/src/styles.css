@@ -23,6 +23,12 @@
   --layout-pad-block: var(--space-m);
   --layout-gutter: var(--space-s);
   --layout-chrome: calc(var(--space-s) * 2.4);
+  /* Room round a control for its focus ring, as the platform keeps round its own: a ring's width
+     past the ring, at the language's offset. */
+  --layout-ring-room: calc(2 * var(--ui-focus-width) + max(0px, var(--ui-focus-offset)));
+  /* The chapter control's bar, top to bottom: its button's least height, the ring's room above and
+     below it, and its rule. */
+  --layout-jump: calc(2.75rem + 2 * var(--layout-ring-room) + 1px);
   --layout-scrub: calc(var(--space-s) * 3.6);
   --layout-bar: calc(var(--space-s) * 1.8);
   --layout-peek: var(--space-2xl);
@@ -246,7 +252,7 @@
 
 /* Top to bottom the chapter control sticks to the top edge, so whatever a link lands on clears it. */
 [data-variant='horizontal-cinema'] .hc-shell :is(.hc-scene, [id]) {
-  scroll-margin-block-start: calc(var(--layout-chrome) + var(--space-2xs));
+  scroll-margin-block-start: calc(var(--layout-jump) + var(--space-2xs));
 }
 
 [data-variant='horizontal-cinema'] .hc-scene[data-w='8'] {
@@ -2134,7 +2140,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-s);
-  min-block-size: var(--layout-chrome);
+  /* The button's ring inside the bar: past its edges it lay on the top line's band above, and off
+     the screen's top edge once the bar stuck. */
+  min-block-size: var(--layout-jump);
+  padding-block: var(--layout-ring-room);
   padding-inline: var(--layout-grid-margin);
   border-block-end: 1px solid var(--color-border-subtle);
   background-color: var(--color-canvas);
@@ -2160,7 +2169,7 @@
 }
 
 [data-variant='horizontal-cinema'] .hc-jump__sheet {
-  inset-block: var(--layout-chrome) auto;
+  inset-block: var(--layout-jump) auto;
   inset-inline: var(--layout-grid-margin);
   inline-size: auto;
   max-inline-size: 28rem;
@@ -2172,7 +2181,7 @@
   color: var(--color-text-primary);
   box-shadow: var(--ui-shadow-card);
   /* Every scene is in it, so it scrolls on a short screen rather than running off it. */
-  max-block-size: calc(100svh - var(--layout-chrome) - var(--space-s));
+  max-block-size: calc(100svh - var(--layout-jump) - var(--space-s));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -2968,6 +2977,11 @@
     .hc-shell:not([data-fit='over'])
     .hc-jump {
     display: none;
+  }
+
+  /* With no chapter control on the top edge, a landing clears the top line alone, as it did. */
+  [data-variant='horizontal-cinema'] .hc[data-view='strip'] .hc-shell:not([data-fit='over']) {
+    --layout-jump: var(--layout-chrome);
   }
 }
 

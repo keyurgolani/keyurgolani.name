@@ -333,3 +333,24 @@ test('the strip is a screen’s: on paper, landscape included, the scenes run to
     /block-size: auto;/,
   );
 });
+
+test('top to bottom the chapter control’s bar holds its button’s focus ring, with a ring’s room above and below it', () => {
+  const root = declared("[data-variant='horizontal-cinema']", CSS);
+  assert.match(
+    root,
+    /--layout-ring-room: calc\(2 \* var\(--ui-focus-width\) \+ max\(0px, var\(--ui-focus-offset\)\)\);/,
+  );
+  assert.match(root, /--layout-jump: calc\(2\.75rem \+ 2 \* var\(--layout-ring-room\) \+ 1px\);/);
+  // The token's 2.75rem is the button's least height, and the bar holds the button inside its room.
+  assert.match(declared(at('.hc-jump__button'), CSS), /min-block-size: 2\.75rem;/);
+  const bar = declared(at('.hc-jump'), CSS);
+  assert.match(bar, /min-block-size: var\(--layout-jump\);/);
+  assert.match(bar, /padding-block: var\(--layout-ring-room\);/);
+  assert.match(bar, /border-block-end: 1px solid /);
+  // What sits under the bar starts below it: the sheet, and whatever a link lands on.
+  assert.match(declared(at('.hc-jump__sheet'), CSS), /inset-block: var\(--layout-jump\) auto;/);
+  assert.match(
+    declared(at('.hc-shell :is(.hc-scene, [id])'), CSS),
+    /scroll-margin-block-start: calc\(var\(--layout-jump\) \+ var\(--space-2xs\)\);/,
+  );
+});
