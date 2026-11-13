@@ -441,19 +441,23 @@
 [data-variant='aurora-glass'] .ag-chrome {
   /* Its own width, in its text's em, folds the capsule at enlarged text as a narrow screen does. */
   container: ag-chrome / inline-size;
-  /* Stuck, it takes no room in the flow, as the fixed bar took none: a box 0 px tall at the page's
-     top, held a step below the viewport's, its row hanging below it. */
+  /* Stuck, it keeps the room it takes in the flow on one line, scrolling, to the pixel: a step
+     below the page's top, the room the stuck offset keeps (row 150, the coordinator's (b)). So a
+     chrome the enhancement turns sticky after the first paint, on a no-JS window, moves no box:
+     before, stuck it took no room, and turning a 320 header sticky moved the page 92 px up. */
   position: sticky;
   z-index: 10;
   inset-block-start: var(--space-s);
-  block-size: 0;
+  min-block-size: calc(var(--layout-sticky-offset) - var(--space-s));
+  margin-block-start: var(--space-s);
   inline-size: var(--layout-page);
   margin-inline: auto;
   display: grid;
   /* Centred while it fits; when it doesn't, the capsule gives way, never the ornament. */
   grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   align-items: center;
-  column-gap: var(--space-xs);
+  /* From 320 it grows back from 3xs to xs, at a tenth of the viewport's growth (row 150, (f)). */
+  column-gap: clamp(var(--space-3xs), var(--space-3xs) + (100vw - 320px) * 0.1, var(--space-xs));
   pointer-events: none;
 }
 
@@ -465,7 +469,12 @@
   gap: var(--space-3xs);
   min-block-size: var(--layout-chrome);
   padding: var(--layout-capsule-pad);
-  padding-inline-start: var(--space-m);
+  /* From 320 it grows back from s to m, at a tenth of the viewport's growth (row 150, (f): the 20rem step). */
+  padding-inline-start: clamp(
+    var(--space-s),
+    var(--space-s) + (100vw - 320px) * 0.1,
+    var(--space-m)
+  );
   border: var(--ui-border-card) var(--color-border-subtle);
   border-radius: var(--ui-radius-badge);
   background-image: var(--layout-surface);
@@ -597,31 +606,41 @@
 
 /*
  * Its note, the reason it holds: plain text right after it, its description, in the secondary
- * text. In the ornament it sits on its own opaque pill over the sky, clear of Pause's halo; in
- * the capsule it shows only where the capsule's Pause does (below 75rem), clear of its focus band.
+ * text, on its own opaque pill. It hangs below the row, under its own Pause, not in it (row 150,
+ * the coordinator's (a)): in the row it put its width on the row's need, so under reduced motion
+ * the capsule and the ornament no longer fitted at the 64em fold, and at 1440 the call and the
+ * Index ran past the capsule into the ornament. Out of the row it takes no room in the row's
+ * width or in the flow; it shows only where its Pause does (the capsule's below 75rem).
  */
 [data-variant='aurora-glass'] .ag-orn__held {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-2xs));
   display: inline-flex;
   align-items: center;
-  min-block-size: var(--layout-capsule-item);
-  color: var(--color-text-secondary);
-  font-style: italic;
-  white-space: nowrap;
-}
-
-[data-variant='aurora-glass'] .ag-ornament .ag-orn__held {
-  margin-inline-start: calc(var(--ui-focus-offset) + 3 * var(--ui-focus-width));
+  padding-block: var(--space-3xs);
   padding-inline: var(--space-s);
   border: var(--ui-border-card) var(--color-border-subtle);
   border-radius: var(--ui-radius-badge);
   background-color: var(--color-surface-default);
+  color: var(--color-text-secondary);
+  font-style: italic;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
-/* Its end padding is the capsule items' own, so "held" doesn't sit on the capsule's end (D, 1024). */
+/* Pause is the ornament's first item: its note hangs from the ornament's start. */
+[data-variant='aurora-glass'] .ag-ornament {
+  position: relative;
+}
+
+[data-variant='aurora-glass'] .ag-ornament .ag-orn__held {
+  inset-inline-start: 0;
+}
+
+/* Pause is the capsule's last item: its note hangs from the capsule's end (the frost holds it). */
 [data-variant='aurora-glass'] .ag-capsule .ag-orn__held {
   display: none;
-  margin-inline-start: var(--layout-capsule-pad);
-  padding-inline-end: var(--space-s);
+  inset-inline-end: 0;
 }
 
 [data-variant='aurora-glass'] .ag-orn__held[hidden] {
@@ -672,6 +691,11 @@
  */
 [data-variant='aurora-glass'] .ag-capsule :is(.ag-orn--capsule, .ag-capsule__index) {
   position: relative;
+}
+
+/* The Menu's inline padding grows back from xs to s from 320, a tenth of the viewport's growth a side (row 150, (f)). */
+[data-variant='aurora-glass'] .ag-capsule .ag-capsule__index {
+  padding-inline: clamp(var(--space-xs), var(--space-xs) + (100vw - 320px) * 0.1, var(--space-s));
 }
 
 /* Focused, the item and its band paint over their neighbours, so under a thick ring the call's fill never covers the band's edge (polish carry-over). */
@@ -797,8 +821,9 @@
 
 /* ── the opening: the identity pane shingled under the signature sheet ── */
 
+/* The chrome keeps its own room above it, stuck or scrolling (row 150, (b)): a step past it. */
 [data-variant='aurora-glass'] .ag-opening-frame {
-  padding-block-start: calc(var(--layout-sticky-offset) + var(--space-2xs));
+  padding-block-start: var(--space-2xs);
 }
 
 [data-variant='aurora-glass'] .ag-opening {
@@ -3211,25 +3236,17 @@
  * words, as at every width, and steps down a size so the Menu's word keeps its place. And the
  * capsule finds the rest of its room in its spacing (row 150, the 320 probe): with the name at its
  * longest word the Menu ran 13.4px past the capsule on the default pack. The capsule's start
- * padding steps from m to s, the chrome's gap from xs to 3xs and the Menu's inline padding from s
- * to xs, 27px at 320 between them; the capsule's end padding, the band's room, stays.
+ * padding is s at 320, the chrome's gap 3xs and the Menu's inline padding xs, 27px between them;
+ * the capsule's end padding, the band's room, stays. Past 320 they grow back to m, xs and s, not in
+ * one step (row 150, the coordinator's (f)): a step put 27px on the row's need at 320.01, more than
+ * the chrome gained, so a header on one line at 320 took two again at 324 and one at 336. Grown at
+ * four tenths of the viewport's growth in all (their own rules, above), the need never gains on
+ * the chrome, and as the window widens the row's lines never go back up.
  */
 @media (max-width: 20rem) {
   /* The name steps down a size, so the Menu's word keeps its place beside it (one name, "Menu"). */
   [data-variant='aurora-glass'] .ag-capsule__name {
     font-size: var(--type-step--1);
-  }
-
-  [data-variant='aurora-glass'] .ag-capsule {
-    padding-inline-start: var(--space-s);
-  }
-
-  [data-variant='aurora-glass'] .ag-chrome {
-    column-gap: var(--space-3xs);
-  }
-
-  [data-variant='aurora-glass'] .ag-capsule .ag-capsule__index {
-    padding-inline: var(--space-xs);
   }
 }
 
@@ -3286,7 +3303,9 @@
     position: static;
     display: block;
     block-size: auto;
+    min-block-size: 0;
     inline-size: auto;
+    margin-block-start: 0;
     margin-block-end: var(--space-s);
   }
 

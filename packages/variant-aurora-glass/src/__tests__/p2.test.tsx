@@ -642,10 +642,27 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
   // The Menu's word stays on screen (one name, "Menu"); the name steps down a size to make room.
   assert.ok(!narrow.includes('.ag-capsule .ag-narrow { position: absolute;'));
   assert.ok(narrow.includes('.ag-capsule__name { font-size: var(--type-step--1); }'));
-  // And the rest of its room comes from its spacing (row 150, the 320 probe), its end padding kept.
-  assert.ok(narrow.includes('.ag-capsule { padding-inline-start: var(--space-s); }'));
-  assert.ok(narrow.includes('.ag-chrome { column-gap: var(--space-3xs); }'));
-  assert.ok(narrow.includes('.ag-capsule .ag-capsule__index { padding-inline: var(--space-xs); }'));
+  // And the rest of its room comes from its spacing (row 150, the 320 probe), its end padding kept:
+  // s, 3xs and xs at 320, growing back to m, xs and s past it at a tenth of the viewport's growth
+  // each, four tenths in all, not in one step (row 150, the coordinator's (f): a step put 27px on
+  // the row's need at 320.01, and a header on one line at 320 took two again at 324).
+  const ramp = (lo: string, hi: string) =>
+    `clamp( var(--space-${lo}), var(--space-${lo}) + (100vw - 320px) * 0.1, var(--space-${hi}) )`;
+  const flat = (text: string) => text.replace(/\( /g, '(').replace(/ \)/g, ')');
+  const capsule = /\.ag-capsule \{ grid-column: 2;([^}]*)\}/.exec(css)?.[1] ?? '';
+  assert.ok(flat(capsule).includes(`padding-inline-start: ${flat(ramp('s', 'm'))};`), capsule);
+  assert.ok(flat(css).includes(`column-gap: ${flat(ramp('3xs', 'xs'))};`));
+  assert.ok(
+    flat(css).includes(
+      `.ag-capsule .ag-capsule__index { padding-inline: ${flat(ramp('xs', 's'))}; }`,
+    ),
+  );
+  for (const step of [
+    '.ag-capsule { padding-inline-start:',
+    '.ag-chrome { column-gap:',
+    '.ag-capsule .ag-capsule__index { padding-inline:',
+  ])
+    assert.ok(!narrow.slice(0, narrow.indexOf('@media', 10)).includes(step), step);
   // The capsule never wraps (its name and call wrap inside it, between words); it folds its
   // destinations into the Index under the chrome's 64em in its text's em, what it needs beside the
   // ornament plus a margin (row 150), and to the phone's under 44em.
@@ -706,9 +723,11 @@ test('a still Pause’s note is plain text after it, its description, where its 
   assert.ok(print.includes('.ag .ag-capsule .ag-orn__held:not([hidden]) { display: none; }'));
 });
 
-// D's 1024 still shot (e19b657b9): "held" sat hard on the capsule's end. Its end padding is the
-// capsule items' own inline padding, the same token, not a value of its own.
-test('in the capsule a still Pause’s note ends on the capsule items’ own padding', () => {
+// D's 1024 still shot (e19b657b9): "held" sat hard on the capsule's end. Its inline padding is the
+// capsule items' own, the same token, not a value of its own. And it hangs below the row, under its
+// Pause, not in it (row 150, the coordinator's (a)): in the row it widened it, so under reduced
+// motion the capsule and the ornament no longer fitted at the 64em fold.
+test('a still Pause’s note hangs below the row, on the capsule items’ own padding', () => {
   const css = readFileSync(
     path.join(REPO_ROOT, 'packages/variant-aurora-glass/src/styles.css'),
     'utf8',
@@ -719,9 +738,13 @@ test('in the capsule a still Pause’s note ends on the capsule items’ own pad
   assert.ok(items >= 0);
   const token = /padding-inline: ([^;]+);/.exec(css.slice(items, css.indexOf('}', items)))?.[1];
   assert.equal(token, 'var(--space-s)');
-  const note = css.indexOf('.ag-capsule .ag-orn__held { display: none;');
-  assert.ok(note >= 0);
-  assert.ok(css.slice(note, css.indexOf('}', note)).includes(`padding-inline-end: ${token};`));
+  const held = /\[data-variant='aurora-glass'\] \.ag-orn__held \{([^}]*)\}/.exec(css)?.[1] ?? '';
+  assert.ok(held.includes(`padding-inline: ${token};`), held);
+  assert.ok(held.includes('position: absolute;'), held);
+  assert.ok(held.includes('inset-block-start: calc(100% + var(--space-2xs));'), held);
+  assert.ok(css.includes('.ag-ornament { position: relative; }'));
+  assert.ok(css.includes('.ag-ornament .ag-orn__held { inset-inline-start: 0; }'));
+  assert.ok(css.includes('.ag-capsule .ag-orn__held { display: none; inset-inline-end: 0; }'));
 });
 
 // The default recipe's 390 print cell (49826dc90): the capsule ran off the sheet on one row, the
