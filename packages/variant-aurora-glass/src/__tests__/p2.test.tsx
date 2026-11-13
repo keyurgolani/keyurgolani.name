@@ -617,8 +617,6 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
     path.join(REPO_ROOT, 'packages/variant-aurora-glass/src/styles.css'),
     'utf8',
   ).replace(/\s+/g, ' ');
-  const narrow = css.slice(css.indexOf('@media (max-width: 20rem) {'));
-  assert.ok(narrow.length > 0 && css.includes('@media (max-width: 20rem) {'));
   // The name and the call are never cut and never split a word, at every width (row 150): no ellipsis,
   // no clip, no one-line hold, a box never narrower than the longest word, and no break inside one.
   for (const rule of [/\.ag-capsule__name \{([^}]*)\}/, /\.ag-capsule__cta-text \{([^}]*)\}/]) {
@@ -639,9 +637,12 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
     first,
   );
   assert.doesNotMatch(first, /white-space: nowrap|text-overflow: ellipsis|overflow: hidden/);
-  // The Menu's word stays on screen (one name, "Menu"); the name steps down a size to make room.
-  assert.ok(!narrow.includes('.ag-capsule .ag-narrow { position: absolute;'));
-  assert.ok(narrow.includes('.ag-capsule__name { font-size: var(--type-step--1); }'));
+  // The Menu's word stays on screen (one name, "Menu"), and the name keeps its size at 320: the
+  // 20rem step that set it a size down never applied (a plainer selector than the size's own, row
+  // 150), so it goes, and no 20rem rule is left (row 150's fix round).
+  assert.ok(!css.includes('.ag-capsule .ag-narrow { position: absolute;'));
+  assert.ok(!css.includes('@media (max-width: 20rem) {'));
+  assert.ok(!css.includes('.ag-capsule__name { font-size: var(--type-step--1); }'));
   // And the rest of its room comes from its spacing (row 150, the 320 probe), its end padding kept:
   // s, 3xs and xs at 320, growing back to m, xs and s past it at a tenth of the viewport's growth
   // each, four tenths in all, not in one step (row 150, the coordinator's (f): a step put 27px on
@@ -657,12 +658,6 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
       `.ag-capsule .ag-capsule__index { padding-inline: ${flat(ramp('xs', 's'))}; }`,
     ),
   );
-  for (const step of [
-    '.ag-capsule { padding-inline-start:',
-    '.ag-chrome { column-gap:',
-    '.ag-capsule .ag-capsule__index { padding-inline:',
-  ])
-    assert.ok(!narrow.slice(0, narrow.indexOf('@media', 10)).includes(step), step);
   // The capsule never wraps (its name and call wrap inside it, between words); it folds its
   // destinations into the Index under the chrome's 64em in its text's em, what it needs beside the
   // ornament plus a margin (row 150), and to the phone's under 44em.

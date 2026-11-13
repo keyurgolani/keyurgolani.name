@@ -469,7 +469,11 @@
   gap: var(--space-3xs);
   min-block-size: var(--layout-chrome);
   padding: var(--layout-capsule-pad);
-  /* From 320 it grows back from s to m, at a tenth of the viewport's growth (row 150, (f): the 20rem step). */
+  /* s at 320, where the Menu ran 13.4px past the capsule on the default pack (row 150, the 320 probe),
+     growing back to m at a tenth of the viewport's growth: with the chrome's gap and the Menu's
+     padding (their own rules), four tenths in all, not one 27px step at 20rem, which put more on the
+     row's need at 320.01 than the chrome gained and took a one-line header back to two (the
+     coordinator's (f)). The name keeps its size at 320, as every 320 read and look had it. */
   padding-inline-start: clamp(
     var(--space-s),
     var(--space-s) + (100vw - 320px) * 0.1,
@@ -3228,25 +3232,6 @@
     [data-variant='aurora-glass'] .ag-capsule > .ag-capsule__name {
       margin-inline-end: auto;
     }
-  }
-}
-
-/*
- * At 320 nothing clips its own words (the reflow check): the capsule's name wraps between its
- * words, as at every width, and steps down a size so the Menu's word keeps its place. And the
- * capsule finds the rest of its room in its spacing (row 150, the 320 probe): with the name at its
- * longest word the Menu ran 13.4px past the capsule on the default pack. The capsule's start
- * padding is s at 320, the chrome's gap 3xs and the Menu's inline padding xs, 27px between them;
- * the capsule's end padding, the band's room, stays. Past 320 they grow back to m, xs and s, not in
- * one step (row 150, the coordinator's (f)): a step put 27px on the row's need at 320.01, more than
- * the chrome gained, so a header on one line at 320 took two again at 324 and one at 336. Grown at
- * four tenths of the viewport's growth in all (their own rules, above), the need never gains on
- * the chrome, and as the window widens the row's lines never go back up.
- */
-@media (max-width: 20rem) {
-  /* The name steps down a size, so the Menu's word keeps its place beside it (one name, "Menu"). */
-  [data-variant='aurora-glass'] .ag-capsule__name {
-    font-size: var(--type-step--1);
   }
 }
 
