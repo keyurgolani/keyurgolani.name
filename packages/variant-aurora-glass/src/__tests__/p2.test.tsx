@@ -658,10 +658,19 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
       `.ag-capsule .ag-capsule__index { padding-inline: ${flat(ramp('xs', 's'))}; }`,
     ),
   );
-  // The capsule never wraps (its name and call wrap inside it, between words); it folds its
-  // destinations into the Index under the chrome's 64em in its text's em, what it needs beside the
-  // ornament plus a margin (row 150), and to the phone's under 44em.
-  assert.doesNotMatch(css, /\.ag-capsule \{[^}]*flex-wrap: wrap;/);
+  // The capsule wraps only where it alone is wider than the chrome (row 150's (iii)): with the
+  // enhancement, data-ag-wrap says so; without it, the capsule-alone container rule does. Nowhere
+  // else (its name and call wrap inside it, between words); it folds its destinations into the
+  // Index under the chrome's 64em in its text's em, what it needs beside the ornament plus a margin
+  // (row 150), and to the phone's under 44em.
+  const wraps = [...css.matchAll(/([^{}]*)\.ag-capsule \{[^}]*flex-wrap: wrap;/g)].map(
+    (m) => m[1]!.trim().split(' ').slice(-1)[0],
+  );
+  assert.deepEqual(wraps, [
+    '.ag-chrome[data-ag-wrap]',
+    '.ag-chrome:not([data-ag-rows])',
+    '.ag-chrome:not([data-ag-rows])',
+  ]);
   assert.match(css, /\.ag-chrome \{[^}]*container: ag-chrome \/ inline-size;/);
   assert.ok(css.includes('@container ag-chrome (max-width: 64em) {'));
   assert.ok(!css.includes('@container ag-chrome (max-width: 52em) {'));
