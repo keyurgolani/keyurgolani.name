@@ -823,14 +823,20 @@
  * follows its control's corners, and round a full pill most of a 2px ring is antialiased curve,
  * under 3:1 at the edge. The ring itself stays the platform's.
  */
-[data-variant='aurora-glass']
-  :is(
-    .ag-capsule a,
-    .ag-band__nav a,
-    .ag-btn,
-    .ag-ornament [data-visitor-control-slot] summary
-  ):focus-visible {
+[data-variant='aurora-glass'] :is(.ag-capsule a, .ag-band__nav a, .ag-btn):focus-visible {
   border-radius: var(--ui-radius-control);
+}
+
+/*
+ * The visitor's control in its slot, focused: its ring is concentric with the slot, its radius the
+ * slot's less the slot's padding, so it follows the slot's corners (a full pill's round ends too) a
+ * padding inside the slot's edge and sits on the slot's surface all the way round. With the control
+ * radius, a rounded rectangle, its corners and short sides ran past a pill's ends onto the sky.
+ * Nothing but the ring changes on focus. Where a language's badge radius is a bare 0 the sum is no
+ * length, and the summary's radius computes to its initial 0, the square slot's own.
+ */
+[data-variant='aurora-glass'] .ag-ornament > [data-visitor-control-slot] summary:focus-visible {
+  border-radius: max(0px, var(--ui-radius-badge) - var(--layout-capsule-pad));
 }
 
 /* With no visitor control the empty slot takes no gap, so the ornament ends on the page's end line. */
