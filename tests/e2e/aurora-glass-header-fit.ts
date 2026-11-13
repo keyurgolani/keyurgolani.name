@@ -30,7 +30,8 @@ import { readHeader } from './aurora-glass-capsule-fit';
 //     stuck);
 //   - at 768 and 864, root text 200% from the first paint, loading the page shifts nothing: the enhancement adds no
 //     line (Accessible Reading: with script the capsule holds Pause and its row takes two lines, without it one, so
-//     the page moved down when the script came; the no-JS row now keeps Pause's room);
+//     the page moved down when the script came; the no-JS row now keeps Pause's room); an entry the page's own
+//     web-font swap makes before data-ag-rows is set is set aside and printed, every other entry counts;
 //   - at 1024 and 1440, the still Pause's held note shows at rest and, while the chrome sticks, hides over the page
 //     (on Accessible Reading at 1440 it covered the signature sheet's "Project organization"), and either way it
 //     stays Pause's description;
@@ -133,6 +134,7 @@ const loadShifts = (page: Page) =>
     o.observe({ type: 'layout-shift', buffered: true });
     const all = o.takeRecords() as unknown as {
       value: number;
+      startTime: number;
       hadRecentInput: boolean;
       sources: { node: Node | null }[];
     }[];
@@ -141,6 +143,7 @@ const loadShifts = (page: Page) =>
       .filter((entry) => !entry.hadRecentInput)
       .map((entry) => ({
         value: entry.value,
+        time: Math.round(entry.startTime),
         nodes: entry.sources.map((s) =>
           s.node instanceof Element
             ? `${s.node.localName}${[...s.node.classList].map((k) => `.${k}`).join('')}`
@@ -148,6 +151,45 @@ const loadShifts = (page: Page) =>
         ),
       }));
   });
+
+/** One frame's read of the fonts and the mark: [time, document.fonts.status, loaded faces, data-ag-rows]. */
+type FontSample = [number, string, number, string | null];
+
+/** From the first frame for 2.5 s, a sample each time document.fonts' status, its loaded faces or the mark changes. */
+const sampleFonts = (page: Page) =>
+  page.addInitScript(() => {
+    const w = window as unknown as { __agFonts: [number, string, number, string | null][] };
+    w.__agFonts = [];
+    const start = performance.now();
+    const tick = () => {
+      const status = document.fonts ? document.fonts.status : '';
+      let faces = 0;
+      if (document.fonts) document.fonts.forEach((f) => (faces += f.status === 'loaded' ? 1 : 0));
+      const rows = document.querySelector<HTMLElement>('.ag-chrome')?.dataset.agRows ?? null;
+      const last = w.__agFonts.at(-1);
+      if (!last || last[1] !== status || last[2] !== faces || last[3] !== rows)
+        w.__agFonts.push([Math.round(performance.now()), status, faces, rows]);
+      if (performance.now() - start < 2500) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+
+/**
+ * The page's own web-font swap, not the header: an entry is set aside when, in the 50 ms up to it, the fonts' status
+ * changed or a face loaded, and no data-ag-rows mark was there yet or came in that window. Every other entry counts.
+ */
+const fontSwap = (samples: FontSample[], time: number) => {
+  let font = false;
+  for (let i = 1; i < samples.length; i++) {
+    const [prev, cur] = [samples[i - 1]!, samples[i]!];
+    if (cur[0] > time) break;
+    if (cur[0] < time - 50) continue;
+    if (cur[3] !== prev[3]) return false;
+    if (cur[1] !== prev[1] || cur[2] > prev[2]) font = true;
+  }
+  const at = samples.filter((s) => s[0] <= time).at(-1);
+  return font && at !== undefined && at[3] === null;
+};
 
 /**
  * Each point of a 5 x 3 grid over a box (its top from the chrome's top) where the note is under the point. The note
@@ -366,6 +408,7 @@ export function headerFit(
                 watch.disconnect();
               }).observe(document, { childList: true });
           });
+          await sampleFonts(page);
           await open(page, width, 900);
           expect(
             await page.evaluate(() => getComputedStyle(document.documentElement).fontSize),
@@ -374,10 +417,21 @@ export function headerFit(
           await page.waitForTimeout(150);
           const at = await lines(page);
           const shifts = await loadShifts(page);
+          const samples = await page.evaluate(
+            () => (window as unknown as { __agFonts: FontSample[] }).__agFonts,
+          );
+          const aside = shifts.filter((entry) => fontSwap(samples, entry.time));
           console.log(
             `header-fit ${pack} ${width} 200% load: ${at.lines} line(s), ${shifts.reduce((sum, entry) => sum + entry.value, 0).toFixed(4)} ${JSON.stringify(shifts)}`,
           );
-          expect(shifts, 'the load shifts nothing').toEqual([]);
+          for (const entry of aside)
+            console.log(
+              `header-fit ${pack} ${width} 200% load, set aside as the page's own font swap: ${JSON.stringify(entry)}, fonts [time, status, loaded faces, rows] ${JSON.stringify(samples.filter((s) => s[0] >= entry.time - 120 && s[0] <= entry.time + 20))}`,
+            );
+          expect(
+            shifts.filter((entry) => !aside.includes(entry)),
+            'the load shifts nothing but the fonts swapping in',
+          ).toEqual([]);
         },
       );
 
