@@ -25,7 +25,11 @@ import { readHeader } from './aurora-glass-capsule-fit';
 //     stuck).
 
 export type HeaderPack =
-  'accessible-reading' | 'geometric-display' | 'technical-sans-mono' | 'humanist-ui';
+  | 'accessible-reading'
+  | 'geometric-display'
+  | 'technical-sans-mono'
+  | 'humanist-ui'
+  | 'multilingual-system';
 
 const FIXTURE = contractFixture('complete');
 const DIR = path.dirname(FIXTURE.files.portfolio);
@@ -81,7 +85,7 @@ const lines = (page: Page) =>
 
 export function headerFit(
   pack: HeaderPack,
-  pins: { wide?: boolean; load?: boolean; turns?: boolean },
+  pins: { wide?: boolean; load?: boolean; turns?: boolean; wrong?: boolean },
 ) {
   test.use({ appOptions: headerFitOptions(pack), contextOptions: { reducedMotion: 'reduce' } });
 
