@@ -15,9 +15,9 @@ import { expect, test } from '../harness/fixtures';
 
 const FIXTURE = contractFixture('complete');
 const DIR = path.dirname(FIXTURE.files.portfolio);
-/** The records' own path: the capsule nav's first link. */
+/** The records' own path, the capsule nav's first link, with row 150's page box (.ag-page) above the header. */
 const NAME =
-  'html > body:nth-child(2) > div:nth-child(2) > div:nth-child(2) > header:nth-child(2) > nav:nth-child(1) > a:nth-child(1)';
+  'html > body:nth-child(2) > div:nth-child(2) > div:nth-child(2) > div:nth-child(2) > header:nth-child(1) > nav:nth-child(1) > a:nth-child(1)';
 
 test.use({
   viewport: { width: 1024, height: 768 },
