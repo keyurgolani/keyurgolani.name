@@ -3106,8 +3106,11 @@
  * + 1.288rem over 20rem and 14.480em + 2.539rem + 1.268rem under for the row, 9.243em + 2.078rem
  * + 0.957rem and 9.248em + 0.945rem + 0.941rem for the capsule alone, and the page's margins
  * (--space-s-l, written out: a query can't read a property). So it never sticks on two lines, and
- * only a pack's window, at most 3.3ch, scrolls on one. A target or a focused control lands clear of
- * the bar while it sticks, and at its own top when the chrome scrolls away.
+ * only a pack's window, at most 3.3ch, scrolls on one. From 48rem to 75rem the enhancement puts Pause
+ * in the capsule wherever the sky would move, so there the rule counts Pause too (below), and where
+ * script runs, Pause's own box keeps its place unseen until the script decides it: the row breaks
+ * where it will with script, and the enhancement never adds a line. A target or a focused control lands clear of the
+ * bar while it sticks, and at its own top when the chrome scrolls away.
  */
 [data-variant='aurora-glass'] .ag-page :is([id], a[href], button, summary, [tabindex]) {
   scroll-margin-block-start: var(--layout-sticky-offset);
@@ -3200,6 +3203,106 @@
   }
 
   @container ag-page (width < calc(9.248em + 1.887rem + 2 * clamp(1.125rem, 0.5625rem + 2.5vw, 2.5rem))) {
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) .ag-capsule {
+      flex-wrap: wrap;
+      row-gap: var(--space-2xs);
+    }
+
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) .ag-capsule > .ag-capsule__name {
+      flex: 1 0 min-content;
+    }
+  }
+}
+
+/*
+ * Pause in the capsule, from 48rem to 75rem, where the enhancement shows it: wherever the sky would
+ * move, the drift on, or the Lens shown from 56.01rem (sky.ts, pauseState). Where script runs, before
+ * it does, its own box keeps its place, unseen and out of the accessibility tree and the Tab order, so
+ * the row breaks where it does once the script has run: on Accessible Reading at 768 and 864 at 200%
+ * root text the script-on row took two lines where the row before it took one, and the page moved
+ * down when the script came. Without script it never comes, so the capsule holds no empty room for
+ * it, and nothing moves later. The rules above count it too: its gap (--space-3xs), its padding (--space-s each
+ * side) and its mark, then from 64rem, where its word shows, the word's gap (--space-2xs) and the
+ * word itself, at most 13ch (written out: a query can't read a property). Over, a window scrolls on
+ * one line; never under, so it never sticks on two.
+ */
+@media screen and (scripting: enabled) and (min-width: 48rem) and (max-width: 75rem) {
+  [data-variant='aurora-glass']
+    .ag:has(.ag-sky[data-ag-drift='on'])
+    .ag-chrome:not([data-ag-rows])
+    .ag-capsule
+    .ag-orn--capsule[hidden] {
+    display: inline-flex;
+    visibility: hidden;
+  }
+}
+
+@media screen and (scripting: enabled) and (min-width: 56.01rem) and (max-width: 75rem) {
+  [data-variant='aurora-glass']
+    .ag:has(.ag-lens)
+    .ag-chrome:not([data-ag-rows])
+    .ag-capsule
+    .ag-orn--capsule[hidden] {
+    display: inline-flex;
+    visibility: hidden;
+  }
+}
+
+@media screen and (min-width: 48rem) and (max-width: 63.99rem) {
+  @container ag-page (width < calc(14.476em + 5.523rem + 2 * clamp(1.125rem, 0.5625rem + 2.5vw, 2.5rem) + clamp(0.2813rem, 0.2685rem + 0.0568vw, 0.3125rem) + 2 * clamp(1.125rem, 1.0739rem + 0.2273vw, 1.25rem) + 0.625rem)) {
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) {
+      position: relative;
+      inset-block-start: auto;
+      block-size: auto;
+      min-block-size: calc(var(--layout-sticky-offset) - var(--space-s));
+      margin-block-start: var(--space-s);
+    }
+
+    [data-variant='aurora-glass'] .ag-page:has(> .ag-chrome:not([data-ag-rows])) .ag-opening-frame {
+      padding-block-start: var(--space-2xs);
+    }
+
+    [data-variant='aurora-glass']
+      .ag-page:has(> .ag-chrome:not([data-ag-rows]))
+      :is([id], a[href], button, summary, [tabindex]) {
+      scroll-margin-block-start: 0;
+    }
+  }
+
+  @container ag-page (width < calc(9.243em + 3.035rem + 2 * clamp(1.125rem, 0.5625rem + 2.5vw, 2.5rem) + clamp(0.2813rem, 0.2685rem + 0.0568vw, 0.3125rem) + 2 * clamp(1.125rem, 1.0739rem + 0.2273vw, 1.25rem) + 0.625rem)) {
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) .ag-capsule {
+      flex-wrap: wrap;
+      row-gap: var(--space-2xs);
+    }
+
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) .ag-capsule > .ag-capsule__name {
+      flex: 1 0 min-content;
+    }
+  }
+}
+
+@media screen and (min-width: 64rem) and (max-width: 75rem) {
+  @container ag-page (width < calc(14.476em + 5.523rem + 2 * clamp(1.125rem, 0.5625rem + 2.5vw, 2.5rem) + clamp(0.2813rem, 0.2685rem + 0.0568vw, 0.3125rem) + 2 * clamp(1.125rem, 1.0739rem + 0.2273vw, 1.25rem) + 0.625rem + clamp(0.5625rem, 0.5369rem + 0.1136vw, 0.625rem) + 13ch)) {
+    [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) {
+      position: relative;
+      inset-block-start: auto;
+      block-size: auto;
+      min-block-size: calc(var(--layout-sticky-offset) - var(--space-s));
+      margin-block-start: var(--space-s);
+    }
+
+    [data-variant='aurora-glass'] .ag-page:has(> .ag-chrome:not([data-ag-rows])) .ag-opening-frame {
+      padding-block-start: var(--space-2xs);
+    }
+
+    [data-variant='aurora-glass']
+      .ag-page:has(> .ag-chrome:not([data-ag-rows]))
+      :is([id], a[href], button, summary, [tabindex]) {
+      scroll-margin-block-start: 0;
+    }
+  }
+
+  @container ag-page (width < calc(9.243em + 3.035rem + 2 * clamp(1.125rem, 0.5625rem + 2.5vw, 2.5rem) + clamp(0.2813rem, 0.2685rem + 0.0568vw, 0.3125rem) + 2 * clamp(1.125rem, 1.0739rem + 0.2273vw, 1.25rem) + 0.625rem + clamp(0.5625rem, 0.5369rem + 0.1136vw, 0.625rem) + 13ch)) {
     [data-variant='aurora-glass'] .ag-chrome:not([data-ag-rows]) .ag-capsule {
       flex-wrap: wrap;
       row-gap: var(--space-2xs);
