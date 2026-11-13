@@ -33,14 +33,24 @@ import { readHeader } from './aurora-glass-capsule-fit';
 //     the page moved down when the script came; the no-JS row now keeps Pause's room);
 //   - at 1024 and 1440, the still Pause's held note shows at rest and, while the chrome sticks, hides over the page
 //     (on Accessible Reading at 1440 it covered the signature sheet's "Project organization"), and either way it
-//     stays Pause's description.
+//     stays Pause's description;
+//   - at 1440, loading the page moves nothing in the header: the ornament's Pause, which the script shows, had no
+//     place before it, and the capsule moved over when it came;
+//   - before the script runs (its chunks held back), Pause keeps its place unseen, at 864 the capsule's and at 1440
+//     the ornament's, and it is neither in the accessibility tree nor a Tab stop.
 
 export type HeaderPack =
   | 'accessible-reading'
   | 'geometric-display'
   | 'technical-sans-mono'
   | 'humanist-ui'
-  | 'multilingual-system';
+  | 'multilingual-system'
+  | 'book-serif'
+  | 'drafting-grotesk'
+  | 'editorial-serif'
+  | 'field-serif'
+  | 'paste-up'
+  | 'swiss-grotesque';
 
 const FIXTURE = contractFixture('complete');
 const DIR = path.dirname(FIXTURE.files.portfolio);
@@ -139,6 +149,34 @@ const loadShifts = (page: Page) =>
       }));
   });
 
+/**
+ * Each point of a 5 x 3 grid over a box (its top from the chrome's top) where the note is under the point. The note
+ * takes no pointer, so for this read alone it does, then it's put back: hit-testing skips an element that takes none.
+ */
+const noteHits = (page: Page, id: string, box: number[]) =>
+  page.evaluate(
+    ({ nid, at }) => {
+      const note = document.getElementById(nid)!;
+      const top = document.querySelector('.ag-chrome')!.getBoundingClientRect().top;
+      const [l, t, r, b] = [at[0]!, at[1]! + top, at[2]!, at[3]! + top];
+      const keep = note.style.pointerEvents;
+      note.style.pointerEvents = 'auto';
+      const hits: string[] = [];
+      try {
+        for (const fx of [0.1, 0.3, 0.5, 0.7, 0.9])
+          for (const fy of [0.2, 0.5, 0.8]) {
+            const [x, y] = [l + (r - l) * fx, t + (b - t) * fy];
+            if (document.elementsFromPoint(x, y).some((el) => note.contains(el)))
+              hits.push(`${x.toFixed(0)},${y.toFixed(0)}`);
+          }
+      } finally {
+        note.style.pointerEvents = keep;
+      }
+      return hits;
+    },
+    { nid: id, at: box },
+  );
+
 export function headerFit(
   pack: HeaderPack,
   pins: {
@@ -148,6 +186,8 @@ export function headerFit(
     wrong?: boolean;
     rootLoad?: boolean;
     note?: boolean;
+    wideLoad?: boolean;
+    waiting?: boolean;
   },
 ) {
   test.use({ appOptions: headerFitOptions(pack), contextOptions: { reducedMotion: 'reduce' } });
@@ -354,6 +394,10 @@ export function headerFit(
           );
           await expect(pause).toBeVisible();
           await expect(pause).toHaveAttribute('aria-disabled', 'true');
+          await expect(
+            page.locator('[data-ag-pause][data-ag-waiting]'),
+            'the script has decided both Pause copies',
+          ).toHaveCount(0);
           const id = (await pause.getAttribute('aria-describedby'))!;
           const text = ((await page.locator(`[id="${id}"]`).textContent()) ?? '').trim();
           expect(text, 'the still Pause says why').not.toBe('');
@@ -371,34 +415,25 @@ export function headerFit(
             };
           }, id);
           expect(rest.shown, 'at rest the note shows').toBe(true);
+          const restHits = await noteHits(page, id, rest.box);
+          expect(restHits.length, 'at rest the grid finds the note under it').toBeGreaterThan(0);
           await page.evaluate(() => scrollTo(0, 600));
           await page.waitForTimeout(150);
           await twoFrames(page);
           // Stuck: across the note's box, nothing hits the note; what's under it is the page's.
-          const stuck = await page.evaluate(
-            ({ nid, box }) => {
+          const stuck = {
+            ...(await page.evaluate(() => {
               const chrome = document.querySelector<HTMLElement>('.ag-chrome')!;
-              const note = document.getElementById(nid)!;
-              const h = chrome.getBoundingClientRect();
-              const [l, t, r, b] = [box[0]!, box[1]! + h.top, box[2]!, box[3]! + h.top];
-              const hits: string[] = [];
-              for (const fx of [0.1, 0.3, 0.5, 0.7, 0.9])
-                for (const fy of [0.2, 0.5, 0.8]) {
-                  const [x, y] = [l + (r - l) * fx, t + (b - t) * fy];
-                  if (document.elementsFromPoint(x, y).some((el) => note.contains(el)))
-                    hits.push(`${x.toFixed(0)},${y.toFixed(0)}`);
-                }
               return {
                 position: getComputedStyle(chrome).position,
-                top: h.top,
+                top: chrome.getBoundingClientRect().top,
                 scrollY,
-                hits,
               };
-            },
-            { nid: id, box: rest.box },
-          );
+            })),
+            hits: await noteHits(page, id, rest.box),
+          };
           console.log(
-            `header-fit ${pack} ${width} note: "${text}", rest ${JSON.stringify(rest)}, stuck ${JSON.stringify(stuck)}`,
+            `header-fit ${pack} ${width} note: "${text}", rest ${JSON.stringify(rest)}, ${restHits.length} of 15 at rest hit it, stuck ${JSON.stringify(stuck)}`,
           );
           expect(stuck.position, 'the chrome sticks').toBe('sticky');
           expect(stuck.scrollY).toBeGreaterThan(0);
@@ -407,6 +442,81 @@ export function headerFit(
             pause,
             'stuck, the note is still its description',
           ).toHaveAccessibleDescription(text);
+        },
+      );
+
+  if (pins.wideLoad)
+    test(
+      `at 1440 on ${pack}, loading the page moves nothing in the header: Pause's place beside the ornament is kept`,
+      { annotation },
+      async ({ page, browserName }) => {
+        test.skip(browserName !== 'chromium', 'Chromium alone has layout-shift entries');
+        await open(page, 1440, 900);
+        await page.waitForTimeout(600);
+        const header = (await loadShifts(page)).filter((entry) =>
+          entry.nodes.some((n) => /\bag-(chrome|capsule|ornament)\b/.test(n)),
+        );
+        console.log(`header-fit ${pack} 1440 load: ${JSON.stringify(header)}`);
+        expect(header, 'no shift moves the chrome, the capsule or the ornament').toEqual([]);
+      },
+    );
+
+  if (pins.waiting)
+    for (const width of [864, 1440])
+      test(
+        `at ${width} on ${pack}, before the script runs, Pause keeps its place unseen, out of the accessibility tree and the Tab order`,
+        { annotation },
+        async ({ page, browserName }) => {
+          test.skip(browserName !== 'chromium', 'the script is held back by aborting its chunks');
+          let aborted = 0;
+          await page.route('**/_next/static/chunks/**', (route) => {
+            aborted += 1;
+            return route.abort();
+          });
+          await page.setViewportSize({ width, height: 900 });
+          await page.goto('/', { waitUntil: 'load' });
+          await page.waitForTimeout(300);
+          expect(aborted, "the script's chunks were held back").toBeGreaterThan(0);
+          await expect(page.locator('.ag-chrome[data-ag-rows]'), 'no enhancement ran').toHaveCount(
+            0,
+          );
+          expect(
+            await page.evaluate(() => matchMedia('(scripting: enabled)').matches),
+            'script runs here',
+          ).toBe(true);
+          // Below 75rem Pause is the capsule's last item, above it the ornament's first.
+          const copy = width > 1200 ? '.ag-ornament .ag-orn' : '.ag-capsule .ag-orn--capsule';
+          const held = await page.evaluate((sel) => {
+            const p = document.querySelector<HTMLElement>(sel)!;
+            const r = p.getBoundingClientRect();
+            const cs = getComputedStyle(p);
+            return {
+              width: r.width,
+              height: r.height,
+              display: cs.display,
+              visibility: cs.visibility,
+            };
+          }, copy);
+          await expect(page.getByRole('button', { name: 'Pause the sky' })).toHaveCount(0);
+          await page.locator('.ag-capsule__name').focus();
+          const stops: string[] = [];
+          for (let i = 0; i < 8; i += 1) {
+            await page.keyboard.press('Tab');
+            stops.push(
+              await page.evaluate(() => {
+                const el = document.activeElement as HTMLElement | null;
+                return el?.matches('[data-ag-pause]')
+                  ? 'Pause'
+                  : `${el?.localName ?? ''}.${el?.className.toString().split(' ')[0] ?? ''}`;
+              }),
+            );
+          }
+          console.log(
+            `header-fit ${pack} ${width} waiting: ${JSON.stringify(held)}, ${aborted} chunks held back, Tab ${JSON.stringify(stops)}`,
+          );
+          expect(stops, 'a waiting Pause is no Tab stop').not.toContain('Pause');
+          expect(held.visibility, 'unseen').toBe('hidden');
+          expect(held.width, 'its place is kept').toBeGreaterThan(0);
         },
       );
 }

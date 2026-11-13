@@ -367,6 +367,42 @@ test('the focused skip link is raised above .ag, its sky and its chrome (C1)', (
   );
 });
 
+// Pause ships waiting, never hidden: the platform's [hidden] rule outranks a variant's, so a hidden Pause could hold
+// no place before the script. A waiting Pause has no box by default; only where script runs, in the band where the
+// script shows its copy and the sky would move, it keeps its place unseen (out of the accessibility tree and the Tab
+// order). The script takes the mark off as it decides Pause.
+test('Pause ships waiting: no box by default, its place kept unseen only where script runs and would show it', () => {
+  const html = sample();
+  const pauses = [...html.matchAll(/<button [^>]*data-ag-pause=""[^>]*>/g)].map((m) => m[0]);
+  assert.equal(pauses.length, 2);
+  for (const p of pauses) {
+    assert.ok(p.includes('data-ag-waiting=""'), p);
+    assert.ok(!/ hidden=""/.test(p), p);
+  }
+  const flat = CSS.replace(/\s+/g, ' ');
+  assert.ok(
+    flat.includes(
+      "[data-variant='aurora-glass'] .ag-chrome :is(.ag-capsule, .ag-ornament) .ag-orn[data-ag-waiting] { display: none; }",
+    ),
+  );
+  const keep = (media: string, sky: string, copy: string) =>
+    `@media screen and (scripting: enabled) and ${media} { [data-variant='aurora-glass'] .ag:has(${sky}) ${copy}[data-ag-waiting] { display: inline-flex; visibility: hidden; } }`;
+  const drift = ".ag-sky[data-ag-drift='on']";
+  const capsule = '.ag-capsule .ag-orn--capsule';
+  const ornament = '.ag-ornament .ag-orn';
+  assert.ok(flat.includes(keep('(min-width: 48rem) and (max-width: 75rem)', drift, capsule)));
+  assert.ok(
+    flat.includes(keep('(min-width: 56.01rem) and (max-width: 75rem)', '.ag-lens', capsule)),
+  );
+  assert.ok(flat.includes(keep('(min-width: 75.01rem)', drift, ornament)));
+  assert.ok(flat.includes(keep('(min-width: 75.01rem)', '.ag-lens', ornament)));
+  // Wherever a waiting Pause takes a box, it is unseen.
+  for (const [, selector, body] of flat.matchAll(/([^{}]*\[data-ag-waiting\][^{}]*)\{([^}]*)\}/g))
+    if (/display: (?!none)/.test(body!)) assert.match(body!, /visibility: hidden;/, selector);
+  // No rule keys a held place on [hidden] any more.
+  assert.ok(!flat.includes('.ag-orn--capsule[hidden] { display: inline-flex;'));
+});
+
 test('Pause: the ornament holds it above 75rem, the capsule as its last item below; the ring sits on surface (G1, S2, C2)', () => {
   const html = sample();
   const capsule =
