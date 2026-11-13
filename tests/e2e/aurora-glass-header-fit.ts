@@ -16,11 +16,14 @@ import { readHeader } from './aurora-glass-capsule-fit';
 //   - (b) at 320, root 100%, loading the page shifts nothing: the layout-shift entries' sum from the navigation on is
 //     0, as at the base, where it read 0.1438 (the page's main moved from y 92 to 0 when the enhancement turned the
 //     no-JS window sticky);
-//   - (f) at root 100%, from 300 to 440 px in 4 px steps, the row's lines never go back up as the window widens (on
+//   - at root 100%, from 300 to 440 px in 1 px steps, the row's lines never go back up as the window widens (on
 //     Humanist UI they went 2, 1, 2, 1 between 304 and 336); at a turn that changes them the opening's first line
 //     moves the turn's way, by at most the second line's height and 1 px, never the other way (the coordinator's
-//     cap: the one-line chrome's room already holds part of it, so on Humanist UI the 83 px line moves it 65), and
-//     at a step that keeps them, not at all;
+//     cap: the one-line chrome's room already holds part of it, so on Humanist UI the 83 px line moves it 65); at a
+//     step that keeps them, by no more than 0.5 px, and over a run of such steps by no more than the fluid spacing
+//     above it grows: the chrome's margin and the room its box keeps (--space-s,
+//     twice, and --layout-chrome), the opening frame's offset (--space-2xs) and the identity pane's padding
+//     (--space-m), each read at the run's two ends, printed beside the move, with 0.05 px for the layout's rounding;
 //   - (d) at 768, root 100% and 200%, with motion allowed and reduced, the chrome on two lines is never sticky, and
 //     data-ag-rows says the lines it lays out (Multilingual System at 768 at 200% with motion allowed: the row
 //     needed 693.7 px of the chrome's 693.6, the enhancement's half-pixel slack read it as one line, and it wrapped
@@ -91,8 +94,27 @@ const lines = (page: Page) =>
       // second line it already holds, so a turn moves the first line by the rest.
       room: two ? 0 : chrome.getBoundingClientRect().height - c.height,
       first: first.getBoundingClientRect().top + scrollY,
+      // The fluid spacing above the first line, each token in px at this width.
+      tokens: Object.fromEntries(
+        (['--space-s', '--space-2xs', '--space-m', '--layout-chrome'] as const).map((name) => {
+          const ruler = document.createElement('div');
+          ruler.style.cssText = `position: absolute; visibility: hidden; block-size: var(${name});`;
+          document.querySelector('.ag-page')!.append(ruler);
+          const px = ruler.getBoundingClientRect().height;
+          ruler.remove();
+          return [name, px];
+        }),
+      ) as Record<string, number>,
     };
   });
+
+/** How many times each token stands above the first line: the turns pin's fluid range. */
+const ABOVE: Record<string, number> = {
+  '--space-s': 2,
+  '--space-2xs': 1,
+  '--space-m': 1,
+  '--layout-chrome': 1,
+};
 
 /** The page's layout-shift entries from the navigation on, none with recent input (Chromium). */
 const loadShifts = (page: Page) =>
@@ -169,10 +191,10 @@ export function headerFit(
 
   if (pins.turns)
     test(
-      `at root 100% on ${pack}, from 300 to 440 px the row's lines never go back up, and a turn moves the first line its own way by no more than its second line`,
+      `at root 100% on ${pack}, from 300 to 440 px the row's lines never go back up, a turn moves the first line its own way by no more than its second line, and a step that keeps them by no more than the fluid spacing`,
       { annotation },
       async ({ page }) => {
-        test.setTimeout(120_000);
+        test.setTimeout(240_000);
         await open(page, 300, 800);
         const steps: {
           width: number;
@@ -180,8 +202,9 @@ export function headerFit(
           second: number;
           room: number;
           first: number;
+          tokens: Record<string, number>;
         }[] = [];
-        for (let width = 300; width <= 440; width += 4) {
+        for (let width = 300; width <= 440; width += 1) {
           await page.setViewportSize({ width, height: 800 });
           await twoFrames(page);
           await page.waitForTimeout(60);
@@ -190,17 +213,33 @@ export function headerFit(
         const back: string[] = [];
         const moves: string[] = [];
         const turns: string[] = [];
+        const runs: string[] = [];
+        // A run of steps that keep the lines: its creep against what the spacing above grew.
+        let from = 0;
+        const run = (to: number) => {
+          const [a, b] = [steps[from]!, steps[to]!];
+          const creep = b.first - a.first;
+          const parts = Object.entries(ABOVE).map(
+            ([name, n]) => [name, n * Math.abs(b.tokens[name]! - a.tokens[name]!)] as const,
+          );
+          const range = parts.reduce((sum, [, v]) => sum + v, 0);
+          const line = `${a.width} -> ${b.width} (${a.lines} line(s)): crept ${creep.toFixed(2)}px, the spacing grew ${range.toFixed(2)}px (${parts.map(([name, v]) => `${name} ${v.toFixed(2)}`).join(', ')})`;
+          runs.push(line);
+          if (Math.abs(creep) > range + 0.05) moves.push(line);
+        };
         for (let i = 1; i < steps.length; i++) {
           const [p, s] = [steps[i - 1]!, steps[i]!];
           if (s.lines > p.lines) back.push(`${p.width} ${p.lines} -> ${s.width} ${s.lines}`);
           const moved = s.first - p.first;
           if (s.lines === p.lines) {
-            if (Math.abs(moved) > 0.05)
+            if (Math.abs(moved) > 0.5)
               moves.push(
-                `${p.width} -> ${s.width} (${s.lines} lines kept): the first line moved ${moved.toFixed(1)}px`,
+                `${p.width} -> ${s.width} (${s.lines} lines kept): the first line jumped ${moved.toFixed(2)}px`,
               );
             continue;
           }
+          run(i - 1);
+          from = i;
           // Onto two lines the first line goes down, onto one up: by at most the second line and 1 px.
           const [two, one] = s.lines > p.lines ? [s, p] : [p, s];
           const way = s.lines > p.lines ? 1 : -1;
@@ -208,14 +247,16 @@ export function headerFit(
           turns.push(line);
           if (moved * way < -0.05 || Math.abs(moved) > two.second + 1) moves.push(line);
         }
+        run(steps.length - 1);
         console.log(`r150 fix ${pack} turn lines: ${JSON.stringify(turns)}`);
+        console.log(`header-fit ${pack} same-line runs: ${JSON.stringify(runs)}`);
         console.log(
           `r150 fix ${pack} turns: ${JSON.stringify(steps.map((s) => [s.width, s.lines, Math.round(s.second), Math.round(s.first)]))}`,
         );
         expect(back, 'as the window widens, the row never takes more lines').toEqual([]);
         expect(
           moves,
-          'a turn moves the first line its own way by no more than its second line',
+          'a turn moves the first line its own way by no more than its second line; a step that keeps the lines, by no more than the spacing',
         ).toEqual([]);
       },
     );
