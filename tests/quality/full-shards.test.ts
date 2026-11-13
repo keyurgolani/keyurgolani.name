@@ -51,7 +51,6 @@ import {
   sliceRecord,
   testBucket,
   TIMEOUT_MARGIN,
-  timeoutMinutes,
   VISUAL_SECONDS,
   VISUAL_SPEC,
   type NightlyPlan,

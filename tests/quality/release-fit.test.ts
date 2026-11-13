@@ -14,7 +14,6 @@ import {
   releasePlan,
   releaseTimeoutMinutes,
   TIMEOUT_MARGIN,
-  timeoutMinutes,
 } from './lib/full-shards';
 import { CELL_SPEC, testKey } from './lib/pr-shards';
 import {
