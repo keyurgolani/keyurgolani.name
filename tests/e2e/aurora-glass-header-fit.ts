@@ -17,8 +17,10 @@ import { readHeader } from './aurora-glass-capsule-fit';
 //     0, as at the base, where it read 0.1438 (the page's main moved from y 92 to 0 when the enhancement turned the
 //     no-JS window sticky);
 //   - (f) at root 100%, from 300 to 440 px in 4 px steps, the row's lines never go back up as the window widens (on
-//     Humanist UI they went 2, 1, 2, 1 between 304 and 336), and at a turn that changes them the opening's first
-//     line moves by the second line's height, within 1 px, and no more;
+//     Humanist UI they went 2, 1, 2, 1 between 304 and 336); at a turn that changes them the opening's first line
+//     moves the turn's way, by at most the second line's height and 1 px, never the other way (the coordinator's
+//     cap: the one-line chrome's room already holds part of it, so on Humanist UI the 83 px line moves it 65), and
+//     at a step that keeps them, not at all;
 //   - (d) at 768, root 100% and 200%, with motion allowed and reduced, the chrome on two lines is never sticky, and
 //     data-ag-rows says the lines it lays out (Multilingual System at 768 at 200% with motion allowed: the row
 //     needed 693.7 px of the chrome's 693.6, the enhancement's half-pixel slack read it as one line, and it wrapped
@@ -77,8 +79,11 @@ const lines = (page: Page) =>
     const first = document.querySelector('.ag-main h1, .ag-main h2, .ag-main p')!;
     return {
       lines: two ? 2 : 1,
-      // The second line, the gap above it included: what it puts on the chrome's height.
+      // The second line, the gap above it included: what it puts on the row's height.
       second: two ? o.bottom - c.bottom : 0,
+      // On one line, the room the chrome's box keeps past its row (its min-block-size's): part of a
+      // second line it already holds, so a turn moves the first line by the rest.
+      room: two ? 0 : chrome.getBoundingClientRect().height - c.height,
       first: first.getBoundingClientRect().top + scrollY,
     };
   });
@@ -147,12 +152,18 @@ export function headerFit(
 
   if (pins.turns)
     test(
-      `at root 100% on ${pack}, from 300 to 440 px the row's lines never go back up, and a turn moves the first line by its second line alone`,
+      `at root 100% on ${pack}, from 300 to 440 px the row's lines never go back up, and a turn moves the first line its own way by no more than its second line`,
       { annotation },
       async ({ page }) => {
         test.setTimeout(120_000);
         await open(page, 300, 800);
-        const steps: { width: number; lines: number; second: number; first: number }[] = [];
+        const steps: {
+          width: number;
+          lines: number;
+          second: number;
+          room: number;
+          first: number;
+        }[] = [];
         for (let width = 300; width <= 440; width += 4) {
           await page.setViewportSize({ width, height: 800 });
           await twoFrames(page);
@@ -161,21 +172,34 @@ export function headerFit(
         }
         const back: string[] = [];
         const moves: string[] = [];
+        const turns: string[] = [];
         for (let i = 1; i < steps.length; i++) {
           const [p, s] = [steps[i - 1]!, steps[i]!];
           if (s.lines > p.lines) back.push(`${p.width} ${p.lines} -> ${s.width} ${s.lines}`);
           const moved = s.first - p.first;
-          const allowed = s.lines === p.lines ? 0 : s.lines > p.lines ? s.second : -p.second;
-          if (Math.abs(moved - allowed) > 1)
-            moves.push(
-              `${p.width} -> ${s.width} (${p.lines} -> ${s.lines} lines): the first line moved ${moved.toFixed(1)}px, its second line ${allowed.toFixed(1)}px`,
-            );
+          if (s.lines === p.lines) {
+            if (Math.abs(moved) > 0.05)
+              moves.push(
+                `${p.width} -> ${s.width} (${s.lines} lines kept): the first line moved ${moved.toFixed(1)}px`,
+              );
+            continue;
+          }
+          // Onto two lines the first line goes down, onto one up: by at most the second line and 1 px.
+          const [two, one] = s.lines > p.lines ? [s, p] : [p, s];
+          const way = s.lines > p.lines ? 1 : -1;
+          const line = `${p.width} -> ${s.width} (${p.lines} -> ${s.lines} lines): moved ${moved.toFixed(1)}px, its second line ${two.second.toFixed(1)}px, the one-line room ${one.room.toFixed(1)}px (${two.second.toFixed(1)} - ${one.room.toFixed(1)} = ${(two.second - one.room).toFixed(1)})`;
+          turns.push(line);
+          if (moved * way < -0.05 || Math.abs(moved) > two.second + 1) moves.push(line);
         }
+        console.log(`r150 fix ${pack} turn lines: ${JSON.stringify(turns)}`);
         console.log(
           `r150 fix ${pack} turns: ${JSON.stringify(steps.map((s) => [s.width, s.lines, Math.round(s.second), Math.round(s.first)]))}`,
         );
         expect(back, 'as the window widens, the row never takes more lines').toEqual([]);
-        expect(moves, 'a turn moves the first line by its second line alone').toEqual([]);
+        expect(
+          moves,
+          'a turn moves the first line its own way by no more than its second line',
+        ).toEqual([]);
       },
     );
 
