@@ -67,7 +67,7 @@ const twoFrames = (page: Page) =>
   );
 
 /** The header's read: the chrome's em, whether the destinations show, and what's cut. */
-function readHeader(page: Page) {
+export function readHeader(page: Page) {
   return page.evaluate(() => {
     const chrome = document.querySelector('.ag-chrome')!;
     const capsule = chrome.querySelector('.ag-capsule')!;
@@ -117,7 +117,12 @@ function readHeader(page: Page) {
       }
     }
     const rtl = getComputedStyle(chrome).direction === 'rtl';
-    if (rtl ? c.left < o.right - 1 : c.right > o.left + 1)
+    // Only on one line: on two (row 150's (iii)), the ornament takes a line of its own below the
+    // capsule, and the inline spans of the two lines overlap without either running into the other
+    // (the coordinator's (c): AR at 320, the capsule 18-302 on the first line, the ornament 178-302
+    // on the second).
+    const oneLine = o.height > 0 && o.top < c.bottom - 1;
+    if (oneLine && (rtl ? c.left < o.right - 1 : c.right > o.left + 1))
       cut.push(
         `the capsule, ${c.left.toFixed(1)}-${c.right.toFixed(1)}, runs into the ornament, ${o.left.toFixed(1)}-${o.right.toFixed(1)}`,
       );
@@ -150,7 +155,12 @@ function readNeed(page: Page) {
       "[data-variant='aurora-glass'] .ag-chrome { grid-template-columns: repeat(3, max-content) !important; }" +
       "[data-variant='aurora-glass'] .ag-capsule .ag-capsule__dest { display: flex !important; }" +
       // Its content's width, not the row the capsule fills above 75rem under 70em (row 150).
-      "[data-variant='aurora-glass'] .ag-capsule { inline-size: auto !important; max-inline-size: none !important; margin-inline-start: 0 !important; }";
+      "[data-variant='aurora-glass'] .ag-capsule { inline-size: auto !important; max-inline-size: none !important; margin-inline-start: 0 !important; }" +
+      // Under 75rem the chrome is a flex line and the capsule grows to fill it, so read as it was the
+      // need was the chrome's own width (row 150, the coordinator's (e)): one line, each at its content.
+      "[data-variant='aurora-glass'] .ag-chrome { flex-wrap: nowrap !important; }" +
+      "[data-variant='aurora-glass'] .ag-capsule { flex: none !important; inline-size: max-content !important; min-inline-size: 0 !important; }" +
+      "[data-variant='aurora-glass'] .ag-ornament { flex: none !important; margin-inline-start: 0 !important; }";
     document.head.append(style);
     try {
       const s = getComputedStyle(chrome);
