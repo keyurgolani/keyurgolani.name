@@ -4,6 +4,7 @@ import {
   followFocus,
   holdFocus,
   arrivalLands,
+  chromeStuck,
   pauseState,
   heldNote,
   firstArrival,
@@ -287,6 +288,18 @@ test('Pause is live while the sky moves, still while a setting holds it, and gon
   assert.equal(pauseState({ ...base, moves: false }), 'gone');
   assert.equal(pauseState({ ...base, done: true }), 'gone');
   assert.equal(pauseState({ ...base, allowed: false, wide: false }), 'gone');
+});
+
+// The chrome sticks on one line once the page scrolls and its top meets its inset; on two it
+// scrolls with the page, never stuck. Stuck, a still Pause's held note hides over the page.
+test('the chrome is stuck on one line, scrolled, at its inset; never on two, nor at rest', () => {
+  const at = { rows: '1', scrolled: 600, top: 18, inset: 18 };
+  assert.equal(chromeStuck(at), true);
+  assert.equal(chromeStuck({ ...at, top: 18.4 }), true);
+  assert.equal(chromeStuck({ ...at, scrolled: 0 }), false);
+  assert.equal(chromeStuck({ ...at, top: 40 }), false);
+  assert.equal(chromeStuck({ ...at, rows: '2', top: -300 }), false);
+  assert.equal(chromeStuck({ ...at, rows: undefined }), false);
 });
 
 // D's delta check 1: a still Pause says why, on the control itself: in the ornament the reason

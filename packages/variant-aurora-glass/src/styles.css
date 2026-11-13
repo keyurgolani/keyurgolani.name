@@ -652,6 +652,21 @@
 }
 
 /*
+ * While the chrome sticks (data-ag-stuck, sky.ts), the note hides over the page, as Pause's word does
+ * below 64rem: out of sight and still Pause's description. Hanging below the stuck bar it covered
+ * what the bar's offset clears (on Accessible Reading at 1440, the signature sheet's "Project
+ * organization"). At rest, and on two lines, where the chrome scrolls with the page, it shows.
+ */
+[data-variant='aurora-glass'] .ag-chrome[data-ag-stuck] .ag-orn__held:not([hidden]) {
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/*
  * Pause, in either place, can have sky beside it, and no ring colour clears
  * 3:1 on every sky frame (lime on lavender was 1.7:1). The ring itself is
  * the platform's (utilities layer: colour, width and offset, which no

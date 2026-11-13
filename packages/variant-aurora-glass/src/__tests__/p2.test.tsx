@@ -774,6 +774,15 @@ test('a still Pause’s note hangs below the row, on the capsule items’ own pa
   assert.ok(css.includes('.ag-ornament { position: relative; }'));
   assert.ok(css.includes('.ag-ornament .ag-orn__held { inset-inline-start: 0; }'));
   assert.ok(css.includes('.ag-capsule .ag-orn__held { display: none; inset-inline-end: 0; }'));
+  // While the chrome sticks (sky.ts marks it), the note hides over the page, out of sight and still
+  // Pause's description: never display: none, never out of the DOM.
+  const stuck = /\.ag-chrome\[data-ag-stuck\] \.ag-orn__held:not\(\[hidden\]\) \{([^}]*)\}/.exec(
+    css,
+  )?.[1];
+  assert.ok(stuck?.includes('clip-path: inset(50%);'), stuck);
+  assert.ok(stuck?.includes('inline-size: 1px;'), stuck);
+  assert.ok(!stuck?.includes('display'), stuck);
+  assert.ok(!stuck?.includes('visibility'), stuck);
 });
 
 // The default recipe's 390 print cell (49826dc90): the capsule ran off the sheet on one row, the

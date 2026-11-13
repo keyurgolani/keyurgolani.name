@@ -125,18 +125,52 @@ export function chromeNeed(
 }
 
 /**
+ * Whether the chrome sticks: on one line, the page scrolled, and its top at its sticky inset. Stuck,
+ * a still Pause's held note hides over the page (styles.css) and stays Pause's description.
+ */
+export function chromeStuck({
+  rows,
+  scrolled,
+  top,
+  inset,
+}: {
+  rows: string | undefined;
+  scrolled: number;
+  top: number;
+  inset: number;
+}): boolean {
+  return rows === '1' && scrolled > 0 && top <= inset + 0.5;
+}
+
+/**
  * Marks the chrome with how many lines its row takes, data-ag-rows "1" or "2", so it sticks on one
  * and scrolls with the page on two, exactly, on every pack, and data-ag-wrap where the capsule alone
  * is wider than the chrome (the stylesheet's em and rem rule is the page's without script). Only
  * where the row can take two lines (the chrome lays out as a flex line, under 75rem); wider, one.
  * Read now, on any resize of the page's box, the capsule or the ornament, once the fonts load, and
- * when the boundary's pack or the root's size changes. Returns the undo.
+ * when the boundary's pack or the root's size changes; and data-ag-stuck while it sticks, read on
+ * each scroll's next frame and with the lines. Returns the undo.
  */
 export function fitChrome(root: HTMLElement): () => void {
   const chrome = root.querySelector<HTMLElement>('.ag-chrome');
   const capsule = chrome?.querySelector<HTMLElement>('.ag-capsule');
   if (!chrome || !capsule) return () => undefined;
   const ornament = chrome.querySelector<HTMLElement>('.ag-ornament');
+  let frame = 0;
+  const stick = () => {
+    frame = 0;
+    const stuck = chromeStuck({
+      rows: chrome.dataset.agRows,
+      scrolled: window.scrollY,
+      top: chrome.getBoundingClientRect().top,
+      inset: parseFloat(getComputedStyle(chrome).insetBlockStart) || 0,
+    });
+    if (stuck && !('agStuck' in chrome.dataset)) chrome.dataset.agStuck = '';
+    if (!stuck && 'agStuck' in chrome.dataset) delete chrome.dataset.agStuck;
+  };
+  const onScroll = () => {
+    frame ||= requestAnimationFrame(stick);
+  };
   const measure = () => {
     const flexes = getComputedStyle(chrome).display === 'flex';
     const need = flexes ? chromeNeed(chrome, capsule, ornament) : null;
@@ -149,8 +183,10 @@ export function fitChrome(root: HTMLElement): () => void {
     const wrap = need !== null && need.capsule > need.width - 0.5;
     if (wrap && !('agWrap' in chrome.dataset)) chrome.dataset.agWrap = '';
     if (!wrap && 'agWrap' in chrome.dataset) delete chrome.dataset.agWrap;
+    stick();
   };
   measure();
+  window.addEventListener('scroll', onScroll, { passive: true });
   const resized = new ResizeObserver(measure);
   for (const box of [root.querySelector('.ag-page') ?? root, capsule, ornament])
     if (box) resized.observe(box);
@@ -170,8 +206,11 @@ export function fitChrome(root: HTMLElement): () => void {
     live = false;
     resized.disconnect();
     changed.disconnect();
+    window.removeEventListener('scroll', onScroll);
+    cancelAnimationFrame(frame);
     delete chrome.dataset.agRows;
     delete chrome.dataset.agWrap;
+    delete chrome.dataset.agStuck;
   };
 }
 
