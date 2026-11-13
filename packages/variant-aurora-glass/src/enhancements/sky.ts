@@ -140,9 +140,13 @@ export function fitChrome(root: HTMLElement): () => void {
   const measure = () => {
     const flexes = getComputedStyle(chrome).display === 'flex';
     const need = flexes ? chromeNeed(chrome, capsule, ornament) : null;
-    const rows = need && need.row > need.width + 0.5 ? '2' : '1';
+    // Within half a pixel of the chrome's width, two lines, never one (row 150, the coordinator's
+    // (d)): the flex line wraps at any overflow, so a slack the other way read Multilingual System's
+    // 693.7 px of row in 693.6 as one line, and the chrome stuck on two. Short of it, the row scrolls
+    // on two where one might just have fitted, never the other way.
+    const rows = need && need.row > need.width - 0.5 ? '2' : '1';
     if (chrome.dataset.agRows !== rows) chrome.dataset.agRows = rows;
-    const wrap = need !== null && need.capsule > need.width + 0.5;
+    const wrap = need !== null && need.capsule > need.width - 0.5;
     if (wrap && !('agWrap' in chrome.dataset)) chrome.dataset.agWrap = '';
     if (!wrap && 'agWrap' in chrome.dataset) delete chrome.dataset.agWrap;
   };
