@@ -24,7 +24,13 @@ import { readHeader } from './aurora-glass-capsule-fit';
 //   - (d) at 768, root 100% and 200%, with motion allowed and reduced, the chrome on two lines is never sticky, and
 //     data-ag-rows says the lines it lays out (Multilingual System at 768 at 200% with motion allowed: the row
 //     needed 693.7 px of the chrome's 693.6, the enhancement's half-pixel slack read it as one line, and it wrapped
-//     stuck).
+//     stuck);
+//   - at 768 and 864, root text 200% from the first paint, loading the page shifts nothing: the enhancement adds no
+//     line (Accessible Reading: with script the capsule holds Pause and its row takes two lines, without it one, so
+//     the page moved down when the script came; the no-JS row now keeps Pause's room);
+//   - at 1024 and 1440, the still Pause's held note shows at rest and, while the chrome sticks, hides over the page
+//     (on Accessible Reading at 1440 it covered the signature sheet's "Project organization"), and either way it
+//     stays Pause's description.
 
 export type HeaderPack =
   | 'accessible-reading'
@@ -88,9 +94,39 @@ const lines = (page: Page) =>
     };
   });
 
+/** The page's layout-shift entries from the navigation on, none with recent input (Chromium). */
+const loadShifts = (page: Page) =>
+  page.evaluate(() => {
+    const o = new PerformanceObserver(() => undefined);
+    o.observe({ type: 'layout-shift', buffered: true });
+    const all = o.takeRecords() as unknown as {
+      value: number;
+      hadRecentInput: boolean;
+      sources: { node: Node | null }[];
+    }[];
+    o.disconnect();
+    return all
+      .filter((entry) => !entry.hadRecentInput)
+      .map((entry) => ({
+        value: entry.value,
+        nodes: entry.sources.map((s) =>
+          s.node instanceof Element
+            ? `${s.node.localName}${[...s.node.classList].map((k) => `.${k}`).join('')}`
+            : String(s.node?.nodeName ?? ''),
+        ),
+      }));
+  });
+
 export function headerFit(
   pack: HeaderPack,
-  pins: { wide?: boolean; load?: boolean; turns?: boolean; wrong?: boolean },
+  pins: {
+    wide?: boolean;
+    load?: boolean;
+    turns?: boolean;
+    wrong?: boolean;
+    rootLoad?: boolean;
+    note?: boolean;
+  },
 ) {
   test.use({ appOptions: headerFitOptions(pack), contextOptions: { reducedMotion: 'reduce' } });
 
@@ -124,26 +160,7 @@ export function headerFit(
         test.skip(browserName !== 'chromium', 'Chromium alone has layout-shift entries');
         await open(page, 320, 640);
         await page.waitForTimeout(150);
-        const shifts = await page.evaluate(() => {
-          const o = new PerformanceObserver(() => undefined);
-          o.observe({ type: 'layout-shift', buffered: true });
-          const all = o.takeRecords() as unknown as {
-            value: number;
-            hadRecentInput: boolean;
-            sources: { node: Node | null }[];
-          }[];
-          o.disconnect();
-          return all
-            .filter((e) => !e.hadRecentInput)
-            .map((e) => ({
-              value: e.value,
-              nodes: e.sources.map((s) =>
-                s.node instanceof Element
-                  ? `${s.node.localName}${[...s.node.classList].map((k) => `.${k}`).join('')}`
-                  : String(s.node?.nodeName ?? ''),
-              ),
-            }));
-        });
+        const shifts = await loadShifts(page);
         const sum = shifts.reduce((a, e) => a + e.value, 0);
         console.log(`r150 fix ${pack} 320 load: ${sum.toFixed(4)} ${JSON.stringify(shifts)}`);
         expect(shifts, 'the load shifts nothing').toEqual([]);
@@ -246,6 +263,109 @@ export function headerFit(
           expect(reads, 'the chrome on two lines scrolls, and data-ag-rows says its lines').toEqual(
             [],
           );
+        },
+      );
+
+  if (pins.rootLoad)
+    for (const width of [768, 864])
+      test(
+        `at ${width} at 200% root text from the first paint on ${pack}, the enhancement adds no line: loading the page shifts nothing`,
+        { annotation },
+        async ({ page, browserName }) => {
+          test.skip(browserName !== 'chromium', 'Chromium alone has layout-shift entries');
+          // The root's text at 200% before the page's first paint, as a reader's setting is.
+          await page.addInitScript(() => {
+            const set = () =>
+              document.documentElement.style.setProperty('font-size', '200%', 'important');
+            if (document.documentElement) set();
+            else
+              new MutationObserver((_, watch) => {
+                if (!document.documentElement) return;
+                set();
+                watch.disconnect();
+              }).observe(document, { childList: true });
+          });
+          await open(page, width, 900);
+          expect(
+            await page.evaluate(() => getComputedStyle(document.documentElement).fontSize),
+            'the root text at 200%',
+          ).toBe('32px');
+          await page.waitForTimeout(150);
+          const at = await lines(page);
+          const shifts = await loadShifts(page);
+          console.log(
+            `header-fit ${pack} ${width} 200% load: ${at.lines} line(s), ${shifts.reduce((sum, entry) => sum + entry.value, 0).toFixed(4)} ${JSON.stringify(shifts)}`,
+          );
+          expect(shifts, 'the load shifts nothing').toEqual([]);
+        },
+      );
+
+  if (pins.note)
+    for (const width of [1024, 1440])
+      test(
+        `at ${width} on ${pack}, under reduced motion, the held note shows at rest and hides while the chrome sticks, and stays Pause's description`,
+        { annotation },
+        async ({ page }) => {
+          await open(page, width, 900);
+          // Pause is the capsule's last item to 75rem, the ornament's first above.
+          const pause = page.locator(
+            width > 1200 ? '.ag-ornament .ag-orn' : '.ag-capsule .ag-orn--capsule',
+          );
+          await expect(pause).toBeVisible();
+          await expect(pause).toHaveAttribute('aria-disabled', 'true');
+          const id = (await pause.getAttribute('aria-describedby'))!;
+          const text = ((await page.locator(`[id="${id}"]`).textContent()) ?? '').trim();
+          expect(text, 'the still Pause says why').not.toBe('');
+          await expect(pause, 'at rest, the note is its description').toHaveAccessibleDescription(
+            text,
+          );
+          // Where the note sits from the chrome's top, at rest: shown.
+          const rest = await page.evaluate((nid) => {
+            const note = document.getElementById(nid)!;
+            const n = note.getBoundingClientRect();
+            const h = document.querySelector('.ag-chrome')!.getBoundingClientRect();
+            return {
+              shown: n.width > 1 && n.height > 1,
+              box: [n.left, n.top - h.top, n.right, n.bottom - h.top],
+            };
+          }, id);
+          expect(rest.shown, 'at rest the note shows').toBe(true);
+          await page.evaluate(() => scrollTo(0, 600));
+          await page.waitForTimeout(150);
+          await twoFrames(page);
+          // Stuck: across the note's box, nothing hits the note; what's under it is the page's.
+          const stuck = await page.evaluate(
+            ({ nid, box }) => {
+              const chrome = document.querySelector<HTMLElement>('.ag-chrome')!;
+              const note = document.getElementById(nid)!;
+              const h = chrome.getBoundingClientRect();
+              const [l, t, r, b] = [box[0]!, box[1]! + h.top, box[2]!, box[3]! + h.top];
+              const hits: string[] = [];
+              for (const fx of [0.1, 0.3, 0.5, 0.7, 0.9])
+                for (const fy of [0.2, 0.5, 0.8]) {
+                  const [x, y] = [l + (r - l) * fx, t + (b - t) * fy];
+                  if (document.elementsFromPoint(x, y).some((el) => note.contains(el)))
+                    hits.push(`${x.toFixed(0)},${y.toFixed(0)}`);
+                }
+              return {
+                position: getComputedStyle(chrome).position,
+                top: h.top,
+                scrollY,
+                hits,
+              };
+            },
+            { nid: id, box: rest.box },
+          );
+          console.log(
+            `header-fit ${pack} ${width} note: "${text}", rest ${JSON.stringify(rest)}, stuck ${JSON.stringify(stuck)}`,
+          );
+          expect(stuck.position, 'the chrome sticks').toBe('sticky');
+          expect(stuck.scrollY).toBeGreaterThan(0);
+          expect(stuck.hits, 'while the chrome sticks, the note covers nothing').toEqual([]);
+          await expect(
+            pause,
+            'stuck, the note is still its description',
+          ).toHaveAccessibleDescription(text);
         },
       );
 }
