@@ -71,3 +71,47 @@ test(
     }
   },
 );
+
+// At the reader's own text size the label keeps its place: beside the work, in the hang's last two columns,
+// ending at its wall's end, at 1024 and at 1440, so a fix for the root text leaves 1x where it is.
+for (const [width, height] of [
+  [1024, 768],
+  [1440, 900],
+] as const)
+  test.describe(`at ${width}`, () => {
+    test.use({ viewport: { width, height } });
+    test(
+      `at ${width} at 1x, the wall label of the work with a missing picture hangs beside the work, at its wall's end`,
+      { annotation: [{ type: 'route', description: '/' }] },
+      async ({ page }) => {
+        await page.goto('/', { waitUntil: 'networkidle' });
+        await expect(page.locator(LABEL)).toHaveCount(1);
+        const read = await page.locator(LABEL).evaluate((label) => {
+          const box = (el: Element) => {
+            const r = el.getBoundingClientRect();
+            return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+          };
+          const work = label.closest('.oa-hang')!.querySelector('.oa-hang__work')!;
+          return {
+            root: getComputedStyle(document.documentElement).fontSize,
+            column: getComputedStyle(label).gridColumnStart,
+            label: box(label),
+            work: box(work),
+            wall: box(label.closest('.oa-wall')!),
+          };
+        });
+        expect(read.root, 'the reader text is the default').toBe('16px');
+        expect(read.column, 'the label starts on the hang column after the work').toBe('7');
+        expect(read.label.left, 'the label starts past the work').toBeGreaterThanOrEqual(
+          read.work.right,
+        );
+        expect(read.label.top, 'the label is beside the work, not under it').toBeLessThan(
+          read.work.bottom,
+        );
+        expect(
+          Math.abs(read.label.right - read.wall.right),
+          "the label ends at its wall's end",
+        ).toBeLessThanOrEqual(0.5);
+      },
+    );
+  });
