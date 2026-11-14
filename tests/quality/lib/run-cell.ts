@@ -103,6 +103,23 @@ import {
 import { MOTION_SAMPLER, motionFindings } from './a11y/motion';
 import { inPage } from './a11y/probe';
 import { setOwnTimeout } from './perf/isolation';
+import { optionalFaces, pinFaces } from '../../harness/optional-faces';
+
+/**
+ * The pages whose optional faces (a typography pack's font-display: optional) are pinned to their
+ * designed state: every cell's context routes its requests, which turns the HTTP cache off, so each
+ * load is a first visit, and whether an optional face made the browser's block window would depend
+ * on the runner's load, the same cell judging its fallback one run and its face the next. Pinned
+ * once a page, before its first load, it holds for every load after, the conditions' reloads and
+ * script off included (tests/harness/optional-faces.ts). Perf's load-shift reads load their own
+ * pages (lib/perf/measure.ts) and are never pinned.
+ */
+const pinned = new WeakSet<Page>();
+async function pinOptionalFaces(page: Page, at: string): Promise<void> {
+  if (pinned.has(page)) return;
+  pinned.add(page);
+  await pinFaces(page, await optionalFaces(page, at), 'designed');
+}
 
 /** Waits for the page to settle: loaded, its fonts in, and two frames drawn (or their time, without JavaScript). */
 /** Waits for the page to load and settle, and answers whether it settled (notBusy()). */
@@ -616,6 +633,7 @@ export async function runPass(
   if (options.reemulate) await emulateRow(page, onScreen);
   else await applyRow(page, onScreen);
   const at = rowPath(cell, row);
+  await pinOptionalFaces(page, at);
   const { response, settled, enhanced, held, served } = await loadForPass(page, at);
   const status = response?.status() ?? 0;
   ran.add('status');
