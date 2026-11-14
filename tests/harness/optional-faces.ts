@@ -14,10 +14,14 @@
 // - 'designed': the page adds, as its document starts, a copy of each optional face that blocks
 //   while it loads (`display: block`), so its text lays out in the face from the first frame, as a
 //   visit with the face in the cache does. A copy with the same family, weight and style comes
-//   after the stylesheet's rule, so the browser picks it.
+//   after the stylesheet's rule, so the browser picks it. With script off the copies can't run, so
+//   the stylesheets that declare the faces are also served with each `font-display: optional` as
+//   `block`: the text waits for the face, and the page settles in it either way.
 import type { Page } from '@playwright/test';
 
 export interface OptionalFace {
+  /** The stylesheet that declares it, as its HTML links it. */
+  readonly sheet: string;
   readonly family: string;
   readonly url: string;
   readonly weight: string;
@@ -50,6 +54,7 @@ export async function optionalFaces(page: Page, route = '/'): Promise<OptionalFa
       const family = value(block!, 'font-family');
       if (!url || !family) continue;
       faces.push({
+        sheet: href,
         family,
         url,
         weight: value(block!, 'font-weight') ?? 'normal',
@@ -61,7 +66,10 @@ export async function optionalFaces(page: Page, route = '/'): Promise<OptionalFa
   return faces;
 }
 
-/** Pins `faces` to `state` for the page's next navigations. Nothing to pin, nothing done. */
+/**
+ * Pins `faces` to `state` for the page's next navigations. Its routes are the page's context's, so a
+ * test that clears its page's own routes (page.unrouteAll()) keeps them. Nothing to pin, nothing done.
+ */
 export async function pinFaces(
   page: Page,
   faces: readonly OptionalFace[],
@@ -70,12 +78,24 @@ export async function pinFaces(
   if (faces.length === 0) return;
   if (state === 'fallback') {
     const files = new Set(faces.map((face) => new URL(face.url, 'http://x').pathname));
-    await page.route(
+    await page.context().route(
       (url) => files.has(url.pathname),
       (route) => route.abort('blockedbyclient'),
     );
     return;
   }
+  const sheets = new Set(faces.map((face) => new URL(face.sheet, 'http://x').pathname));
+  await page.context().route(
+    (url) => sheets.has(url.pathname),
+    async (route) => {
+      const response = await route.fetch();
+      const body = (await response.text()).replace(
+        /font-display:\s*optional/g,
+        'font-display: block',
+      );
+      await route.fulfill({ response, body });
+    },
+  );
   await page.addInitScript((list: OptionalFace[]) => {
     for (const face of list) {
       const copy = new FontFace(face.family, `url("${new URL(face.url, location.href).href}")`, {
