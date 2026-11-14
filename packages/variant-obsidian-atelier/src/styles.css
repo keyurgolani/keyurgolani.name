@@ -2064,7 +2064,13 @@
     grid-column: col 1 / span 8;
   }
 
+  /*
+   * The room is the container its label measures by (below): its width is main's, never its
+   * content's, and only its wall, a subgrid, can't be one. Nothing in a room is fixed or raised over its
+   * neighbours, so the stacking context and containing block containment gives it change nothing.
+   */
   [data-variant='obsidian-atelier'] .oa-room--wall {
+    container: oa-room / inline-size;
     padding-block: 0;
     row-gap: 0;
   }
@@ -2287,6 +2293,21 @@
   [data-variant='obsidian-atelier'] .oa-exit[data-labelled] > .oa-block--cta {
     grid-row: 1;
     grid-column: col 10 / span 3;
+  }
+}
+
+/*
+ * A room narrow for the reader's text: the label's two columns
+ * beside the work are narrower than its longest word, which the wall's
+ * clip would cut, so it hangs under the work across the hang, as below
+ * 64rem, and breaks only between its words. A container query's rem is
+ * the root's, so this holds only when the reader's text is large: a room
+ * here is 63rem wide or more at 1x, and 32rem at 1024 with the text at 200%.
+ */
+@container oa-room (max-width: 40rem) {
+  [data-variant='obsidian-atelier'] .oa-room--wall .oa-label {
+    grid-row: 2;
+    grid-column: 1 / -1;
   }
 }
 
