@@ -308,8 +308,21 @@ export function platformStylesheet(): string {
       // 1.4.10). break-word leaves min-content sizing alone, so a table still
       // scrolls and a number stays whole wherever it fits.
       'overflow-wrap': 'break-word',
+      // A tap's highlight is the accent, faint, not the browser's grey.
+      '-webkit-tap-highlight-color': 'color-mix(in srgb, var(--color-accent) 20%, transparent)',
     }),
     block([BOUNDARY], scaleDeclarations()),
+    // The browser's own parts of a typed field: its placeholder in text-muted, and its autofill
+    // wash covered by the control's own surface, its text the scheme's.
+    block([`${BOUNDARY} ::placeholder`], { color: 'var(--color-text-muted)' }),
+    block([`${BOUNDARY} :autofill`], {
+      '-webkit-text-fill-color': 'var(--color-text-primary)',
+      'box-shadow': 'inset 0 0 0 100vmax var(--color-surface-subtle)',
+    }),
+    // A dialog's backdrop is the scheme's scrim, under a composition's own and the primitive's.
+    block([`${BOUNDARY} :where(dialog)::backdrop`], {
+      'background-color': 'color-mix(in srgb, var(--color-scrim) 62%, transparent)',
+    }),
     block([`${BOUNDARY} ::selection`], {
       color: 'var(--color-text-primary)',
       'background-color': 'var(--color-selection)',
