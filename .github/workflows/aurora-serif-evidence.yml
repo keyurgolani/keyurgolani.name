@@ -1,0 +1,84 @@
+# Evidence only, never merged: Aurora Glass's type packs on CI Linux, again, with Field Serif's
+# italic and Paste-Up's Archivo optional on the head. One job, on a push of either evidence branch
+# alone (the head, and its base twin, which carries the same commit on the landing), in the browser
+# job's pinned image after install and ci:build:
+# - the load-shift pins from _ci-evidence/aurora-serif, a copy of tests/e2e/aurora-glass-load-shift.ts
+#   and its fifteen packs, so the base twin runs them too: on every type pack, script on and off, at
+#   1440, 1024, 768, 390 and 320, a fresh page's load records no layout-shift entry. On the base twin
+#   Fraunces 600 moved Book Serif's and Field Serif's display line, Fraunces Italic Field Serif's
+#   caption, and Archivo Paste-Up's capsule; on the head those faces load optional;
+# - the repository's own header-fit pins for Book Serif, Field Serif and Paste-Up, which on the head
+#   run in each pack's fallback faces and in its own.
+# Each set runs twice over, no retries. The runs' exits are data, printed; the job fails only on a
+# load-shift listing of other than EV_COUNT tests. Holds contents: read and no secret, and reads no
+# cache.
+name: aurora-serif-evidence
+
+on:
+  push:
+    branches: [kgn/aurora-serif-evidence-2, kgn/aurora-serif-evidence-2-base]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurora-serif-evidence-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+
+jobs:
+  evidence:
+    name: aurora-serif-evidence (load-shift, the optional packs' header-fit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      CI_REPORTS_DIR: reports/aurora-serif-evidence
+      EV_CONFIG: _ci-evidence/aurora-serif/playwright.config.ts
+      EV_COUNT: '30'
+      EV_FIT: tests/e2e/aurora-glass-header-fit-book-serif.spec.ts tests/e2e/aurora-glass-header-fit-field-serif.spec.ts tests/e2e/aurora-glass-header-fit-paste-up.spec.ts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: List the job's tests
+        shell: bash
+        run: |
+          pnpm exec playwright test --config "$EV_CONFIG" --list > "$RUNNER_TEMP/list.txt" 2>&1 || true
+          cat "$RUNNER_TEMP/list.txt"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{if (n == "") print "unread"; else print n}' "$RUNNER_TEMP/list.txt")
+          echo "[aurora-serif] load-shift listed $total test(s); want exactly $EV_COUNT"
+          [ "$total" = "$EV_COUNT" ] || { echo "[aurora-serif] FAIL: listed $total, not $EV_COUNT"; exit 1; }
+          read -r -a fit <<< "$EV_FIT"
+          pnpm exec playwright test "${fit[@]}" --list 2>&1 | tail -n 1
+      - name: Run them
+        shell: bash
+        run: |
+          rc=0
+          pnpm exec playwright test --config "$EV_CONFIG" --repeat-each=2 --retries=0 || rc=$?
+          echo "[aurora-serif] load-shift exited $rc (data: the base twin's serif packs move by design)"
+          rc=0
+          read -r -a fit <<< "$EV_FIT"
+          pnpm exec playwright test "${fit[@]}" --repeat-each=2 --retries=0 || rc=$?
+          echo "[aurora-serif] header-fit exited $rc (data)"
+      - name: Upload the evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aurora-serif-evidence-${{ github.ref_name == 'kgn/aurora-serif-evidence-2' && 'head' || 'base' }}
+          path: reports/aurora-serif-evidence/
+          if-no-files-found: ignore
+          retention-days: 7
