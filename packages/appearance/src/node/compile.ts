@@ -746,7 +746,8 @@ function compileTypography(manifest: TypographyManifest, dir: string): CompileRe
         `  src: url("${url}") format("woff2");`,
         `  font-weight: ${weights};`,
         `  font-style: ${asset.style};`,
-        '  font-display: swap;',
+        // A face whose late arrival would move the page is the manifest's `display: optional`.
+        `  font-display: ${asset.display ?? 'swap'};`,
         `  unicode-range: ${range};`,
         '}',
         '',
