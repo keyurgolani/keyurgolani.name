@@ -208,8 +208,12 @@
   }
 
   /* Its margin is its focus ring's reach (width plus any outward offset), so at the page's
-     top-left corner the ring is drawn whole, never clipped by the viewport's edge. */
+     top-left corner the ring is drawn whole, never clipped by the viewport's edge. It stacks above
+     a composition's chrome at the page's top: z-index 4 is above Obsidian Atelier's, at 3, whose
+     name link painted over it at 390. A composition that sets its own still wins. */
   [data-ui-slot='skip-link']:focus {
+    position: relative;
+    z-index: 4;
     display: inline-flex;
     align-items: center;
     margin: calc(var(--ui-focus-width, 2px) + max(var(--ui-focus-offset, 2px), 0px));
