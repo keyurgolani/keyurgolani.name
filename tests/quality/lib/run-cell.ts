@@ -37,7 +37,7 @@ import {
   sweepRowChecks,
 } from './checks';
 import { FIXED_TIME } from './clock';
-import { checkEmulation } from './emulation';
+import { checkDisplayMode, checkEmulation } from './emulation';
 import type { PreferenceRow, Viewport } from './matrix';
 import { elementDetailsScript, resolvedTokensScript, type ElementDetails } from './probes';
 import {
@@ -616,6 +616,8 @@ export async function runPass(
   if (printRow) await page.emulateMedia({ media: 'print' });
 
   const emulation = await checkEmulation(page, row);
+  // A composition cell's page renders its tuple's display mode, whatever the preference emulated.
+  const shown = await checkDisplayMode(page, cell, row);
   ran.add('emulation');
   const now = await page.evaluate(() => Date.now());
   ran.add('clock');
@@ -661,6 +663,12 @@ export async function runPass(
   if (cell.sweep) ran.add(SWEEP_PACK_CHECK);
   // What a change-directed cell's failures name its tokens from (the [37] rule).
   const tokenPages = [{ route: cell.route, tokens, file: written.at(-1)! }];
+  // The mode each document boundary rendered, and its computed color-scheme, against the cell's.
+  await keep('display-mode.json', {
+    expected: row.displayMode ?? cell.tuple.displayMode,
+    checked: cell.kind === 'composition' && !row.displayMode,
+    boundaries: shown.looks,
+  });
 
   const context: CellContext = { cell, viewport, row, artifacts: written };
   const found: CellFailure[] = [];
@@ -781,6 +789,9 @@ export async function runPass(
       const problems = await checkEmulation(page, row);
       for (const problem of problems)
         findings.push({ gate: 'runner', rule: 'media-emulation', actual: problem });
+      const { problems: modeProblems } = await checkDisplayMode(page, cell, row);
+      for (const problem of modeProblems)
+        findings.push({ gate: 'runner', rule: 'display-mode', actual: problem });
       findings.push(...(owed.has('motion') ? await motionFindings(page) : []));
       const { results: axe, contrast: resampled } = await audit(page, row);
       const primitiveTokens: ResolvedTokens = await page.evaluate(resolvedTokensScript, [
@@ -834,6 +845,7 @@ export async function runPass(
       ? []
       : [runnerFailure(context, 'status', `${status}, not ${cell.expectedStatus}`)]),
     ...emulation.map((problem) => runnerFailure(context, 'media-emulation', problem)),
+    ...shown.problems.map((problem) => runnerFailure(context, 'display-mode', problem)),
     ...(settled ? [] : [runnerFailure(context, 'settled', STILL_BUSY)]),
     ...(enhanced ? [] : [runnerFailure(context, 'enhanced', stillEnhancingText(held))]),
     ...[...isolation, ...sweptPack].map((finding) => ({

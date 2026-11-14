@@ -22,8 +22,7 @@ import type { Summary, SummaryTest } from '../reporter';
 import { plantCanary, scanArtifacts, scrubArtifacts, writeZip } from '../lib/artifacts.mjs';
 import { CANARY_FORMS, everyForm, UNKNOWN_FORM } from '../lib/canary-forms.mjs';
 import { requiredChecks, VISUAL_CHECKS } from '../lib/checks';
-import { checkEmulation } from '../lib/emulation';
-import * as emulation from '../lib/emulation';
+import { checkDisplayMode, checkEmulation } from '../lib/emulation';
 import { egressFailure, installBrowserPolicy, serverEgressFailure } from '../lib/egress';
 import { PREFERENCE_ROWS } from '../lib/matrix';
 import { judge as verdictOf, type VerdictInput, type VerdictTest } from '../lib/verdict';
@@ -255,7 +254,7 @@ async function displayModeOutcome(rendered: string): Promise<MetaOutcome> {
     );
     const row = PREFERENCE_ROWS.find((each) => each.id === 'default')!;
     const cell = { kind: 'composition', tuple: { displayMode: 'dark' } } as const;
-    const { problems } = await emulation.checkDisplayMode(tab, cell, row);
+    const { problems } = await checkDisplayMode(tab, cell, row);
     return { passed: problems.length === 0, findings: problems };
   } finally {
     await browser.close();

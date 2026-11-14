@@ -6,6 +6,8 @@
 // default and pass it. The default row checks the other way round: nothing
 // may be emulated in it. A row that sets a display mode (high-contrast)
 // also needs every document boundary on the page to render that mode.
+// Under any other row, a composition cell's page renders its tuple's display
+// mode in every document boundary (checkDisplayMode).
 
 import type { Page } from '@playwright/test';
 import type { PreferenceRow } from './matrix';
@@ -84,6 +86,67 @@ export function displayModeProblems(row: PreferenceRow, modes: readonly string[]
       (mode) =>
         `${row.id}: a boundary renders ${mode || 'no mode'}, not ${row.displayMode}: the emulation was ignored`,
     );
+}
+
+/** One document boundary as the page renders it: its display mode, computed color-scheme, and lock. */
+export interface BoundaryLook {
+  readonly displayMode: string;
+  readonly colorScheme: string;
+  /** Whether its scheme pinned the mode (data-mode-locked). */
+  readonly locked: boolean;
+}
+
+/** Each document boundary's look. Runs in the browser. */
+export function readLooksScript(): BoundaryLook[] {
+  return [...document.querySelectorAll('[data-appearance-boundary="document"]')].map(
+    (boundary) => ({
+      displayMode: boundary.getAttribute('data-display-mode') ?? '',
+      colorScheme: getComputedStyle(boundary).colorScheme,
+      locked: boundary.getAttribute('data-mode-locked') === 'true',
+    }),
+  );
+}
+
+/**
+ * What's wrong for a composition cell's page under a row that sets no display mode: no document
+ * boundary, or one rendering another mode than `mode`, the cell's tuple's. The plan holds only
+ * tuples the resolver renders as asked and unpinned (cells.ts's accepts()), so a boundary that
+ * renders another mode was served the wrong one, whatever the emulated preference. A row that
+ * sets its own mode is displayModeProblems()'s.
+ */
+export function tupleModeProblems(
+  mode: string,
+  row: PreferenceRow,
+  looks: readonly BoundaryLook[],
+): string[] {
+  if (row.displayMode) return [];
+  if (looks.length === 0) {
+    return [
+      `${row.id}: no presentation boundary renders a display mode, so the cell's ${mode} wasn't served`,
+    ];
+  }
+  return looks
+    .filter((look) => look.displayMode !== mode)
+    .map(
+      (look) =>
+        `${row.id}: a boundary renders ${look.displayMode || 'no mode'}, its color-scheme ${look.colorScheme || 'normal'}, not the cell's ${mode}: the tuple's display mode wasn't served`,
+    );
+}
+
+/**
+ * The display-mode check on a cell's page: what's wrong (tupleModeProblems) and each document
+ * boundary's look, which the pass keeps. A surface's tuple is a stand-in it doesn't render (the
+ * fallback composition in system), so only a composition cell's mode is checked.
+ */
+export async function checkDisplayMode(
+  page: Page,
+  cell: { readonly kind: string; readonly tuple: { readonly displayMode: string } },
+  row: PreferenceRow,
+): Promise<{ problems: string[]; looks: BoundaryLook[] }> {
+  const looks = await page.evaluate(readLooksScript);
+  const problems =
+    cell.kind === 'composition' ? tupleModeProblems(cell.tuple.displayMode, row, looks) : [];
+  return { problems, looks };
 }
 
 /** Reads the row's queries and display mode in `page` and returns what's wrong. */
