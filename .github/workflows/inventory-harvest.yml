@@ -1,0 +1,155 @@
+# Evidence only, never merged: the inventory harvest. An inventory run's findings, read from its
+# shards' report artifacts on CI, so nobody downloads them; a shard job's log can't carry them, as
+# its failure summary is one write to a pipe, cut at 64 KB. quality/inventory/harvest.json names
+# the runs (ci/evidence/inventory-harvest.mjs):
+#
+# - harvest-1 and harvest-2, one after the other: each run's finished shard jobs' reports, the
+#   first half and the second, one artifact at a time, each zip read for its quality/summary.json
+#   and verdict.json and deleted, so a job's disk holds one shard's reports at most. Each uploads
+#   the summaries it kept.
+# - harvest-merge: every summary kept, and an earlier harvest's records when harvest.json names
+#   its run: each failed test's records counted by composition, check and rule, check and
+#   viewport, with every record key and the failed tests no record names, printed whole in this
+#   job's log and uploaded as inventory-harvest-records.
+#
+# Runs on a push of a kgn-a/harvest-inventory-* branch alone. contents: read and actions: read,
+# for the runs' jobs and artifacts, and no secret; reads no cache.
+name: inventory-harvest
+
+on:
+  push:
+    branches: ['kgn-a/harvest-inventory-*']
+
+permissions:
+  contents: read
+  # To list the harvested runs' jobs and artifacts, and download them.
+  actions: read
+
+concurrency:
+  group: inventory-harvest
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+
+jobs:
+  harvest-1:
+    name: harvest (1/2)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ci/evidence/
+            ci/release/
+            quality/inventory/
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Pick the runs' finished shards' reports
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node ci/evidence/inventory-harvest.mjs pick quality/inventory/harvest.json "$RUNNER_TEMP/picked.json"
+      - name: Read the first half's summaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node ci/evidence/inventory-harvest.mjs fetch "$RUNNER_TEMP/picked.json" 1/2 "$RUNNER_TEMP/harvest"
+      - name: Upload the summaries
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: harvest-summaries-1
+          path: ${{ runner.temp }}/harvest/
+          if-no-files-found: error
+          retention-days: 30
+
+  harvest-2:
+    name: harvest (2/2)
+    needs: [harvest-1]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ci/evidence/
+            ci/release/
+            quality/inventory/
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Pick the runs' finished shards' reports
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node ci/evidence/inventory-harvest.mjs pick quality/inventory/harvest.json "$RUNNER_TEMP/picked.json"
+      - name: Read the second half's summaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node ci/evidence/inventory-harvest.mjs fetch "$RUNNER_TEMP/picked.json" 2/2 "$RUNNER_TEMP/harvest"
+      - name: Upload the summaries
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: harvest-summaries-2
+          path: ${{ runner.temp }}/harvest/
+          if-no-files-found: error
+          retention-days: 30
+
+  harvest-merge:
+    name: harvest-merge
+    needs: [harvest-1, harvest-2]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ci/evidence/
+            ci/release/
+            quality/inventory/
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: The earlier harvest, when harvest.json names one
+        id: earlier
+        run: echo "run=$(node -p "require('./quality/inventory/harvest.json').earlier ?? ''")" >> "$GITHUB_OUTPUT"
+      - name: Download the summaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: harvest-summaries-*
+          path: ${{ runner.temp }}/summaries
+      - name: Download the earlier harvest's records
+        if: ${{ steps.earlier.outputs.run != '' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: inventory-harvest-records
+          path: ${{ runner.temp }}/earlier
+          run-id: ${{ steps.earlier.outputs.run }}
+          github-token: ${{ github.token }}
+      - name: Merge, and print the inventory whole
+        env:
+          EARLIER: ${{ steps.earlier.outputs.run }}
+        run: |
+          if [ -n "$EARLIER" ]; then
+            node ci/evidence/inventory-harvest.mjs merge "$RUNNER_TEMP/records" "$RUNNER_TEMP/summaries" --records "$RUNNER_TEMP/earlier/records.jsonl"
+          else
+            node ci/evidence/inventory-harvest.mjs merge "$RUNNER_TEMP/records" "$RUNNER_TEMP/summaries"
+          fi
+      - name: Upload the records
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: inventory-harvest-records
+          path: ${{ runner.temp }}/records/
+          if-no-files-found: error
+          retention-days: 30
