@@ -27,6 +27,34 @@
     isolation: isolate;
   }
 
+  /*
+   * The browser's own scrollbar, in the scheme: a scroll container's bar is a border-strong thumb
+   * on a clear track, at the browser's own width, never hidden. scrollbar-color inherits, so every
+   * scroller in a boundary takes it, and Chromium and Firefox, which read it, leave WebKit's parts
+   * alone; WebKit, which doesn't, draws the same thumb through them. The document root's is the
+   * scheme compile's, since the tokens live on the boundary.
+   */
+  [data-appearance-boundary] {
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  [data-appearance-boundary] ::-webkit-scrollbar {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  [data-appearance-boundary] ::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-strong);
+    background-clip: padding-box;
+    border: 0.1875rem solid transparent;
+    border-radius: var(--ui-radius-badge);
+  }
+
+  [data-appearance-boundary] ::-webkit-scrollbar-track,
+  [data-appearance-boundary] ::-webkit-scrollbar-corner {
+    background-color: transparent;
+  }
+
   /* A modal dialog stops the page behind it from scrolling. */
   :root:has([data-ui-slot='dialog']:modal) {
     overflow: hidden;

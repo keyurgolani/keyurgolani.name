@@ -404,7 +404,9 @@ export function platformStylesheet(): string {
     wrap(
       '@media (forced-colors: active)',
       block([`${BOUNDARY} *`], { '--color-focus': 'inherit' }) +
-        block([BOUNDARY], { ...forced, ...FORCED_EFFECTS }),
+        block([BOUNDARY], { ...forced, ...FORCED_EFFECTS, 'scrollbar-color': 'auto' }) +
+        // The scheme's thumb and track give way to the system's, on the root as in a boundary.
+        block([':root'], { 'scrollbar-color': 'auto' }),
     ),
     // A Surface's level is a background image, which forced colors drop, over a transparent
     // color: Canvas keeps it opaque, and an overlay's edge shows in CanvasText, since its
