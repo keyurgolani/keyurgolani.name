@@ -35,7 +35,7 @@ const GATE_DOCS = {
     // The push half of quality-pr's base, by the script that chooses it.
     'the base `ci/quality-base.mjs` chooses: on a pull request',
     "on a push the branch's tip before it (`github.event.before`), fetched alone and diffed tree to tree",
-    'pnpm quality:full -- --shard=1/16',
+    'pnpm quality:full -- --shard=1/12',
     'pnpm quality:full -- --night=2026-10-24',
     'pnpm quality:merge',
     'pnpm quality:release',

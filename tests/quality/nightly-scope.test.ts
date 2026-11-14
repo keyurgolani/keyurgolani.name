@@ -23,7 +23,7 @@ import { checkoutMeta } from './plan-fixtures';
 // The nightly's scope (lib/nightly-scope.ts, row 151, the coordinator's (b1)): cut from the
 // reachable plan, every public composition's default-pack pairs at 390 and 1440 and the whole
 // pairwise array at 1440, default row, with the every-night harness, perf and visual groups, in a
-// 7-night cycle at 16 shards of 120 minutes, by the release's measured weights and pace.
+// 7-night cycle at 12 shards of 120 minutes, by the release's measured weights and pace.
 
 const ENGINES = RUN_ENGINES.full;
 const WEB = fileURLToPath(new URL('../../apps/web/', import.meta.url));
@@ -53,8 +53,8 @@ const rotation = (shards: number) => {
   return rotationFor(fullGroups(night, ENGINES, weights), weights, shards);
 };
 
-test('the nightly runs 16 shards of 120 minutes, its ceiling fitted at the release pace', () => {
-  assert.equal(fullShards.FULL_SHARDS, 16);
+test('the nightly runs 12 shards of 120 minutes, its ceiling fitted at the release pace', () => {
+  assert.equal(fullShards.FULL_SHARDS, 12);
   assert.equal(fullShards.NIGHTLY_TIMEOUT_MINUTES, 120);
   assert.equal(
     fullShards.NIGHTLY_CEILING,
@@ -84,11 +84,11 @@ test('(b1) every (c′) pair is in a test the 7-night cycle runs', () => {
   assert.equal(keys.length, night.tests.length);
 });
 
-test('(b1) each of the 7 nights fits the ceiling at 16 shards, and its slowest shard ends within 120 minutes at the release pace', () => {
-  const cycle = rotation(16);
+test('(b1) each of the 7 nights fits the ceiling at 12 shards, and its slowest shard ends within 120 minutes at the release pace', () => {
+  const cycle = rotation(fullShards.FULL_SHARDS);
   assert.equal(cycle.slices.length, 7);
   for (const [at, slice] of cycle.slices.entries()) {
-    assert.equal(slice.length, 16);
+    assert.equal(slice.length, 12);
     for (const shard of slice) {
       const estimate = fullEstimate(shard);
       assert.ok(
@@ -101,8 +101,8 @@ test('(b1) each of the 7 nights fits the ceiling at 16 shards, and its slowest s
   }
 });
 
-test('(b1) 12 shards still fit the 7-night cycle', () => {
-  const cycle = rotation(12);
+test('(b1) 16 shards fit the 7-night cycle too', () => {
+  const cycle = rotation(16);
   assert.equal(cycle.nights, 7);
   assert.ok(cycle.slowest <= fullShards.NIGHTLY_CEILING);
 });

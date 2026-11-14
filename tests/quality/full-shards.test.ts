@@ -237,7 +237,7 @@ function shippingCounts(meta: BuildMeta): Record<string, number> {
 }
 
 /** The model's cycle, and its release shard count in the checked-in release scope. */
-const CATALOG_NIGHTS = 28;
+const CATALOG_NIGHTS = 56;
 const CATALOG_SHARDS = 28;
 
 /** The scope file release.yml's and rc-preflight.yml's quality jobs name, and the env that names it. */
@@ -427,8 +427,12 @@ function testNights(
 /** The salts the balance test rolls the nights with: the plan's own, the empty one, and 49 more. */
 const SALTS = ['', ...Array.from({ length: 49 }, (_, at) => `salt-${at + 1}:`)];
 
-test('the caps: 16 shard jobs at once a night, 16 at release across its three jobs, and the release in as many waves of them as rc-quality-plan counts', () => {
-  assert.equal(FULL_SHARDS, 16, 'PR CI keeps 4 of the account’s 20 job slots a night');
+test('the caps: 12 shard jobs at once a night, 16 at release across its three jobs, and the release in as many waves of them as rc-quality-plan counts', () => {
+  assert.equal(
+    FULL_SHARDS,
+    12,
+    'the nightly holds 12 of the account’s 20 job slots, the most the repository’s CI holds',
+  );
   assert.equal(
     RELEASE_PARALLEL,
     16,
@@ -445,7 +449,7 @@ test('the caps: 16 shard jobs at once a night, 16 at release across its three jo
   const count = '${{ needs.rc-quality-plan.outputs.count }}';
   assert.deepEqual(
     SCHEDULED['quality-full']!.strategy?.matrix?.shard,
-    Array.from({ length: 16 }, (_, at) => at + 1),
+    Array.from({ length: 12 }, (_, at) => at + 1),
   );
   for (const [at, { id }] of RELEASE_JOBS.entries()) {
     assert.equal(
