@@ -140,9 +140,9 @@ jobs:
   # Whether a big run is in flight on the repository (ci/big-run.mjs): a
   # release-tag run of release.yml, or an inventory evidence run over the
   # release scope (c′), any run of .github/workflows/inventory.yml. When one
-  # is, quality-full and quality-verdict skip the night, so the nightly's 16
-  # shards never stand beside its 16 past the account's 20 job slots (row
-  # 151, the coordinator's ruling), and the job summary says which run it
+  # is, quality-full and quality-verdict skip the night, so the nightly's 12
+  # shards never stand beside a big run's past the account's 20 job slots,
+  # and the job summary says which run it
   # found; report counts their skip as expected. It holds actions: read to
   # list the runs, and nothing else.
   big-run:
@@ -197,7 +197,7 @@ jobs:
   # reports hold quality/fonts.observed.txt, the image's fonts, for
   # fonts.txt's bootstrap (CONTRIBUTING.md).
   quality-full:
-    name: quality-full (${{ matrix.shard }}/16)
+    name: quality-full (${{ matrix.shard }}/12)
     needs: [quality-night, big-run]
     if: ${{ needs.big-run.outputs.busy == 'false' }}
     runs-on: ubuntu-24.04
@@ -206,9 +206,9 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 16
+      max-parallel: 12
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
@@ -224,11 +224,11 @@ jobs:
         uses: ./.github/actions/install # zizmor: ignore[self-repository]
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/16 --night=${{ needs.quality-night.outputs.night }}
+      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/12 --night=${{ needs.quality-night.outputs.night }}
         env:
-          SHARD: ${{ matrix.shard }}/16
+          SHARD: ${{ matrix.shard }}/12
           NIGHT: ${{ needs.quality-night.outputs.night }}
-          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/16 --night=${{ needs.quality-night.outputs.night }}
+          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/12 --night=${{ needs.quality-night.outputs.night }}
           QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
         run: pnpm ci:quality-full "--shard=$SHARD" "--night=$NIGHT"
@@ -293,7 +293,7 @@ jobs:
       - name: pnpm ci:quality-verdict
         env:
           SHARDS: ${{ runner.temp }}/quality-shards
-        run: pnpm ci:quality-verdict "$SHARDS" --shards 16 --mode full
+        run: pnpm ci:quality-verdict "$SHARDS" --shards 12 --mode full
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs

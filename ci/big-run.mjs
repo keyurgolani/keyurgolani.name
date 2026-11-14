@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The nightly's pause (row 151, the coordinator's ruling, 2026-11-11): scheduled.yml's big-run job
 // asks whether a big run is in flight on the repository, and quality-full and quality-verdict skip
-// the night when one is, so the nightly's 16 shards never stand beside a big run's 16 past the
+// the night when one is, so the nightly's 12 shards never stand beside a big run's past the
 // account's 20 job slots. A big run is either:
 //
 // - a release-tag run: release.yml on a tag push (a candidate's or a final's), never its PR dry run;

@@ -4,12 +4,11 @@
 // heaviest-first assignment. Nothing here weighs a test again.
 //
 // The caps. A night holds no more than FULL_SHARDS of the account's 20 job
-// slots at once, and a release candidate no more than RELEASE_PARALLEL (its
-// rc-quality jobs' max-parallel together), so PR CI keeps the rest: 4 a
-// night and 4 while a candidate runs (the coordinator's rulings for v1.0.0,
-// 2026-11-11: 16 at once for each, the nightly's (b1) scope in a 7-night
-// cycle, lib/nightly-scope.ts). The nightly pauses while a release or an
-// inventory run is in flight (ci/big-run.mjs), so the two never hold 32.
+// slots at once, 12, and a release candidate no more than RELEASE_PARALLEL
+// (its rc-quality jobs' max-parallel together), 16, so other work keeps the
+// rest: the nightly's scope in a 7-night cycle (lib/nightly-scope.ts). The
+// nightly pauses while a release or an inventory run is in flight
+// (ci/big-run.mjs), so the two never stand together.
 //
 // The nightly rotation. The complete plan is more than one night of
 // FULL_SHARDS shards can run, so it runs over a cycle of N nights, the
@@ -74,10 +73,11 @@ import { visualCells, VISUAL_VIEWPORTS } from './visual';
 export const VISUAL_SPEC = 'visual.spec.ts';
 
 /**
- * The nightly's cap: the most shard jobs of a night at once, and the nightly's shard count: 16, so
- * the nightly's scope runs in a 7-night cycle (row 151, (b1)); 12 still fits 7.
+ * The nightly's cap: the most shard jobs of a night at once, and the nightly's shard count: 12, the
+ * most jobs this repository's CI holds at once, so the account's 20 keep room for other work. The nightly's
+ * scope runs in a 7-night cycle at 12 (nightly-scope.test.ts), and would at 16 too.
  */
-export const FULL_SHARDS = 16;
+export const FULL_SHARDS = 12;
 /**
  * The release's rc-quality matrix jobs, by job id, each with its max-parallel: three, since one
  * matrix makes at most MAX_RELEASE_SHARDS jobs, at 6, 5 and 5 at once, 16 together (the
