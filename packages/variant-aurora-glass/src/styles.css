@@ -839,6 +839,20 @@
   border-radius: var(--ui-radius-badge);
 }
 
+/*
+ * While its control is focused the slot reaches a pixel further out: a pixel more padding, given
+ * back as margin, so the control and the slot's neighbours stay where they are. On the round ends'
+ * upper halves the slot's edge (its border and the card shadow under it) met the ring's outer
+ * pixels; the pixel more of surface keeps the ring off it. The ring stays the platform's, and the
+ * slot's radius is the badge's either way, so the ring stays concentric with it.
+ */
+[data-variant='aurora-glass']
+  .ag-ornament
+  > [data-visitor-control-slot]:not(:empty):has(summary:focus-visible) {
+  margin: -1px;
+  padding: calc(var(--layout-capsule-pad) + 1px);
+}
+
 /* With no visitor control the empty slot takes no gap, so the ornament ends on the page's end line. */
 [data-variant='aurora-glass'] .ag-ornament > [data-visitor-control-slot]:empty {
   display: none;
