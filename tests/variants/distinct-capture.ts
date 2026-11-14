@@ -14,6 +14,12 @@
 // every pack axis and the display mode the visitor's (the quality sweep's
 // server), so a control's other tuple is the visitor's preference cookie on
 // the same server, as the quality sweep applies it.
+//
+// A look whose typography pack has optional faces (font-display: optional) is shot in those faces:
+// every context routes its requests, which turns the HTTP cache off, so each load is a first visit,
+// and an optional face that misses the browser's block window would leave its metric fallback in
+// the shot. The faces are pinned to their designed state before the navigation
+// (tests/harness/optional-faces.ts), so the guards compare packs as they're designed.
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -24,6 +30,7 @@ import { createAppearanceRegistry, PLATFORM_DEFAULTS } from '../../packages/appe
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { snapshotBoundary, type ParityNode } from '../../packages/variant-contract/src/node/parity';
 import { startApp } from '../harness/app-server.mjs';
+import { optionalFaces, pinFaces } from '../harness/optional-faces';
 import { accepts, readBuildMeta, siteTextFor } from '../quality/cells';
 import type { Tuple } from '../quality/coverage';
 import { sweepSiteText } from '../quality/lib/server';
@@ -370,6 +377,7 @@ export async function captureComposition({
           await context.addCookies(lookCookies(variant, look, app.origin));
           const page = await context.newPage();
           await page.addInitScript(seedRandomScript, RANDOM_SEED);
+          await pinFaces(page, await optionalFaces(page, ROUTE), 'designed');
           const response = await page.goto(ROUTE);
           expect(response?.status(), `${variant} ${look.name} ${viewport}: ${ROUTE}`).toBe(200);
           await settle(page);
