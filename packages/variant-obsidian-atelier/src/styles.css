@@ -39,6 +39,8 @@
   /* The composition's own lengths, each named. */
   --layout-underline: 0.3em;
   --layout-hairline: 1px;
+  /* A control's room for its focus ring, as the platform's plate gives the visitor's control under more contrast. */
+  --layout-ring-room: calc(2 * var(--ui-focus-width) + max(0px, var(--ui-focus-offset)));
   /* The room a link set among words keeps either side: its focus ring's reach, and 2px more. */
   --layout-ring-clear: calc(var(--ui-focus-width) + max(0px, var(--ui-focus-offset)) + 2px);
   --layout-pool-foot: 40%;
@@ -491,6 +493,23 @@
 /* With no control in the slot, its place closes up. */
 [data-variant='obsidian-atelier'] .oa-chrome__appearance:has([data-visitor-control-slot]:empty) {
   display: none;
+}
+
+/*
+ * The visitor's Appearance control is one more corner line, its summary the touch target's height
+ * with no band of its own above or under it, so the top row is the target's height wherever the
+ * control stands in it. With the disclosure's own padding and rules the row grew past the band the
+ * walls keep clear, and on a phone the name, centred in it, rang over the entrance's plaque.
+ * Under more contrast the platform sets the control on a plate with its ring's room round it; the
+ * plate's room stands past the row, above and below, so the row stays the target's height there too.
+ */
+[data-variant='obsidian-atelier'] .oa-chrome__appearance details {
+  padding-block: 0;
+  border-block: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome__appearance {
+  margin-block: calc(-1 * var(--layout-ring-room));
 }
 
 /*
