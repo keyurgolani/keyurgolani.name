@@ -1,0 +1,201 @@
+{
+  "source": "The 25 default-row cells that timed out at 240 s with no record in the inventory (runs 43166869592 and 43530446147, f5212efb5), run again on a tree whose default row has 360 s. Each job runs its tests by their @test tags; its log's failure summary says which still fail.",
+  "jobs": [
+    {
+      "label": "sample-t1",
+      "tests": 8,
+      "grep": "(@test-2417ca278867|@test-43626883483f|@test-56b88864050f|@test-6067378b82ee|@test-60f0c57d2fa3|@test-ac26b730851f|@test-ca8dc54fa9a6|@test-d084dc5ab5d6)",
+      "cells": [
+        {
+          "tag": "@test-2417ca278867",
+          "cell": "composition:schematic complete / schematic/platform-neutral/oled-black/humanist-ui/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43530446147-213"]
+        },
+        {
+          "tag": "@test-43626883483f",
+          "cell": "composition:schematic complete / schematic/platform-neutral/ocean-abyss/humanist-ui/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43530446147-589"]
+        },
+        {
+          "tag": "@test-56b88864050f",
+          "cell": "composition:schematic complete / schematic/platform-neutral/signal-paper/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-35"]
+        },
+        {
+          "tag": "@test-6067378b82ee",
+          "cell": "composition:schematic complete / schematic/material-expressive-inspired/desert-terracotta/console-mono/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-283"]
+        },
+        {
+          "tag": "@test-60f0c57d2fa3",
+          "cell": "composition:schematic complete / schematic/platform-neutral/warm-parchment/accessible-reading/system",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-270"]
+        },
+        {
+          "tag": "@test-ac26b730851f",
+          "cell": "composition:schematic complete / schematic/platform-neutral/sunset-ember/humanist-ui/high-contrast",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-351"]
+        },
+        {
+          "tag": "@test-ca8dc54fa9a6",
+          "cell": "composition:schematic complete / schematic/platform-neutral/warm-parchment/book-serif/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43530446147-419"]
+        },
+        {
+          "tag": "@test-d084dc5ab5d6",
+          "cell": "composition:schematic complete / schematic/platform-neutral/sunset-ember/humanist-ui/high-contrast",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-351"]
+        }
+      ]
+    },
+    {
+      "label": "sample-t2",
+      "tests": 9,
+      "grep": "(@test-1237a02fc092|@test-469776e993cd|@test-5b2688934d35|@test-9c24c5bfb1e7|@test-a3267f657a90|@test-a9310591ad41|@test-b9dc37e4bd25|@test-d69f44bbf9b6|@test-ed78635a8e48)",
+      "cells": [
+        {
+          "tag": "@test-1237a02fc092",
+          "cell": "composition:schematic complete / schematic/platform-neutral/drafting-blue/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43530446147-394"]
+        },
+        {
+          "tag": "@test-469776e993cd",
+          "cell": "composition:schematic complete / schematic/platform-neutral/signal-paper/humanist-ui/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-447"]
+        },
+        {
+          "tag": "@test-5b2688934d35",
+          "cell": "composition:schematic complete / schematic/platform-neutral/coral-lagoon/humanist-ui/light",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-151"]
+        },
+        {
+          "tag": "@test-9c24c5bfb1e7",
+          "cell": "composition:schematic complete / schematic/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-4"]
+        },
+        {
+          "tag": "@test-a3267f657a90",
+          "cell": "composition:schematic complete / schematic/platform-neutral/coral-lagoon/humanist-ui/light",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-151"]
+        },
+        {
+          "tag": "@test-a9310591ad41",
+          "cell": "composition:schematic complete / schematic/platform-neutral/forest-moss/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-462"]
+        },
+        {
+          "tag": "@test-b9dc37e4bd25",
+          "cell": "composition:aurora-glass complete / aurora-glass/letterpress/arctic-aurora/accessible-reading/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43530446147-607"]
+        },
+        {
+          "tag": "@test-d69f44bbf9b6",
+          "cell": "composition:schematic complete / schematic/platform-neutral/sunset-ember/humanist-ui/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-3"]
+        },
+        {
+          "tag": "@test-ed78635a8e48",
+          "cell": "composition:schematic complete / schematic/material-3-inspired/control-room/accessible-reading/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-102"]
+        }
+      ]
+    },
+    {
+      "label": "sample-t3",
+      "tests": 8,
+      "grep": "(@test-33816834095d|@test-4cdd1b1ab032|@test-53e035292d20|@test-7270945bb975|@test-865bb1e64e64|@test-8ba0b892fc8b|@test-e11177722ec3|@test-f9f51a6ff117)",
+      "cells": [
+        {
+          "tag": "@test-33816834095d",
+          "cell": "composition:schematic complete / schematic/platform-neutral/ocean-abyss/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-568"]
+        },
+        {
+          "tag": "@test-4cdd1b1ab032",
+          "cell": "composition:schematic complete / schematic/material-3-inspired/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-324"]
+        },
+        {
+          "tag": "@test-53e035292d20",
+          "cell": "composition:schematic complete / schematic/neumorphic/low-stimulus-warm/accessible-reading/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-429"]
+        },
+        {
+          "tag": "@test-7270945bb975",
+          "cell": "composition:schematic complete / schematic/platform-neutral/reduced-chroma/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-347"]
+        },
+        {
+          "tag": "@test-865bb1e64e64",
+          "cell": "composition:mission-control complete / mission-control/handcrafted-collage/night-terminal/accessible-reading/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-68"]
+        },
+        {
+          "tag": "@test-8ba0b892fc8b",
+          "cell": "composition:schematic complete / schematic/platform-neutral/liquid-dusk/humanist-ui/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-236"]
+        },
+        {
+          "tag": "@test-e11177722ec3",
+          "cell": "composition:schematic complete / schematic/platform-neutral/warm-parchment/humanist-ui/high-contrast",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-10"]
+        },
+        {
+          "tag": "@test-f9f51a6ff117",
+          "cell": "composition:swiss-signal complete / swiss-signal/memphis/neon-city/accessible-reading/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-118"]
+        }
+      ]
+    }
+  ]
+}
