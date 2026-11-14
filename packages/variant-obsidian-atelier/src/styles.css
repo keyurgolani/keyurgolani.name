@@ -577,13 +577,19 @@
  * 4.5:1 on the floor by floor-contrast.test.ts, and the inverse ink on it.
  * At rest its box already reaches past its glyphs and under its hanging
  * underline, its margins giving that back, so focus changes colors alone.
+ * The room's title on the entrance and the installation stands on the floor
+ * too (the section's ::after paints it), so its links do the same.
  */
-[data-variant='obsidian-atelier'] :is(.oa-wallfloor, .oa-floor__on) a {
+[data-variant='obsidian-atelier']
+  :is(.oa-wallfloor, .oa-floor__on, .oa-entrance__statement, .oa-installation__title)
+  a {
   margin: 0 calc(-1 * var(--space-3xs)) calc(-1 * var(--layout-underline));
   padding: 0 var(--space-3xs) var(--layout-underline);
 }
 
-[data-variant='obsidian-atelier'] :is(.oa-wallfloor, .oa-floor__on) a:focus-visible {
+[data-variant='obsidian-atelier']
+  :is(.oa-wallfloor, .oa-floor__on, .oa-entrance__statement, .oa-installation__title)
+  a:focus-visible {
   background-color: var(--color-text-primary);
   color: var(--color-text-inverse);
 }
