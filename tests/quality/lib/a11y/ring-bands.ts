@@ -28,6 +28,11 @@ export interface RingContrast {
   readonly held: Readonly<Record<RingSide, number>>;
   /** The whole line, each point read alone: how many are in the clips, and how many of them are strong. */
   readonly line: { readonly points: number; readonly strong: number };
+  /**
+   * Each point a side counts and doesn't hold strong, where it lies on the page (CSS px, the clip's
+   * own frame), so a caller can say what the ring crosses there.
+   */
+  readonly weak: readonly { readonly side: RingSide; readonly x: number; readonly y: number }[];
   /** The box the centre line runs round: the border box set out by the offset and half the width. */
   readonly box: Box;
 }
@@ -212,7 +217,14 @@ export function measureRing(
       ratio,
       band ? band.half : width / 2,
     );
-    return { side, counted: total > 0, strong: band !== null && strong > 0, arc: onArc(point) };
+    return {
+      side,
+      counted: total > 0,
+      strong: band !== null && strong > 0,
+      arc: onArc(point),
+      x: point.x,
+      y: point.y,
+    };
   });
   // The arc rule (row 146, the coordinator's ruling, option 1). Round a corner, where the paint
   // antialiases every pixel, a lone point under 3:1 is the blend, not a gap in the ring: an arc
@@ -262,6 +274,11 @@ export function measureRing(
     bands: painted,
     held: heldBy,
     line: { points: counted.length, strong: counted.filter((read) => read.strong).length },
+    weak: reads.flatMap((read, i) =>
+      read.counted && !read.strong && !held.has(i)
+        ? [{ side: read.side, x: read.x, y: read.y }]
+        : [],
+    ),
     box: {
       x: snapped.x - distance,
       y: snapped.y - distance,

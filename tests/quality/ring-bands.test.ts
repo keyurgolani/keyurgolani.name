@@ -175,6 +175,11 @@ for (const mode of ['light', 'dark'] as const) {
     const focused = without(shot, (x, y) => x > right - 4 && x < right + 1 && y > 400 && y < 420);
     const ring = measureRing(focused, shot.blurred, shot.clip, shot, held);
     assert.equal(whole(ring).right, false, JSON.stringify(ring));
+    // Each weak point named where it lies: on the right side, inside the stretch taken out.
+    const weak = ring.weak.filter(({ side }) => side === 'right');
+    assert.equal(weak.length, ring.sides.right.points - ring.sides.right.strong);
+    assert.ok(weak.length > 0);
+    for (const point of weak) assert.ok(point.y > 398 && point.y < 422, JSON.stringify(point));
   });
 
   test(`#scene-5's fold summary in ${mode} with a run of its bottom-right arc gone reads that corner weak (row 146)`, () => {
