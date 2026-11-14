@@ -4,6 +4,12 @@ import type { Page } from '@playwright/test';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
+import {
+  optionalFaces,
+  pinFaces,
+  renderedFonts,
+  type OptionalFace,
+} from '../harness/optional-faces';
 import { readHeader } from './aurora-glass-capsule-fit';
 
 // Row 150, Aurora Glass, the fix round (the coordinator's (a), (b) and (f), from the (iii) probe v3.2 and the motion-on
@@ -38,6 +44,9 @@ import { readHeader } from './aurora-glass-capsule-fit';
 //     place before it, and the capsule moved over when it came;
 //   - before the script runs (its chunks held back), Pause keeps its place unseen, at 864 the capsule's and at 1440
 //     the ornament's, and it is neither in the accessibility tree nor a Tab stop.
+// A pack with optional faces (its manifest's `display: optional`) runs every pin twice, its faces pinned each time
+// (tests/harness/optional-faces.ts): in its fallback faces, as a first visit the face misses, and in its own, as a
+// visit with them cached; after each test the display line is checked to have drawn in the face the state names.
 
 export type HeaderPack =
   | 'accessible-reading'
@@ -54,6 +63,20 @@ export type HeaderPack =
 
 const FIXTURE = contractFixture('complete');
 const DIR = path.dirname(FIXTURE.files.portfolio);
+
+/** Whether `pack`'s manifest has a face that loads optional. */
+const hasOptionalFaces = (pack: HeaderPack) =>
+  (
+    JSON.parse(
+      readFileSync(
+        new URL(
+          `../../packages/appearance-typography/packs/${pack}/manifest.json`,
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    ) as { fontAssets: { display?: string }[] }
+  ).fontAssets.some((asset) => asset.display === 'optional');
 
 export function headerFitOptions(pack: HeaderPack) {
   return {
@@ -177,21 +200,59 @@ const noteHits = (page: Page, id: string, box: number[]) =>
     { nid: id, at: box },
   );
 
-export function headerFit(
-  pack: HeaderPack,
-  pins: {
-    wide?: boolean;
-    load?: boolean;
-    turns?: boolean;
-    wrong?: boolean;
-    rootLoad?: boolean;
-    note?: boolean;
-    wideLoad?: boolean;
-    waiting?: boolean;
-  },
-) {
-  test.use({ appOptions: headerFitOptions(pack), contextOptions: { reducedMotion: 'reduce' } });
+type Pins = {
+  wide?: boolean;
+  load?: boolean;
+  turns?: boolean;
+  wrong?: boolean;
+  rootLoad?: boolean;
+  note?: boolean;
+  wideLoad?: boolean;
+  waiting?: boolean;
+};
 
+export function headerFit(pack: HeaderPack, pins: Pins) {
+  test.use({ appOptions: headerFitOptions(pack), contextOptions: { reducedMotion: 'reduce' } });
+  if (!hasOptionalFaces(pack)) {
+    definePins(pack, pins);
+    return;
+  }
+  for (const state of ['fallback', 'designed'] as const)
+    test.describe(state === 'fallback' ? 'in its fallback faces' : 'in its own faces', () => {
+      let faces: OptionalFace[] = [];
+      test.beforeEach(async ({ page }) => {
+        faces = await optionalFaces(page);
+        expect(faces.length, 'the pack has optional faces').toBeGreaterThan(0);
+        await pinFaces(page, faces, state);
+      });
+      test.afterEach(async ({ page }) => {
+        if (page.isClosed() || !page.url().startsWith('http')) return;
+        const family = await page.evaluate(() => {
+          const line = document.querySelector('.ag-id__line');
+          return line
+            ? getComputedStyle(line)
+                .fontFamily.split(',')[0]!
+                .trim()
+                .replace(/^"(.*)"$/, '$1')
+            : null;
+        });
+        const face = faces.find((each) => each.family === family);
+        if (!face) return;
+        const own = face.family.replace(/^\S+ /, '');
+        const drawn = await renderedFonts(page, '.ag-id__line');
+        console.log(
+          `header-fit ${pack} ${state}: the display line drew in ${JSON.stringify(drawn)}`,
+        );
+        expect(
+          drawn.some((font) => font.familyName.includes(own)),
+          `the display line drew in ${state === 'designed' ? own : 'its fallback'}`,
+        ).toBe(state === 'designed');
+      });
+      definePins(pack, pins);
+    });
+}
+
+function definePins(pack: HeaderPack, pins: Pins) {
   if (pins.wide)
     for (const root of ['100%', '200%'])
       test(
