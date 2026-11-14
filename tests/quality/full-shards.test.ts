@@ -238,7 +238,7 @@ function shippingCounts(meta: BuildMeta): Record<string, number> {
 
 /** The model's cycle, and its release shard count in the checked-in release scope. */
 const CATALOG_NIGHTS = 28;
-const CATALOG_SHARDS = 20;
+const CATALOG_SHARDS = 28;
 
 /** The scope file release.yml's and rc-preflight.yml's quality jobs name, and the env that names it. */
 const SCOPE_FILE = 'quality/release/scope.json';
@@ -544,10 +544,10 @@ test('the caps: 16 shard jobs at once a night, 16 at release across its three jo
 test("the nightly timeout is 120 minutes, its ceiling the release's measured pace fits to it, and N the fewest nights that fit it at the release's weights: the registry's own, and CATALOG_NIGHTS for #20's model, however the hash falls (row 151)", (t) => {
   assert.equal(NIGHTLY_TIMEOUT_MINUTES, 120);
   assert.equal(SCHEDULED['quality-full']!['timeout-minutes'], NIGHTLY_TIMEOUT_MINUTES);
-  // Fitted as the release's ceiling is: a shard estimated there takes, at rc.2's measured pace,
+  // Fitted as the release's ceiling is: a shard estimated there takes, at the measured pace,
   // at most the night's 120 minutes over the 1.5x margin.
   assert.equal(NIGHTLY_CEILING, fitReleaseCeiling(RELEASE_PACE, NIGHTLY_TIMEOUT_MINUTES));
-  assert.equal(NIGHTLY_CEILING, 6668);
+  assert.equal(NIGHTLY_CEILING, 5058);
   const atCeiling =
     RELEASE_PACE.overheadSeconds + RELEASE_PACE.pace * (NIGHTLY_CEILING - FULL_FIXED);
   assert.ok(atCeiling * TIMEOUT_MARGIN <= NIGHTLY_TIMEOUT_MINUTES * 60, String(atCeiling));

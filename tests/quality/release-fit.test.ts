@@ -11,11 +11,13 @@ import {
   RELEASE_PACE,
   RELEASE_PARALLEL,
   RELEASE_TIMEOUT_MINUTES,
+  releaseDurations,
   releasePlan,
   releaseTimeoutMinutes,
   TIMEOUT_MARGIN,
 } from './lib/full-shards';
-import { CELL_SPEC, testKey } from './lib/pr-shards';
+import { defaultTuple } from './cells';
+import { CELL_SPEC, loadDurations, testKey, testWeight } from './lib/pr-shards';
 import {
   measuredPace,
   measuredRelease,
@@ -28,6 +30,9 @@ import { runReleaseFit } from './release-fit';
 import * as releaseFit from './lib/release-fit';
 
 const RC2_RUN = fileURLToPath(new URL('./fixtures/release-run-42966517304.json', import.meta.url));
+const INVENTORY_RUN = fileURLToPath(
+  new URL('./fixtures/inventory-run-43166869592.json', import.meta.url),
+);
 
 /** A CI Linux run's times, made up: twelve servers' cell tests, a cell's three viewports, and one harness spec. */
 function times(overheadSeconds: number, pace?: number): ReleaseTimes {
@@ -51,46 +56,118 @@ function times(overheadSeconds: number, pace?: number): ReleaseTimes {
   return { source: 'a made-up run', overheadSeconds, tests };
 }
 
-test("the release cap stays 120 minutes, 16 at a time across its three jobs, and the per-shard target is the one rc.2's release run measured fits to it: 6,668 s", () => {
+test('the release cap stays 120 minutes, 16 at a time across its three jobs, and the per-shard target is the one the inventory run measured fits to it: 5,058 s', () => {
   assert.equal(RELEASE_TIMEOUT_MINUTES, 120);
   assert.equal(releaseTimeoutMinutes(), RELEASE_TIMEOUT_MINUTES);
   assert.equal(RELEASE_PARALLEL, 16);
   assert.ok(RELEASE_PACE.source.trim().length > 0, 'RELEASE_PACE names its source');
   assert.equal(RELEASE_CEILING, fitReleaseCeiling(RELEASE_PACE));
-  assert.equal(RELEASE_CEILING, 6668);
+  assert.equal(RELEASE_CEILING, 5058);
 });
 
-test("RELEASE_PACE is rc.2's release run 42966517304, fitted to its slowest shard: every shard's fixed part and estimate at that pace cover its measured job, and a shard at the ceiling keeps the 1.5x margin under 120 minutes", () => {
+test("RELEASE_PACE is inventory run 43166869592's at its median shard, over the release weights that run measured: a shard at the ceiling takes 80 minutes at the median, and the runners' spread past it stays inside the 1.5x margin", () => {
+  const run = releaseFit.loadShardRun(INVENTORY_RUN);
+  assert.equal(run.run, '43166869592');
+  assert.equal(run.commit, 'f5212efb54ef81e4f0c711cf42c7cc2800faec4e');
+  assert.equal(run.shards.length, 486);
+  const fitted = releaseFit.fitMedianPace(run);
+  // The fixed part is what each job took outside its run step, on the mean; the pace is the
+  // median shard's measured time past it, per second of its estimate past FULL_FIXED, rounded up.
+  assert.deepEqual(fitted, {
+    overheadSeconds: 78,
+    pace: 1.018,
+    spread: { p50: 1, p90: 1.21, max: 1.5 },
+  });
+  assert.deepEqual(
+    { overheadSeconds: RELEASE_PACE.overheadSeconds, pace: RELEASE_PACE.pace },
+    { overheadSeconds: fitted.overheadSeconds, pace: fitted.pace },
+  );
+  assert.match(RELEASE_PACE.source, /43166869592/);
+  assert.match(RELEASE_PACE.source, /median/);
+  // At the median, half the run's shards took no more than their fixed part and estimate give.
+  const covered = run.shards.filter(
+    (shard) =>
+      RELEASE_PACE.overheadSeconds + RELEASE_PACE.pace * (shard.estimate - FULL_FIXED) >=
+      shard.jobSeconds,
+  ).length;
+  assert.ok(covered >= run.shards.length / 2, `${covered} of ${run.shards.length}`);
+  // A shard estimated at the ceiling takes the cap over the margin at that pace, and the slowest
+  // runner's pace, 1.5x the median, still ends it inside the cap.
+  const usable = Math.floor((RELEASE_TIMEOUT_MINUTES * 60) / TIMEOUT_MARGIN);
+  const atCeiling =
+    RELEASE_PACE.overheadSeconds + RELEASE_PACE.pace * (RELEASE_CEILING - FULL_FIXED);
+  assert.ok(atCeiling <= usable, `${atCeiling} > ${usable}`);
+  assert.ok(fitted.spread.max <= TIMEOUT_MARGIN, `the spread ${fitted.spread.max}`);
+  const slowestRunner =
+    RELEASE_PACE.overheadSeconds +
+    RELEASE_PACE.pace * fitted.spread.max * (RELEASE_CEILING - FULL_FIXED);
+  assert.ok(slowestRunner <= RELEASE_TIMEOUT_MINUTES * 60, String(slowestRunner));
+});
+
+test("fitShardPace fits a run's slowest shard: rc.2's release run 42966517304, whose every shard its fixed part and estimate cover at that pace", () => {
   const run = releaseFit.loadShardRun(RC2_RUN);
   assert.equal(run.run, '42966517304');
   assert.equal(run.shards.length, 89);
   const fitted = releaseFit.fitShardPace(run);
-  // The fixed part is what each job took outside its run step, on the mean; the pace is the
-  // slowest shard's measured time past it, per second of its estimate past FULL_FIXED, rounded up.
   assert.deepEqual(fitted, { overheadSeconds: 51, pace: 0.76 });
-  assert.deepEqual(
-    { overheadSeconds: RELEASE_PACE.overheadSeconds, pace: RELEASE_PACE.pace },
-    fitted,
-  );
-  assert.match(RELEASE_PACE.source, /42966517304/);
-  assert.match(RELEASE_PACE.source, /slowest/);
-  // Fitted to the slowest, so it covers every shard the run had.
   for (const shard of run.shards) {
-    const predicted =
-      RELEASE_PACE.overheadSeconds + RELEASE_PACE.pace * (shard.estimate - FULL_FIXED);
+    const predicted = fitted.overheadSeconds + fitted.pace * (shard.estimate - FULL_FIXED);
     assert.ok(
       predicted >= shard.jobSeconds,
       `shard ${shard.shard}: ${predicted} < ${shard.jobSeconds}`,
     );
   }
-  // A shard estimated at the ceiling takes, at that pace, no more than the cap over the margin.
-  const usable = Math.floor((RELEASE_TIMEOUT_MINUTES * 60) / TIMEOUT_MARGIN);
-  const atCeiling =
-    RELEASE_PACE.overheadSeconds + RELEASE_PACE.pace * (RELEASE_CEILING - FULL_FIXED);
-  assert.ok(atCeiling <= usable, `${atCeiling} > ${usable}`);
-  assert.ok(atCeiling * TIMEOUT_MARGIN <= RELEASE_TIMEOUT_MINUTES * 60);
   // rc.2's own shards ran at most 40.1 minutes against the 80 its ceiling allowed.
   assert.equal(Math.max(...run.shards.map((shard) => shard.jobSeconds)), 2407);
+});
+
+test("the release weights are inventory run 43166869592's means by target, viewport and row: a test of a measured key weighs its mean, a skipped test the measured skip, and the PR weights hold none of them", () => {
+  const durations = loadDurations();
+  const release = durations.release!;
+  assert.match(release.source ?? '', /43166869592/);
+  const targets = release.targets!;
+  assert.equal(Object.keys(targets).length, 378);
+  assert.equal(release.skipped, 7.1);
+  for (const [key, seconds] of Object.entries(targets)) {
+    assert.match(key, /^[a-z0-9-]+ \d+x\d+ [a-z-]+$/, key);
+    assert.ok(Number.isFinite(seconds) && seconds > 0, key);
+  }
+  const weights = releaseDurations(durations);
+  const test = (target: string, row: string, skip?: string) => ({
+    cell: {
+      kind: 'composition' as const,
+      state: 'complete',
+      tuple: defaultTuple(target, 'system'),
+      target,
+    },
+    viewport: { id: '1440x900' },
+    row: { id: row },
+    conditions: true,
+    engineSkips: {},
+    ...(skip ? { skip } : {}),
+  });
+  assert.equal(
+    testWeight(test('raw-grid', 'default'), 'chromium', weights),
+    targets['raw-grid 1440x900 default'],
+  );
+  assert.equal(
+    testWeight(test('kinetic-cosmos', 'print'), 'chromium', weights),
+    targets['kinetic-cosmos 1440x900 print'],
+  );
+  assert.equal(testWeight(test('raw-grid', 'default', 'a stand-in'), 'chromium', weights), 7.1);
+  // A key the run didn't time weighs as the p90 weights would have it, without the targets.
+  const { targets: _measured, ...p90 } = weights;
+  void _measured;
+  assert.equal(
+    testWeight(test('a-new-composition', 'default'), 'chromium', weights),
+    testWeight(test('a-new-composition', 'default'), 'chromium', p90),
+  );
+  // The PR's own weights have no measured targets, so a PR shard weighs as it did.
+  assert.equal(durations.targets, undefined);
+  assert.notEqual(
+    testWeight(test('raw-grid', 'default'), 'chromium', durations),
+    targets['raw-grid 1440x900 default'],
+  );
 });
 
 test('a run file without its shards, or a shard without its estimate, fails to fit', () => {
