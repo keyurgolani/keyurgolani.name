@@ -328,16 +328,16 @@ test("a swept test that didn't run fails plan-coverage, naming its pack and vari
   }
 });
 
-test("a cell test's timeout is its own 240 s plus the time it waited for the isolation lock, so a test that waited for a perf test keeps its whole budget", async () => {
+test("a cell test's timeout is its own budget plus the time it waited for the isolation lock, so a test that waited for a perf test keeps its whole budget", async () => {
   const plan = planCells({ meta: twoPacks(), registrations, mode: 'pr', changes: CHANGES });
   const plain = plan.cells.find((each) => !each.sweep)!;
-  const own = plan.tests.find((each) => each.cell === plain)!;
+  const own = plan.tests.find((each) => each.cell === plain && each.row.id === 'default')!;
   // Push B's CI (42951677137): Editorial Evidence's 1440 default waited about 93 s for chapters' perf
   // test, then timed out at exactly 240,000 ms, since runCell's timeout replaced the fixture's extension.
   for (const [waited, wanted] of [
-    [null, 240_000],
-    [0, 240_000],
-    [93_000, 333_000],
+    [null, 360_000],
+    [0, 360_000],
+    [93_000, 453_000],
   ] as const) {
     const { dir, testInfo, expect, page } = stubRun(null);
     const set: number[] = [];

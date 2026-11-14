@@ -504,8 +504,19 @@ export async function audit(
   }
 }
 
-/** A cell test does a lot: the default row reloads under every condition. */
+/** A cell test does a lot: its row's pass, or a swept cell's four. */
 const CELL_TIMEOUT_MS = 240_000;
+
+/**
+ * The default row does the most: it reloads under every condition, the keyboard walk's included.
+ * CI Linux ran its slowest cells to 252 s (inventory sample run 43621049594, at the release's two
+ * workers), so it has 360 s, 1.25 times that with room.
+ */
+const DEFAULT_ROW_TIMEOUT_MS = 360_000;
+
+/** A cell test's own budget: the default row's for a plain cell's default row, else the cell's. */
+const cellTimeoutMs = (cell: Cell, row: PreferenceRow) =>
+  !cell.sweep && row.id === 'default' ? DEFAULT_ROW_TIMEOUT_MS : CELL_TIMEOUT_MS;
 
 /** Where a swept page's init script keeps what localStorage held as the document began. */
 const STORAGE_AT_START = '__qualityStorageAtStart';
@@ -902,7 +913,7 @@ function cellExceptions(): Promise<readonly QualityException[]> {
 export async function runCell(run: CellRun, pass: typeof runPass = runPass) {
   const { cell, testInfo, expect } = run;
   // Its own budget, plus the time it waited for the isolation lock (lib/perf/isolation.ts).
-  setOwnTimeout(testInfo, CELL_TIMEOUT_MS);
+  setOwnTimeout(testInfo, cellTimeoutMs(cell, run.row));
   // First, so a cell that throws carries them too.
   testInfo.annotations.push(...cellAnnotations(cell));
   const passes: Pass[] = [];
