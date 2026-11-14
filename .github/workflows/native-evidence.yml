@@ -1,0 +1,89 @@
+name: native-evidence
+
+# Evidence only, never merged: the native UI's browser reads on CI Linux, on a push to its two
+# evidence branches, the head and its base twin, alone: no other workflow runs on these branch
+# names, so the evidence takes one runner, not the complete product's. Read-only, no secrets.
+on:
+  push:
+    branches: [kgn/v1-native-evidence, kgn/v1-native-evidence-base]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-evidence-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  # As ci.yml's: the Node release the image ships.
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+  NEXT_TELEMETRY_DISABLED: '1'
+  REPORT_RETENTION_DAYS: 14
+
+jobs:
+  # Evidence only, never merged: the native UI's browser reads on CI Linux, at this branch's head,
+  # with _ci-evidence/native/playwright.config.ts (the repository's own browser config, its specs
+  # in that folder): scheme.spec.ts in Chromium, Firefox and WebKit, reading what each engine
+  # computes for the document root's and a scroller's scrollbar and the accent, light, dark and
+  # under more contrast, and forced colors; Horizontal Cinema's scrubber checks with a shot of each;
+  # and the classic-bar looks, Aurora Glass, Terra Field, Horizontal Cinema and Singular at 1440x900,
+  # light and dark, as Linux Chromium draws a bar with its track painted. The same commit sits on
+  # the head and on its base twin, whose scheme reads fail by design. The run's exit is data,
+  # printed; the job fails only on a listing of other than EV_COUNT tests.
+  native-evidence:
+    name: native-evidence (scheme reads, scrubber, classic bars)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      CI_REPORTS_DIR: reports/native-evidence
+      EV_CONFIG: _ci-evidence/native/playwright.config.ts
+      EV_COUNT: '35'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install # zizmor: ignore[self-repository]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: List the job's tests
+        shell: bash
+        run: |
+          pnpm exec playwright test --config "$EV_CONFIG" --list > "$RUNNER_TEMP/list.txt" 2>&1 || true
+          cat "$RUNNER_TEMP/list.txt"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{if (n == "") print "unread"; else print n}' "$RUNNER_TEMP/list.txt")
+          echo "[native] listed $total test(s); want exactly $EV_COUNT"
+          [ "$total" = "$EV_COUNT" ] || { echo "[native] FAIL: listed $total, not $EV_COUNT"; exit 1; }
+      - name: Run them
+        shell: bash
+        env:
+          EV_OUT: reports/native-evidence/reads
+          LOOK_OUT: reports/native-evidence/looks
+          SCRUB_SHOTS: reports/native-evidence/scrubber
+        run: |
+          rc=0
+          pnpm exec playwright test --config "$EV_CONFIG" --retries=0 || rc=$?
+          echo "[native] the run exited $rc (data: the base twin's scheme reads fail by design)"
+      - name: The reads, printed
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          for f in reports/native-evidence/reads/*.json reports/native-evidence/looks/*.json; do
+            [ -e "$f" ] || continue
+            echo "$f $(tr -d '\n' < "$f" | tr -s ' ')"
+          done
+      - name: Upload the evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-evidence
+          path: reports/native-evidence/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
