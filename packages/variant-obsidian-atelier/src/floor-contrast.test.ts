@@ -207,9 +207,11 @@ test('the floor holds the primary ink at 4.5:1, the light under it would too and
   );
 });
 
-test('focus on the floor takes the primary ink as its ground, 4.5:1 on the floor as above, and the inverse ink on it at 4.5:1, since the focus color falls short there', () => {
+test("focus on the floor, the room's title's included, takes the primary ink as its ground, 4.5:1 on the floor as above, and the inverse ink on it at 4.5:1, since the focus color falls short there", () => {
   const rule =
-    /:is\(\.oa-wallfloor, \.oa-floor__on\) a:focus-visible \{([^}]*)\}/.exec(STYLES)?.[1] ?? '';
+    /:is\(\.oa-wallfloor, \.oa-floor__on, \.oa-entrance__statement, \.oa-installation__title\)\s+a:focus-visible \{([^}]*)\}/.exec(
+      STYLES,
+    )?.[1] ?? '';
   assert.match(rule, /background-color: var\(--color-text-primary\)/);
   assert.match(rule, /color: var\(--color-text-inverse\)/);
   const floor = Number(FLOOR.exec(STYLES)?.[1]);
