@@ -1,0 +1,634 @@
+{
+  "source": "A confirming sample of the inventory (runs 43166869592 and 43530446147, f5212efb5) on a later tree: one test per failing family (composition, check and rule) that no routed record covers whole, the test with the most of its records, and every test that timed out at 240 s with no record. Each job runs its tests by their @test tags; its log's failure summary says which still fail.",
+  "jobs": [
+    {
+      "label": "sample-f1",
+      "tests": 9,
+      "grep": "(@test-18a714e780c6|@test-50d3b841cc2e|@test-63d1adbd957e|@test-8c833c4bbd88|@test-9703ccdb7367|@test-99f8d21dfdda|@test-a2b26bffdded|@test-b14f050e1767|@test-b6b0fb891886)",
+      "cells": [
+        {
+          "tag": "@test-18a714e780c6",
+          "cell": "composition:obsidian-atelier complete / obsidian-atelier/industrial/warm-parchment/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["composition:obsidian-atelier occlusion obscured"]
+        },
+        {
+          "tag": "@test-50d3b841cc2e",
+          "cell": "composition:editorial-evidence complete / editorial-evidence/platform-neutral/warm-parchment/technical-sans-mono/system",
+          "viewport": "390x844",
+          "row": "contrast-more",
+          "reads": ["composition:editorial-evidence axe target-size"]
+        },
+        {
+          "tag": "@test-63d1adbd957e",
+          "cell": "composition:mission-control complete / mission-control/blueprint/low-stimulus-warm/neutral-ui/dark",
+          "viewport": "1024x768",
+          "row": "forced-colors",
+          "reads": ["composition:mission-control focus perimeter"]
+        },
+        {
+          "tag": "@test-8c833c4bbd88",
+          "cell": "composition:swiss-signal complete / swiss-signal/memphis/neon-city/accessible-reading/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["composition:swiss-signal reflow root-text"]
+        },
+        {
+          "tag": "@test-9703ccdb7367",
+          "cell": "composition:horizontal-cinema complete / horizontal-cinema/bauhaus-geometric/low-stimulus-warm/humanist-ui/dark",
+          "viewport": "1440x900",
+          "row": "forced-colors",
+          "reads": [
+            "composition:horizontal-cinema focus contrast",
+            "composition:horizontal-cinema focus visible"
+          ]
+        },
+        {
+          "tag": "@test-99f8d21dfdda",
+          "cell": "composition:horizontal-cinema complete / horizontal-cinema/bauhaus-geometric/low-stimulus-warm/humanist-ui/dark",
+          "viewport": "1024x768",
+          "row": "contrast-more",
+          "reads": ["composition:horizontal-cinema focus perimeter"]
+        },
+        {
+          "tag": "@test-a2b26bffdded",
+          "cell": "composition:flux complete / flux/retro-web/night-terminal/console-mono/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["composition:flux occlusion obscured"]
+        },
+        {
+          "tag": "@test-b14f050e1767",
+          "cell": "composition:terra-field complete / terra-field/platform-neutral/warm-parchment/accessible-reading/system",
+          "viewport": "1440x900",
+          "row": "forced-colors",
+          "reads": ["composition:terra-field focus perimeter"]
+        },
+        {
+          "tag": "@test-b6b0fb891886",
+          "cell": "composition:flux complete /work/project-name flux/platform-neutral/warm-parchment/humanist-ui/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["composition:flux reflow reflow"]
+        }
+      ]
+    },
+    {
+      "label": "sample-f2",
+      "tests": 9,
+      "grep": "(@test-0a9ee35f4ece|@test-11e544b580ef|@test-27c9cd744822|@test-28eb1cf88b4a|@test-3b97ee43950c|@test-79428a9b64dc|@test-7df9f17d7f82|@test-860628e1ab42|@test-db34718f8e01)",
+      "cells": [
+        {
+          "tag": "@test-0a9ee35f4ece",
+          "cell": "composition:editorial-evidence complete /work/project-name editorial-evidence/platform-neutral/warm-parchment/humanist-ui/dark",
+          "viewport": "1440x900",
+          "row": "contrast-more",
+          "reads": ["composition:editorial-evidence focus perimeter"]
+        },
+        {
+          "tag": "@test-11e544b580ef",
+          "cell": "composition:swiss-signal complete / swiss-signal/platform-neutral/pastel-sorbet/humanist-ui/dark",
+          "viewport": "1024x768",
+          "row": "print",
+          "reads": ["composition:swiss-signal axe color-contrast"]
+        },
+        {
+          "tag": "@test-27c9cd744822",
+          "cell": "composition:schematic complete / schematic/fluent-2-inspired/neon-city/drafting-grotesk/dark",
+          "viewport": "390x844",
+          "row": "forced-colors",
+          "reads": ["composition:schematic focus perimeter"]
+        },
+        {
+          "tag": "@test-28eb1cf88b4a",
+          "cell": "composition:shell complete / shell/letterpress/control-room/book-serif/dark",
+          "viewport": "390x844",
+          "row": "contrast-more",
+          "reads": ["composition:shell focus perimeter"]
+        },
+        {
+          "tag": "@test-3b97ee43950c",
+          "cell": "composition:aurora-glass complete / aurora-glass/fluent-2-inspired/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["composition:aurora-glass focus perimeter"]
+        },
+        {
+          "tag": "@test-79428a9b64dc",
+          "cell": "composition:schematic complete / schematic/material-3-inspired/control-room/accessible-reading/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": [
+            "composition:schematic reflow root-text",
+            "composition:schematic reflow reflow",
+            "composition:schematic reflow zoom"
+          ]
+        },
+        {
+          "tag": "@test-7df9f17d7f82",
+          "cell": "composition:obsidian-atelier complete / obsidian-atelier/glassmorphism/lavender-dusk/accessible-reading/dark",
+          "viewport": "1024x768",
+          "row": "default",
+          "reads": ["composition:obsidian-atelier focus perimeter"]
+        },
+        {
+          "tag": "@test-860628e1ab42",
+          "cell": "composition:flux complete / flux/glassmorphism/iridescent-pearl/geometric-display/high-contrast",
+          "viewport": "390x844",
+          "row": "no-javascript",
+          "reads": ["composition:flux axe target-size", "composition:flux contrast text"]
+        },
+        {
+          "tag": "@test-db34718f8e01",
+          "cell": "composition:singular complete /work/project-name singular/platform-neutral/warm-parchment/humanist-ui/dark",
+          "viewport": "1024x768",
+          "row": "contrast-more",
+          "reads": ["composition:singular contrast high-contrast-text"]
+        }
+      ]
+    },
+    {
+      "label": "sample-f3",
+      "tests": 8,
+      "grep": "(@test-14aedbbd169a|@test-8f1a21f5e2a6|@test-97e75dc83bfc|@test-b1f896aa5af6|@test-bc8a65da8583|@test-d2e652937ffa|@test-f8b03d358b31|@test-fafb3c3baeae)",
+      "cells": [
+        {
+          "tag": "@test-14aedbbd169a",
+          "cell": "composition:swiss-signal complete / swiss-signal/carbon-inspired/drafting-blue/drafting-grotesk/dark",
+          "viewport": "1440x900",
+          "row": "forced-colors",
+          "reads": ["composition:swiss-signal focus perimeter"]
+        },
+        {
+          "tag": "@test-8f1a21f5e2a6",
+          "cell": "composition:singular complete / singular/letterpress/cool-color-safe/accessible-reading/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["composition:singular reflow reflow"]
+        },
+        {
+          "tag": "@test-97e75dc83bfc",
+          "cell": "composition:horizontal-cinema complete / horizontal-cinema/glassmorphism/liquid-dusk/shell-mono/dark",
+          "viewport": "1024x768",
+          "row": "no-javascript",
+          "reads": ["composition:horizontal-cinema axe target-size"]
+        },
+        {
+          "tag": "@test-b1f896aa5af6",
+          "cell": "composition:schematic complete / schematic/platform-neutral/poster-primaries/humanist-ui/light",
+          "viewport": "1024x768",
+          "row": "default",
+          "reads": ["composition:schematic contrast large-text"]
+        },
+        {
+          "tag": "@test-bc8a65da8583",
+          "cell": "composition:obsidian-atelier complete / obsidian-atelier/art-deco/iridescent-pearl/neutral-ui/high-contrast",
+          "viewport": "1024x768",
+          "row": "reduced-transparency",
+          "reads": ["composition:obsidian-atelier contrast high-contrast-text"]
+        },
+        {
+          "tag": "@test-d2e652937ffa",
+          "cell": "composition:spatial-bento complete / spatial-bento/platform-neutral/warm-parchment/humanist-ui/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["composition:spatial-bento reflow root-text"]
+        },
+        {
+          "tag": "@test-f8b03d358b31",
+          "cell": "composition:swiss-signal complete / swiss-signal/international-grid/coral-lagoon/console-mono/dark",
+          "viewport": "390x844",
+          "row": "no-javascript",
+          "reads": ["composition:swiss-signal axe target-size"]
+        },
+        {
+          "tag": "@test-fafb3c3baeae",
+          "cell": "composition:schematic complete / schematic/glassmorphism/forest-moss/paste-up/system",
+          "viewport": "1024x768",
+          "row": "contrast-more",
+          "reads": ["composition:schematic axe target-size"]
+        }
+      ]
+    },
+    {
+      "label": "sample-f4",
+      "tests": 9,
+      "grep": "(@test-5a17e56bf8bd|@test-5cdf057bd8f5|@test-6fc90696e241|@test-7bed95bb6393|@test-851fee11861e|@test-9e1a1ee4be4b|@test-9f42930c36f1|@test-ab33f36520b9|@test-cfcf841a9639)",
+      "cells": [
+        {
+          "tag": "@test-5a17e56bf8bd",
+          "cell": "composition:aurora-glass complete / aurora-glass/art-deco/arctic-aurora/accessible-reading/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["composition:aurora-glass reflow root-text"]
+        },
+        {
+          "tag": "@test-5cdf057bd8f5",
+          "cell": "composition:editorial-evidence complete / editorial-evidence/art-deco/blue-orange-color-safe/drafting-grotesk/high-contrast",
+          "viewport": "1440x900",
+          "row": "contrast-more",
+          "reads": ["composition:editorial-evidence keyboard reachable"]
+        },
+        {
+          "tag": "@test-6fc90696e241",
+          "cell": "composition:shell complete / shell/platform-neutral/aurora-meadow/humanist-ui/light",
+          "viewport": "1024x768",
+          "row": "default",
+          "reads": ["composition:shell contrast text", "composition:shell axe color-contrast"]
+        },
+        {
+          "tag": "@test-7bed95bb6393",
+          "cell": "composition:spatial-bento complete / spatial-bento/neumorphic/sepia-film/swiss-grotesque/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["composition:spatial-bento focus perimeter"]
+        },
+        {
+          "tag": "@test-851fee11861e",
+          "cell": "composition:kinetic-cosmos complete / kinetic-cosmos/paper-tactile/paper-ink/accessible-reading/dark",
+          "viewport": "1024x768",
+          "row": "contrast-more",
+          "reads": ["composition:kinetic-cosmos focus contrast"]
+        },
+        {
+          "tag": "@test-9e1a1ee4be4b",
+          "cell": "composition:swiss-signal complete / swiss-signal/platform-neutral/warm-parchment/humanist-ui/dark",
+          "viewport": "390x844",
+          "row": "contrast-more",
+          "reads": ["composition:swiss-signal contrast high-contrast-large-text"]
+        },
+        {
+          "tag": "@test-9f42930c36f1",
+          "cell": "composition:raw-grid complete /work/project-name raw-grid/platform-neutral/warm-parchment/humanist-ui/dark",
+          "viewport": "1024x768",
+          "row": "contrast-more",
+          "reads": ["composition:raw-grid focus perimeter"]
+        },
+        {
+          "tag": "@test-ab33f36520b9",
+          "cell": "composition:aurora-glass complete / aurora-glass/atelier-luxury/desert-terracotta/accessible-reading/dark",
+          "viewport": "1024x768",
+          "row": "reduced-motion",
+          "reads": ["composition:aurora-glass axe target-size"]
+        },
+        {
+          "tag": "@test-cfcf841a9639",
+          "cell": "composition:swiss-signal complete / swiss-signal/platform-neutral/warm-parchment/humanist-ui/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["composition:swiss-signal contrast large-text"]
+        }
+      ]
+    },
+    {
+      "label": "sample-f5",
+      "tests": 10,
+      "grep": "(@test-17bfde7407fb|@test-595070259b78|@test-69b53ef92702|@test-6a9abf1bfe35|@test-94d1fc20ee84|@test-a00fbd47ae80|@test-c397f4ad202b|@test-d2bb8abc509b|@test-e94024c45586|@test-f4ba2bdd6dc9)",
+      "cells": [
+        {
+          "tag": "@test-17bfde7407fb",
+          "cell": "composition:chapters complete / chapters/platform-neutral/coral-lagoon/humanist-ui/light",
+          "viewport": "1024x768",
+          "row": "default",
+          "reads": ["composition:chapters focus perimeter"]
+        },
+        {
+          "tag": "@test-595070259b78",
+          "cell": "composition:horizontal-cinema complete / horizontal-cinema/primer-inspired/sunset-ember/book-serif/system",
+          "viewport": "1024x768",
+          "row": "print",
+          "reads": ["composition:horizontal-cinema contrast text"]
+        },
+        {
+          "tag": "@test-69b53ef92702",
+          "cell": "composition:flux complete / flux/bauhaus-geometric/aurora-meadow/drafting-grotesk/dark",
+          "viewport": "1024x768",
+          "row": "print",
+          "reads": ["composition:flux axe color-contrast"]
+        },
+        {
+          "tag": "@test-6a9abf1bfe35",
+          "cell": "composition:chapters complete / chapters/bauhaus-geometric/botanical-sage/accessible-reading/high-contrast",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["composition:chapters reflow root-text"]
+        },
+        {
+          "tag": "@test-94d1fc20ee84",
+          "cell": "composition:raw-grid complete / raw-grid/cyberpunk/liquid-dusk/accessible-reading/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["composition:raw-grid occlusion obscured"]
+        },
+        {
+          "tag": "@test-a00fbd47ae80",
+          "cell": "composition:kinetic-cosmos complete / kinetic-cosmos/art-deco/forest-moss/shell-mono/dark",
+          "viewport": "1024x768",
+          "row": "default",
+          "reads": [
+            "composition:kinetic-cosmos contrast text",
+            "composition:kinetic-cosmos contrast large-text"
+          ]
+        },
+        {
+          "tag": "@test-c397f4ad202b",
+          "cell": "composition:raw-grid complete / raw-grid/raw-brutalist/warm-parchment/humanist-ui/system",
+          "viewport": "1024x768",
+          "row": "default",
+          "reads": ["composition:raw-grid contrast text"]
+        },
+        {
+          "tag": "@test-d2bb8abc509b",
+          "cell": "composition:kinetic-cosmos complete / kinetic-cosmos/art-deco/forest-moss/shell-mono/dark",
+          "viewport": "1024x768",
+          "row": "contrast-more",
+          "reads": [
+            "composition:kinetic-cosmos contrast high-contrast-text",
+            "composition:kinetic-cosmos contrast high-contrast-large-text"
+          ]
+        },
+        {
+          "tag": "@test-e94024c45586",
+          "cell": "composition:spatial-bento complete / spatial-bento/neumorphic/warm-parchment/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["composition:spatial-bento focus contrast"]
+        },
+        {
+          "tag": "@test-f4ba2bdd6dc9",
+          "cell": "composition:shell complete / shell/atelier-luxury/low-stimulus-warm/geometric-display/dark",
+          "viewport": "1024x768",
+          "row": "contrast-more",
+          "reads": ["composition:shell axe target-size"]
+        }
+      ]
+    },
+    {
+      "label": "sample-f6",
+      "tests": 9,
+      "grep": "(@test-0bcf29776d84|@test-23caead1697d|@test-5508341b88a8|@test-7315b1caa981|@test-781ff5d131b7|@test-b6a47eca26fd|@test-c3a280fef038|@test-c84c561a4756|@test-d4d521acd69c)",
+      "cells": [
+        {
+          "tag": "@test-0bcf29776d84",
+          "cell": "composition:horizontal-cinema complete / horizontal-cinema/platform-neutral/warm-parchment/accessible-reading/system",
+          "viewport": "1024x768",
+          "row": "no-javascript",
+          "reads": ["composition:horizontal-cinema contrast large-text"]
+        },
+        {
+          "tag": "@test-23caead1697d",
+          "cell": "composition:schematic complete / schematic/neobrutalist/poster-primaries/geometric-display/high-contrast",
+          "viewport": "1024x768",
+          "row": "default",
+          "reads": ["composition:schematic contrast high-contrast-text"]
+        },
+        {
+          "tag": "@test-5508341b88a8",
+          "cell": "composition:obsidian-atelier missing-media / obsidian-atelier/platform-neutral/warm-parchment/humanist-ui/dark",
+          "viewport": "390x844",
+          "row": "reduced-transparency",
+          "reads": ["composition:obsidian-atelier contrast text"]
+        },
+        {
+          "tag": "@test-7315b1caa981",
+          "cell": "composition:singular complete / singular/blueprint/lavender-dusk/humanist-ui/dark",
+          "viewport": "390x844",
+          "row": "contrast-more",
+          "reads": ["composition:singular focus perimeter"]
+        },
+        {
+          "tag": "@test-781ff5d131b7",
+          "cell": "composition:horizontal-cinema complete / horizontal-cinema/bauhaus-geometric/warm-parchment/humanist-ui/system",
+          "viewport": "1024x768",
+          "row": "contrast-more",
+          "reads": ["composition:horizontal-cinema contrast high-contrast-text"]
+        },
+        {
+          "tag": "@test-b6a47eca26fd",
+          "cell": "composition:obsidian-atelier missing-media / obsidian-atelier/platform-neutral/warm-parchment/humanist-ui/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["composition:obsidian-atelier reflow root-text"]
+        },
+        {
+          "tag": "@test-c3a280fef038",
+          "cell": "composition:kinetic-cosmos complete / kinetic-cosmos/letterpress/low-stimulus-warm/paste-up/dark",
+          "viewport": "1024x768",
+          "row": "forced-colors",
+          "reads": ["composition:kinetic-cosmos focus perimeter"]
+        },
+        {
+          "tag": "@test-c84c561a4756",
+          "cell": "composition:mission-control complete / mission-control/art-deco/graphite/swiss-grotesque/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["composition:mission-control reflow root-text"]
+        },
+        {
+          "tag": "@test-d4d521acd69c",
+          "cell": "composition:flux complete / flux/fluent-2-inspired/liquid-dusk/neutral-ui/dark",
+          "viewport": "390x844",
+          "row": "forced-colors",
+          "reads": ["composition:flux focus perimeter"]
+        }
+      ]
+    },
+    {
+      "label": "sample-t1",
+      "tests": 8,
+      "grep": "(@test-2417ca278867|@test-43626883483f|@test-56b88864050f|@test-6067378b82ee|@test-60f0c57d2fa3|@test-ac26b730851f|@test-ca8dc54fa9a6|@test-d084dc5ab5d6)",
+      "cells": [
+        {
+          "tag": "@test-2417ca278867",
+          "cell": "composition:schematic complete / schematic/platform-neutral/oled-black/humanist-ui/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43530446147-213"]
+        },
+        {
+          "tag": "@test-43626883483f",
+          "cell": "composition:schematic complete / schematic/platform-neutral/ocean-abyss/humanist-ui/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43530446147-589"]
+        },
+        {
+          "tag": "@test-56b88864050f",
+          "cell": "composition:schematic complete / schematic/platform-neutral/signal-paper/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-35"]
+        },
+        {
+          "tag": "@test-6067378b82ee",
+          "cell": "composition:schematic complete / schematic/material-expressive-inspired/desert-terracotta/console-mono/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-283"]
+        },
+        {
+          "tag": "@test-60f0c57d2fa3",
+          "cell": "composition:schematic complete / schematic/platform-neutral/warm-parchment/accessible-reading/system",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-270"]
+        },
+        {
+          "tag": "@test-ac26b730851f",
+          "cell": "composition:schematic complete / schematic/platform-neutral/sunset-ember/humanist-ui/high-contrast",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-351"]
+        },
+        {
+          "tag": "@test-ca8dc54fa9a6",
+          "cell": "composition:schematic complete / schematic/platform-neutral/warm-parchment/book-serif/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43530446147-419"]
+        },
+        {
+          "tag": "@test-d084dc5ab5d6",
+          "cell": "composition:schematic complete / schematic/platform-neutral/sunset-ember/humanist-ui/high-contrast",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-351"]
+        }
+      ]
+    },
+    {
+      "label": "sample-t2",
+      "tests": 9,
+      "grep": "(@test-1237a02fc092|@test-469776e993cd|@test-5b2688934d35|@test-9c24c5bfb1e7|@test-a3267f657a90|@test-a9310591ad41|@test-b9dc37e4bd25|@test-d69f44bbf9b6|@test-ed78635a8e48)",
+      "cells": [
+        {
+          "tag": "@test-1237a02fc092",
+          "cell": "composition:schematic complete / schematic/platform-neutral/drafting-blue/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43530446147-394"]
+        },
+        {
+          "tag": "@test-469776e993cd",
+          "cell": "composition:schematic complete / schematic/platform-neutral/signal-paper/humanist-ui/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-447"]
+        },
+        {
+          "tag": "@test-5b2688934d35",
+          "cell": "composition:schematic complete / schematic/platform-neutral/coral-lagoon/humanist-ui/light",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-151"]
+        },
+        {
+          "tag": "@test-9c24c5bfb1e7",
+          "cell": "composition:schematic complete / schematic/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-4"]
+        },
+        {
+          "tag": "@test-a3267f657a90",
+          "cell": "composition:schematic complete / schematic/platform-neutral/coral-lagoon/humanist-ui/light",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-151"]
+        },
+        {
+          "tag": "@test-a9310591ad41",
+          "cell": "composition:schematic complete / schematic/platform-neutral/forest-moss/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-462"]
+        },
+        {
+          "tag": "@test-b9dc37e4bd25",
+          "cell": "composition:aurora-glass complete / aurora-glass/letterpress/arctic-aurora/accessible-reading/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43530446147-607"]
+        },
+        {
+          "tag": "@test-d69f44bbf9b6",
+          "cell": "composition:schematic complete / schematic/platform-neutral/sunset-ember/humanist-ui/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-3"]
+        },
+        {
+          "tag": "@test-ed78635a8e48",
+          "cell": "composition:schematic complete / schematic/material-3-inspired/control-room/accessible-reading/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-102"]
+        }
+      ]
+    },
+    {
+      "label": "sample-t3",
+      "tests": 8,
+      "grep": "(@test-33816834095d|@test-4cdd1b1ab032|@test-53e035292d20|@test-7270945bb975|@test-865bb1e64e64|@test-8ba0b892fc8b|@test-e11177722ec3|@test-f9f51a6ff117)",
+      "cells": [
+        {
+          "tag": "@test-33816834095d",
+          "cell": "composition:schematic complete / schematic/platform-neutral/ocean-abyss/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-568"]
+        },
+        {
+          "tag": "@test-4cdd1b1ab032",
+          "cell": "composition:schematic complete / schematic/material-3-inspired/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-324"]
+        },
+        {
+          "tag": "@test-53e035292d20",
+          "cell": "composition:schematic complete / schematic/neumorphic/low-stimulus-warm/accessible-reading/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-429"]
+        },
+        {
+          "tag": "@test-7270945bb975",
+          "cell": "composition:schematic complete / schematic/platform-neutral/reduced-chroma/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-347"]
+        },
+        {
+          "tag": "@test-865bb1e64e64",
+          "cell": "composition:mission-control complete / mission-control/handcrafted-collage/night-terminal/accessible-reading/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-68"]
+        },
+        {
+          "tag": "@test-8ba0b892fc8b",
+          "cell": "composition:schematic complete / schematic/platform-neutral/liquid-dusk/humanist-ui/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-236"]
+        },
+        {
+          "tag": "@test-e11177722ec3",
+          "cell": "composition:schematic complete / schematic/platform-neutral/warm-parchment/humanist-ui/high-contrast",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-10"]
+        },
+        {
+          "tag": "@test-f9f51a6ff117",
+          "cell": "composition:swiss-signal complete / swiss-signal/memphis/neon-city/accessible-reading/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "reads": ["timed out at 240 s with no record, run 43166869592-118"]
+        }
+      ]
+    }
+  ]
+}

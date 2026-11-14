@@ -13,6 +13,10 @@
 # composition, rule, check and viewport, with their record keys. It never gates on a records
 # list; it fails only when a shard is missing or a report doesn't hold its tests.
 #
+# A sample (quality/inventory/sample.json, ci/inventory-sample.mjs) runs chosen tests of the same
+# plan instead, by their @test tags, in inventory-sample, one matrix of at most 12: inventory-1 to
+# -3 and inventory-summary skip, and each job's log's failure summary says which still fail.
+#
 # While a run of this file is in flight, scheduled.yml's big-run pauses the nightly (ci/big-run.mjs
 # finds it by this file's path), so its 16 never stand beside the nightly's 16. It holds contents:
 # read and no secret, reads no cache, and installs fresh.
@@ -40,9 +44,10 @@ jobs:
     timeout-minutes: 20
     outputs:
       count: ${{ steps.count.outputs.count }}
-      shards1: ${{ steps.count.outputs.shards1 }}
-      shards2: ${{ steps.count.outputs.shards2 }}
-      shards3: ${{ steps.count.outputs.shards3 }}
+      shards1: ${{ steps.sample.outputs.shards1 || steps.count.outputs.shards1 }}
+      shards2: ${{ steps.sample.outputs.shards2 || steps.count.outputs.shards2 }}
+      shards3: ${{ steps.sample.outputs.shards3 || steps.count.outputs.shards3 }}
+      sample: ${{ steps.sample.outputs.matrix }}
       workers: ${{ steps.workers.outputs.workers }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,6 +65,11 @@ jobs:
           # The inventory's scope, (c′) with an empty list (tests/quality/lib/release-scope.ts).
           QUALITY_RELEASE_SCOPE: quality/inventory/scope.json
         run: pnpm exec tsx tests/quality/full-plan.ts
+      # A sample's tests, when quality/inventory/sample.json names them: the three whole-run lists
+      # emptied, so only inventory-sample runs.
+      - name: The tests a sample runs
+        id: sample
+        run: node ci/inventory-sample.mjs quality/inventory/sample.json >> "$GITHUB_OUTPUT"
       # The worker count every shard runs at, which the worker probe settles: one setting for the
       # release run and this one (quality/inventory/workers.json, held to SHARD_WORKERS).
       - name: The worker count
@@ -255,6 +265,67 @@ jobs:
           # Three days: the first wave's reports outlast the last wave's end, as rc-quality's.
           retention-days: 3
 
+  # A sample's tests (ci/inventory-sample.mjs), one matrix at up to 12 at a time: inventory-1's
+  # steps, but for its names and the --grep that picks the job's tests by their @test tags.
+  inventory-sample:
+    name: inventory (${{ matrix.label }})
+    needs: [inventory-plan]
+    if: ${{ needs.inventory-plan.outputs.sample != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix: ${{ fromJSON(needs.inventory-plan.outputs.sample) }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: pnpm ci:quality-full --grep (the sample's ${{ matrix.label }})
+        env:
+          GREP: ${{ matrix.grep }}
+          CI_REPRO_COMMAND: pnpm ci:quality-full "--grep=${{ matrix.grep }}"
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_RELEASE_SCOPE: quality/inventory/scope.json
+        # It reports, and gates on no records list: a job whose tests fail still uploads.
+        run: |
+          status=0
+          pnpm ci:quality-full "--grep=$GREP" || status=$?
+          echo "The sample's tests ended $status: its log's failure summary holds their records."
+      # The reports upload only when this succeeds: it deletes what it can't
+      # read, and fails when it did, or when the canary is still in any.
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-inventory-${{ matrix.label }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 3
+
   # Every shard's reports merged into the inventory: what failed in (c′), by composition, rule,
   # check and viewport, with each record's key, in its artifact and the job summary. It runs
   # however the shards ended, once the plan counted them; it fails only when the shards aren't
@@ -262,7 +333,8 @@ jobs:
   inventory-summary:
     name: inventory-summary
     needs: [inventory-plan, inventory-1, inventory-2, inventory-3]
-    if: ${{ !cancelled() && needs.inventory-plan.result == 'success' }}
+    # A sample's tests are read from each job's log: it skips.
+    if: ${{ !cancelled() && needs.inventory-plan.result == 'success' && needs.inventory-plan.outputs.sample == '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

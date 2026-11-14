@@ -739,6 +739,7 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
     'inventory-1',
     'inventory-2',
     'inventory-3',
+    'inventory-sample',
     'inventory-summary',
   ]);
   const text = JSON.stringify(INVENTORY.jobs);
@@ -796,7 +797,10 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
   // The summary: every shard's reports, however the shards ended, and the inventory's command.
   const summary = INVENTORY.jobs['inventory-summary'];
   assert.deepEqual(summary.needs, ['inventory-plan', 'inventory-1', 'inventory-2', 'inventory-3']);
-  assert.equal(summary.if, "${{ !cancelled() && needs.inventory-plan.result == 'success' }}");
+  assert.equal(
+    summary.if,
+    "${{ !cancelled() && needs.inventory-plan.result == 'success' && needs.inventory-plan.outputs.sample == '' }}",
+  );
   const merge = summary.steps.find((s) => /ci:inventory-summary/.test(s.run ?? ''));
   assert.equal(merge.run, 'pnpm ci:inventory-summary "$SHARDS" --shards "$SHARD_COUNT"');
   assert.equal(merge.env.SHARD_COUNT, '${{ needs.inventory-plan.outputs.count }}');
