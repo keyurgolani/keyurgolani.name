@@ -160,3 +160,35 @@ test("the repository's reference is the one calibration run 43610104176 measured
   });
   assert.equal(result.rows.find((each) => each.metric === 'tbtMs')!.calibrated, true);
 });
+
+test("a long task planted in a light composition's load still fails the release gate at the repository's reference, on that calibration run's fastest runner and on its slowest", () => {
+  const reference = base.timing.calibration.referenceMs!;
+  // A load as the good one reads at the reference (one 90 ms task, TBT 40), and the same load
+  // with a 400 ms task planted in it (TBT 40 + 350), each as a runner at `calibrationMs` takes it.
+  const load = (calibrationMs: number, tasks: readonly number[]) => {
+    const scale = calibrationMs / reference;
+    const blockingTasks = tasks.map((ms) => ms * scale);
+    return {
+      ...GOOD_RUN,
+      calibrationMs,
+      blockingTasks,
+      tbtMs: blockingTasks.reduce((total, ms) => total + Math.max(0, ms - 50), 0),
+    } as PerfRun;
+  };
+  for (const calibrationMs of [137.002, 247.893]) {
+    const clean = timingResult(five(load(calibrationMs, [90])), 'light', base);
+    assert.deepEqual(
+      releaseProblems(clean, base),
+      [],
+      `${calibrationMs}: the load as it is passes`,
+    );
+    const planted = timingResult(five(load(calibrationMs, [90, 400])), 'light', base);
+    const tbt = planted.rows.find((each) => each.metric === 'tbtMs')!;
+    assert.ok(Math.abs(tbt.median! - 390) < 1e-6, `${calibrationMs}: ${tbt.median}`);
+    assert.deepEqual(
+      releaseProblems(planted, base).map((problem) => problem.rule),
+      ['timing-over'],
+      `${calibrationMs}: the planted task fails`,
+    );
+  }
+});
