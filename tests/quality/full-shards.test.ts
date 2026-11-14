@@ -551,7 +551,7 @@ test("the nightly timeout is 120 minutes, its ceiling the release's measured pac
   // Fitted as the release's ceiling is: a shard estimated there takes, at the measured pace,
   // at most the night's 120 minutes over the 1.5x margin.
   assert.equal(NIGHTLY_CEILING, fitReleaseCeiling(RELEASE_PACE, NIGHTLY_TIMEOUT_MINUTES));
-  assert.equal(NIGHTLY_CEILING, 5058);
+  assert.equal(NIGHTLY_CEILING, 5041);
   const atCeiling =
     RELEASE_PACE.overheadSeconds + RELEASE_PACE.pace * (NIGHTLY_CEILING - FULL_FIXED);
   assert.ok(atCeiling * TIMEOUT_MARGIN <= NIGHTLY_TIMEOUT_MINUTES * 60, String(atCeiling));

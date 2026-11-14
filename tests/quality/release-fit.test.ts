@@ -56,33 +56,35 @@ function times(overheadSeconds: number, pace?: number): ReleaseTimes {
   return { source: 'a made-up run', overheadSeconds, tests };
 }
 
-test('the release cap stays 120 minutes, 16 at a time across its three jobs, and the per-shard target is the one the inventory run measured fits to it: 5,058 s', () => {
+test('the release cap stays 120 minutes, 16 at a time across its three jobs, and the per-shard target is the one the inventory run measured fits to it: 5,041 s', () => {
   assert.equal(RELEASE_TIMEOUT_MINUTES, 120);
   assert.equal(releaseTimeoutMinutes(), RELEASE_TIMEOUT_MINUTES);
   assert.equal(RELEASE_PARALLEL, 16);
   assert.ok(RELEASE_PACE.source.trim().length > 0, 'RELEASE_PACE names its source');
   assert.equal(RELEASE_CEILING, fitReleaseCeiling(RELEASE_PACE));
-  assert.equal(RELEASE_CEILING, 5058);
+  assert.equal(RELEASE_CEILING, 5041);
 });
 
 test("RELEASE_PACE is inventory run 43166869592's at its median shard, over the release weights that run measured: a shard at the ceiling takes 80 minutes at the median, and the runners' spread past it stays inside the 1.5x margin", () => {
   const run = releaseFit.loadShardRun(INVENTORY_RUN);
   assert.equal(run.run, '43166869592');
   assert.equal(run.commit, 'f5212efb54ef81e4f0c711cf42c7cc2800faec4e');
-  assert.equal(run.shards.length, 486);
+  // The first run's 486 finished shards and the resume's 127; shard 309 ran as two parts.
+  assert.equal(run.shards.length, 613);
   const fitted = releaseFit.fitMedianPace(run);
   // The fixed part is what each job took outside its run step, on the mean; the pace is the
   // median shard's measured time past it, per second of its estimate past FULL_FIXED, rounded up.
   assert.deepEqual(fitted, {
-    overheadSeconds: 78,
-    pace: 1.018,
-    spread: { p50: 1, p90: 1.21, max: 1.5 },
+    overheadSeconds: 77,
+    pace: 1.022,
+    spread: { p50: 1, p90: 1.2, max: 1.5 },
   });
   assert.deepEqual(
     { overheadSeconds: RELEASE_PACE.overheadSeconds, pace: RELEASE_PACE.pace },
     { overheadSeconds: fitted.overheadSeconds, pace: fitted.pace },
   );
   assert.match(RELEASE_PACE.source, /43166869592/);
+  assert.match(RELEASE_PACE.source, /43530446147/);
   assert.match(RELEASE_PACE.source, /median/);
   // At the median, half the run's shards took no more than their fixed part and estimate give.
   const covered = run.shards.filter(
@@ -125,6 +127,7 @@ test("the release weights are inventory run 43166869592's means by target, viewp
   const durations = loadDurations();
   const release = durations.release!;
   assert.match(release.source ?? '', /43166869592/);
+  assert.match(release.source ?? '', /43530446147/);
   const targets = release.targets!;
   assert.equal(Object.keys(targets).length, 378);
   assert.equal(release.skipped, 7.1);
