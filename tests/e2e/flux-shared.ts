@@ -160,3 +160,153 @@ export async function expectContactTitleFits(page: Page, title: string) {
     tab.above,
   );
 }
+
+/**
+ * The phone dock as shown: each visible word of its name tab (its text, its box and its content,
+ * the lines it shows, the width it takes on one line, and its type and leading against the label
+ * role's in the bar), the bar's height, a focus ring's reach, and the root's scroll-padding at the
+ * window's block end.
+ */
+const dockName = () => {
+  const shown = (el: Element) => {
+    if (el.getClientRects().length === 0) return false;
+    for (let at: Element | null = el; at; at = at.parentElement)
+      if (getComputedStyle(at).visibility === 'hidden') return false;
+    return true;
+  };
+  // The label role's own type in the bar, as the tabs take it.
+  const nav = document.querySelector('#fx--bar .fx-bar__nav')!;
+  const label = document.createElement('span');
+  label.dataset.typeRole = 'label';
+  label.textContent = 'x';
+  nav.append(label);
+  const role = getComputedStyle(label);
+  const roleType = { fontSize: role.fontSize, lineHeight: role.lineHeight };
+  label.remove();
+  const words = [...document.querySelectorAll<HTMLElement>('#fx--bar .fx-tab--name .fx-tab__word')]
+    .filter(shown)
+    .map((word) => {
+      const box = word.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(word);
+      // The lines it shows: a clamp lays out the rest below its box.
+      const lines = new Set(
+        [...range.getClientRects()]
+          .filter((rect) => rect.width > 0 && rect.bottom <= box.bottom + 1)
+          .map((rect) => Math.round(rect.top)),
+      ).size;
+      // The width the name takes on one line, at its own type.
+      const probe = word.cloneNode(true) as HTMLElement;
+      probe.style.cssText = [
+        'position: absolute',
+        'display: inline',
+        'visibility: hidden',
+        'white-space: nowrap',
+        'max-inline-size: none',
+      ].join('; ');
+      word.parentElement!.append(probe);
+      const oneLine = probe.getBoundingClientRect().width;
+      probe.remove();
+      const style = getComputedStyle(word);
+      return {
+        text: word.textContent?.trim() ?? '',
+        clientWidth: word.clientWidth,
+        scrollWidth: word.scrollWidth,
+        clientHeight: word.clientHeight,
+        scrollHeight: word.scrollHeight,
+        width: box.width,
+        lines,
+        oneLine,
+        fontSize: style.fontSize,
+        lineHeight: style.lineHeight,
+        roleType,
+      };
+    });
+  const fx = getComputedStyle(document.querySelector('.fx')!);
+  return {
+    words,
+    bar: document.querySelector('#fx--bar')!.getBoundingClientRect().height,
+    reach:
+      parseFloat(fx.getPropertyValue('--ui-focus-offset')) +
+      parseFloat(fx.getPropertyValue('--ui-focus-width')),
+    reserve: parseFloat(getComputedStyle(document.documentElement).scrollPaddingBlockEnd) || 0,
+  };
+};
+
+/**
+ * The checks on the phone dock's name tab, on the home page at a window and a root text size, at
+ * the opening and with a sheet being read: each word of the name that shows holds the whole name
+ * in the page, never runs past its tab on a line, takes a second line only where one line
+ * wouldn't fit its box, shows at most two and is cut only on its second, and keeps the label
+ * role's type and leading; the link is shown with the whole name as its accessible name, or gone
+ * whole (no box, not focusable); and the root reserves at
+ * least the bar's height and a focus ring's reach at the window's block end, so Tab scrolls a
+ * control clear of it. With script on or off: it waits by the clock, not by frames.
+ */
+export async function expectDockHoldsItsName(
+  page: Page,
+  { width, height, text = 1 }: { width: number; height: number; text?: number },
+) {
+  await page.setViewportSize({ width, height });
+  await page.goto('/', { waitUntil: 'networkidle' });
+  if (text !== 1)
+    await page.evaluate(
+      (scale) =>
+        document.documentElement.style.setProperty('font-size', `${scale * 100}%`, 'important'),
+      text,
+    );
+  await page.waitForTimeout(300);
+  const name = await page
+    .locator('#fx--bar .fx-tab--name .fx-tab__word')
+    .evaluate((word) => word.textContent?.trim() ?? '');
+  expect(name.length, 'the dock carries a name').toBeGreaterThan(0);
+  // The link is the name's: where it shows, its accessible name is the whole name; with no room
+  // it goes whole, no box and nothing to focus, so the dock never holds a link without a name.
+  const link = page.locator('#fx--bar .fx-tab--name');
+  const expectLink = async (state: string) => {
+    if (await link.isVisible()) {
+      await expect(link, `${state}: the link's accessible name`).toHaveAccessibleName(name);
+      return;
+    }
+    const gone = await link.evaluate((el) => {
+      (el as HTMLElement).focus({ preventScroll: true });
+      const focused = document.activeElement === el;
+      (el as HTMLElement).blur();
+      return { boxes: el.getClientRects().length, focused };
+    });
+    expect(gone, `${state}: a name with no room leaves no link behind`).toEqual({
+      boxes: 0,
+      focused: false,
+    });
+  };
+  const states: Record<string, ReturnType<typeof dockName>> = {};
+  await expectLink('opening');
+  states.opening = await page.evaluate(dockName);
+  // A sheet being read: with script, the dock shows its destination beside the name.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight / 2));
+  await page.waitForTimeout(300);
+  await expectLink('reading');
+  states.reading = await page.evaluate(dockName);
+  for (const [state, dock] of Object.entries(states)) {
+    for (const word of dock.words) {
+      const at = `${state}: "${word.text}"`;
+      expect(word.text, `${at} is the whole name in the page`).toBe(name);
+      expect(word.scrollWidth, `${at} never runs past its tab on a line`).toBeLessThanOrEqual(
+        word.clientWidth,
+      );
+      if (word.lines > 1)
+        expect(word.oneLine, `${at} wraps only where one line doesn't fit`).toBeGreaterThan(
+          word.width + 0.5,
+        );
+      expect(word.lines, `${at} shows at most two lines`).toBeLessThanOrEqual(2);
+      if (word.scrollHeight > word.clientHeight + 1)
+        expect(word.lines, `${at} is cut only on its second line`).toBe(2);
+      expect(word.fontSize, `${at} type`).toBe(word.roleType.fontSize);
+      expect(word.lineHeight, `${at} leading`).toBe(word.roleType.lineHeight);
+    }
+    expect(
+      dock.reserve,
+      `${state}: the reserve holds the bar (${dock.bar}px) and a ring`,
+    ).toBeGreaterThanOrEqual(dock.bar + dock.reach);
+  }
+}
