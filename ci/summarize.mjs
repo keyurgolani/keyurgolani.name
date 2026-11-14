@@ -142,6 +142,8 @@ async function main() {
   return problems.length === 0 ? 0 : 1;
 }
 
+// The exit code is set, not exited with: process.exit would drop whatever of the table a pipe
+// hasn't taken yet (past its 64 KB buffer), so the process ends once stdout has drained.
 if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
-  process.exit(await main());
+  process.exitCode = await main();
 }

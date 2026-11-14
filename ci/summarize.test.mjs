@@ -64,3 +64,24 @@ test('a failure table past a pipe buffer reaches a reader that starts late whole
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a record that fails the schema still fails the run, after the valid ones are printed', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'summarize-'));
+  try {
+    const failures = path.join(dir, 'failures');
+    mkdirSync(failures);
+    const valid = failureRecord({ gate: 'unit', reproCommand: 'pnpm ci:unit', test: 'renders' });
+    writeFileSync(path.join(failures, 'unit-a.json'), JSON.stringify(valid));
+    writeFileSync(path.join(failures, 'unit-b.json'), JSON.stringify({ ...valid, extra: 1 }));
+    const env = { ...process.env, CI_REPORTS_DIR: dir };
+    delete env.GITHUB_STEP_SUMMARY;
+    delete env.GITHUB_ACTIONS;
+    const result = spawnSync(process.execPath, [SUMMARIZE], { env, encoding: 'utf8' });
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, `${renderMarkdown([valid])}\n`);
+    assert.match(result.stderr, /unit-b\.json does not match the failure record schema/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
