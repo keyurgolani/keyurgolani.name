@@ -262,6 +262,75 @@ test(
   },
 );
 
+/**
+ * The script chunk that carries the late alert's own clock: the one naming the scope late-alert.tsx
+ * keeps its alert in on the page's globalThis.
+ */
+const LATE_ALERT_CHUNK = /portfolioStudioLateAlert/;
+
+/**
+ * The chunk that carries the late alert held, as a connection that stalls on the page's entry, until
+ * `release` lets it through. Returns what it held.
+ */
+async function holdLateAlert(
+  page: Page,
+): Promise<{ readonly held: string[]; readonly release: () => void }> {
+  const held: string[] = [];
+  let settle: () => void = () => {};
+  const gate = new Promise<void>((resolve) => (settle = resolve));
+  await page.route(/\/_next\/static\/chunks\/.*\.js/, (route) =>
+    unlessGone(page, async () => {
+      const response = await route.fetch();
+      const body = await response.text();
+      if (LATE_ALERT_CHUNK.test(body)) {
+        held.push(route.request().url());
+        await gate;
+      }
+      return route.fulfill({ response, body });
+    }),
+  );
+  return { held, release: () => settle() };
+}
+
+test(
+  "with the chunk that carries the late alert held, as a connection that stalls on the page's entry, /studio still says Studio couldn't load in time, once, with Reload Studio focused, under the page's own script policy, and Reload reloads /studio",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    await page.addInitScript(() => {
+      const w = window as unknown as { __cspViolations: string[] };
+      w.__cspViolations = [];
+      addEventListener('securitypolicyviolation', (event) =>
+        w.__cspViolations.push(`${event.violatedDirective} ${event.blockedURI}`),
+      );
+    });
+    const { held, release } = await holdLateAlert(page);
+    try {
+      const response = await page.goto('/studio', { waitUntil: 'commit' });
+      // The script policy the page is served with: scripts by nonce, never 'unsafe-inline'.
+      const policy = response!.headers()['content-security-policy'] ?? '';
+      const scripts = /(?:^|;)\s*script-src\s([^;]*)/.exec(policy)?.[1] ?? '';
+      expect(scripts, 'a script-src with a nonce').toMatch(/'nonce-/);
+      expect(scripts, "no 'unsafe-inline' in script-src").not.toContain("'unsafe-inline'");
+      await expect.poll(() => held.length, "the late alert's chunk is asked for, and held").toBe(1);
+      await expect(alert(page)).toBeVisible({ timeout: PAST_TIMEOUT_MS });
+      await expect(alert(page), 'one alert').toHaveCount(1);
+      await expect(reloadStudio(page)).toBeFocused();
+      expect(
+        await page.evaluate(
+          () => (window as unknown as { __cspViolations: string[] }).__cspViolations,
+        ),
+        'nothing the policy refused',
+      ).toEqual([]);
+      const documents = studioDocuments(page);
+      await reloadStudio(page).click();
+      await expect.poll(() => documents.length, 'a reload of /studio').toBe(1);
+    } finally {
+      release();
+    }
+  },
+);
+
 test(
   'a shell released at 6 seconds takes over from the late alert with no hydration error: the late node goes, the shell shows and works, and Sign out signs out (row 88c, H5 live)',
   { annotation: [STUDIO] },
