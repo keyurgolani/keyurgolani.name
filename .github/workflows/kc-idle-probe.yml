@@ -1,0 +1,76 @@
+# Evidence only, never merged (Kinetic Cosmos's idle work on hosted runners): six jobs, each on its
+# own hosted runner in the pinned Playwright image with a fresh install, run Kinetic Cosmos's and
+# Raw Grid's perf cells with the probe that stands in for perf.spec.ts on this branch. Each cell
+# takes the lab's default load, unchanged: Kinetic Cosmos as served and in five variants (each of
+# its three opening loops held still in turn, its sky's mask removed, every loop still), Raw Grid
+# as served. Each variant loads once under a Chrome trace and three times plain, and every load
+# prints a [kc-probe] line with the runner's calibration, the rendered mode and its readings. The
+# traces and readings upload per runner. Runs on a push of its evidence branch alone, holds
+# contents: read and no secret, and reads no cache.
+name: kc-idle-probe
+
+on:
+  push:
+    branches: [kgn-a/kc-idle-probe-evidence]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kc-idle-probe
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+
+jobs:
+  probe:
+    name: kc-idle-probe (runner ${{ matrix.job }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        job: [1, 2, 3, 4, 5, 6]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Kinetic Cosmos's and Raw Grid's perf cells, the trace probe, retries 0
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          KC_PROBE_TRACED: 1
+          KC_PROBE_PLAIN: 3
+        run: |
+          status=0
+          pnpm ci:quality-full '--grep=(kinetic-cosmos|raw-grid) complete .*performance at 390x844 \(' --workers=1 --retries=0 || status=$?
+          echo "the probe ended $status on runner ${{ matrix.job }}"
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-kc-idle-probe-${{ matrix.job }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 7
