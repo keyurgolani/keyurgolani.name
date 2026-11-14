@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { contrast, mix } from '../color';
 import { anchorV1 } from '../derive';
 import { LENGTH_KEYS } from '../language-grammar';
 import { LAYER_ORDER } from '../layers';
-import type { DesignLanguageManifest, TypographyManifest } from '../manifests';
+import type { ColorSchemeManifest, DesignLanguageManifest, TypographyManifest } from '../manifests';
 import { schemeSets, type ColorSetName, type SchemeSets } from '../sets';
 import { COLOR_ROLES, LANGUAGE_KEYS } from '../tokens';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +36,7 @@ import {
   unicodeRanges,
   withoutRanges,
 } from './compile';
+import { catalogPacks, packPackages } from './catalog';
 import { mappedCodePoints } from './font-metrics';
 import { minimalWoff2, SAMPLE_METRICS } from '../test-support/woff2';
 
@@ -280,6 +282,88 @@ test('every mode, contrast, and media state renders its set, on the boundary and
     }
   }
   assert.equal(checked, 3 * 4 * 2 * 8);
+});
+
+// The root's scrollbar thumb: the set's border-strong moved 55% toward its text-primary, the
+// smallest step that reads 3:1 on the canvas track and over every composition's art behind an
+// overlay bar, where macOS paints no track.
+const ROOT_THUMB_STEP = 55;
+
+test("the document root's scrollbar is its rendered set's border-strong, a step toward text-primary, as the thumb on its canvas, in every mode, contrast and media state", () => {
+  let checked = 0;
+  for (const [shape, sets] of SHAPES) {
+    const css = compileSchemeStylesheet('acme-scheme', sets);
+    for (const mode of ['system', 'light', 'dark', 'high-contrast']) {
+      for (const contrastAttribute of ['system', 'more'] as const) {
+        for (const dark of [false, true]) {
+          for (const more of [false, true]) {
+            for (const print of [false, true]) {
+              const env = { dark, more, print };
+              const set = sets[expected(sets, mode, contrastAttribute, env)]!;
+              const root = cascade(
+                css,
+                'root',
+                {
+                  'data-appearance-boundary': 'document',
+                  'data-color-scheme': 'acme-scheme',
+                  'data-display-mode': mode,
+                  'data-contrast': contrastAttribute,
+                },
+                env,
+              );
+              assert.equal(
+                root.get('scrollbar-color'),
+                `${mix(set['border-strong']!, set['text-primary']!, ROOT_THUMB_STEP)} ${set.canvas}`,
+                `${shape} ${mode} contrast=${contrastAttribute} ${JSON.stringify(env)}`,
+              );
+              checked += 1;
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.equal(checked, 3 * 4 * 2 * 8);
+});
+
+test('in every shipped scheme, at either contrast, the root scrollbar thumb reads at least 3:1 on its track', () => {
+  const root = fileURLToPath(new URL('../../../../', import.meta.url));
+  const schemes = catalogPacks(root, packPackages(root)).filter(
+    ({ axis }) => axis === 'colorScheme',
+  );
+  assert.ok(schemes.length >= 10, `${schemes.length} schemes`);
+  for (const pack of schemes) {
+    const manifest = pack.manifest as ColorSchemeManifest;
+    const base = schemeBaseSets(manifest);
+    if (!base) continue;
+    const sets = schemeSets(base, manifest.highContrast, manifest.derivation, manifest.anchors);
+    const css = compileSchemeStylesheet(manifest.id, sets);
+    for (const mode of ['system', 'light', 'dark', 'high-contrast']) {
+      for (const [dark, more] of [
+        [false, false],
+        [true, false],
+        [false, true],
+        [true, true],
+      ] as const) {
+        const env = { dark, more, print: false };
+        const value = cascade(
+          css,
+          'root',
+          {
+            'data-appearance-boundary': 'document',
+            'data-color-scheme': manifest.id,
+            'data-display-mode': mode,
+            'data-contrast': 'system',
+          },
+          env,
+        ).get('scrollbar-color');
+        const label = `${manifest.id} ${mode} dark=${dark} more=${more}`;
+        assert.ok(value, `${label}: a scrollbar color`);
+        const [thumb, track] = value.split(' ');
+        assert.ok(contrast(thumb!, track!) >= 3, `${label}: ${thumb} on ${track}`);
+      }
+    }
+  }
 });
 
 test("a plate's scheme never reaches the document root, and another scheme's rules never match", () => {
