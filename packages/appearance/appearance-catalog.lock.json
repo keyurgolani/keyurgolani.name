@@ -80,10 +80,10 @@
     "book-serif": {
       "axis": "typography",
       "package": "@portfolio/appearance-typography",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "tier": "extended",
       "license": "OFL-1.1",
-      "digest": "sha256-4f6935e5c84c2db5e3d2ef8ae54169df3510c9c9eb41e30860fa1fbbd8b8b589"
+      "digest": "sha256-ef3ffd1c1bfe018cc8282cc7ca016ae95f1a8090bd25fc4d28c65275203b22ed"
     },
     "botanical-sage": {
       "axis": "colorScheme",
@@ -196,10 +196,10 @@
     "field-serif": {
       "axis": "typography",
       "package": "@portfolio/appearance-typography",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "OFL-1.1",
-      "digest": "sha256-1f2ff03ae7279810aa895ad22c538305aa781ce7d6786f3cf3847b63203e5127"
+      "digest": "sha256-6bd7a083b353658fd5eeb8eaab45c77f0b545f4bb14309579e1e95c6adb340f7"
     },
     "fluent-2-inspired": {
       "axis": "designLanguage",
