@@ -303,7 +303,10 @@ test(
         return route.fulfill({ response, body });
       }),
     );
-    await page.reload();
+    // The reload waits only for the new document: a page that asks for the held chunk before its
+    // load event can't fire that event until the chunk arrives, and the test lets it through only
+    // after the alert, so a reload that waited for load would wait on the alert it is there to see.
+    await page.reload({ waitUntil: 'commit' });
     await expect
       .poll(() => held.length, "the owner adapter's chunk is asked for, and held")
       .toBe(1);
