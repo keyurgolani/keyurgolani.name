@@ -29,6 +29,7 @@
 // quality:pr's shards (lib/pr-shards.ts) merge the same way: each lists
 // every project and plans the whole PR set, and runs only its own groups.
 
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Plan, RunMode } from '../cells';
@@ -171,21 +172,52 @@ const SHAPES: Readonly<Record<string, (value: Record<string, unknown>) => boolea
     isArray(value.canary.after),
 };
 
-/** A shard's file, or null when it's missing, or when it's there and isn't what run.ts writes, which `problems` says. */
-function readShardFile<T>(file: string, problems: string[]): T | null {
-  if (!existsSync(file)) return null;
+/** A shard's file `name`, read from `text`, or null when it isn't what run.ts writes, which `problems` says. */
+function parseShardFile<T>(name: string, text: string, problems: string[]): T | null {
   let value: unknown;
   try {
-    value = JSON.parse(readFileSync(file, 'utf8'));
+    value = JSON.parse(text);
   } catch (error) {
-    problems.push(`${path.basename(file)} isn't JSON: ${(error as Error).message.split('\n')[0]}`);
+    problems.push(`${name} isn't JSON: ${(error as Error).message.split('\n')[0]}`);
     return null;
   }
-  if (!isObject(value) || !SHAPES[path.basename(file)]!(value)) {
-    problems.push(`${path.basename(file)} isn't what run.ts writes, so it can't be read.`);
+  if (!isObject(value) || !SHAPES[name]!(value)) {
+    problems.push(`${name} isn't what run.ts writes, so it can't be read.`);
     return null;
   }
   return value as T;
+}
+
+/** A shard's file, or null when it's missing, or when it's there and isn't what run.ts writes, which `problems` says. */
+function readShardFile<T>(file: string, problems: string[]): T | null {
+  if (!existsSync(file)) return null;
+  return parseShardFile<T>(path.basename(file), readFileSync(file, 'utf8'), problems);
+}
+
+/** The plans readShards has read, by their plan.json's sha256: each one's record, or why it can't be read. */
+type PlansRead = Map<string, { readonly plan: PlanRecord | null; readonly problems: string[] }>;
+
+/**
+ * A shard's plan.json, read once a run: a run's shards all write the same plan, byte for byte, and a
+ * release shard's is the whole plan (about 28 MB at the release scope's 91,224 tests), so a shard
+ * whose plan.json has the bytes of one already read shares that record, found by its sha256,
+ * rather than holding a copy of its own. Hundreds of shards then hold one plan, not hundreds.
+ */
+function readPlanFile(file: string, problems: string[], read: PlansRead): PlanRecord | null {
+  if (!existsSync(file)) return null;
+  const bytes = readFileSync(file);
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  let known = read.get(digest);
+  if (!known) {
+    const own: string[] = [];
+    known = {
+      plan: parseShardFile<PlanRecord>('plan.json', bytes.toString('utf8'), own),
+      problems: own,
+    };
+    read.set(digest, known);
+  }
+  problems.push(...known.problems);
+  return known.plan;
 }
 
 /**
@@ -195,6 +227,7 @@ function readShardFile<T>(file: string, problems: string[]): T | null {
  */
 export function readShards(root: string): ShardReport[] {
   const shards: ShardReport[] = [];
+  const plans: PlansRead = new Map();
   const walk = (dir: string) => {
     const quality = path.join(dir, 'quality');
     const files = ['plan.json', 'summary.json', 'verdict.json'].map((name) =>
@@ -204,7 +237,7 @@ export function readShards(root: string): ShardReport[] {
       const problems: string[] = [];
       shards.push({
         dir: path.relative(root, dir) || '.',
-        plan: readShardFile<PlanRecord>(files[0]!, problems),
+        plan: readPlanFile(files[0]!, problems, plans),
         summary: readShardFile<Summary>(files[1]!, problems),
         verdict: readShardFile<RunVerdict>(files[2]!, problems),
         ...(problems.length > 0 ? { problems } : {}),
@@ -407,8 +440,13 @@ export function mergeShards(
 
   const plans = shards.filter((shard) => shard.plan);
   const plan = plans[0]?.plan ?? null;
+  // Shards whose plan.json readShards read as the same bytes share one record; any other is
+  // compared by its content, the first plan's text worked out once.
+  let planText: string | undefined;
   for (const shard of plans.slice(1)) {
-    if (JSON.stringify(shard.plan) !== JSON.stringify(plan)) {
+    if (shard.plan === plan) continue;
+    planText ??= JSON.stringify(plan);
+    if (JSON.stringify(shard.plan) !== planText) {
       fail(
         'shard-mismatch',
         `${shard.dir}'s plan isn't ${plans[0]!.dir}'s, so they aren't one run's shards.`,
