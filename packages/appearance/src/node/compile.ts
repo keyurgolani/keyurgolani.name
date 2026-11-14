@@ -9,7 +9,9 @@
 //   attributes, with the prefers-color-scheme, prefers-contrast, and print
 //   queries the compiler writes, its high-contrast sets, and, under the same
 //   queries, :root:has() rules that give the document's root only
-//   color-scheme and background-color, so canvas, scrollbars, and form
+//   color-scheme, background-color, and scrollbar-color (a thumb the set's
+//   border-strong moved ROOT_THUMB_STEP toward its text-primary, on its
+//   canvas), so canvas, scrollbars, and form
 //   controls match from first paint. One file holds every mode. Outside
 //   print, the same :root:has() selectors give the root's
 //   ::view-transition every color role too (K-4 (a)): the view-transition
@@ -47,6 +49,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DisplayMode } from '@portfolio/schema';
 import type { PackKind } from '../axes';
+import { mix } from '../color';
 import { withDerivedRoles } from '../derived-roles';
 import { shadowEdgeReach } from '../gate';
 import { LENGTH_KEYS } from '../language-grammar';
@@ -353,6 +356,15 @@ export function rootTransition(selector: string): string {
  * A context's rules: the boundary's tokens per set, then the document root's two properties
  * per set, then, with `transitions`, every role on the root's ::view-transition per set.
  */
+/**
+ * How far the root's scrollbar thumb moves from the set's border-strong toward its text-primary,
+ * in percent, as color-mix(in srgb) does: the smallest step that reads 3:1 on the canvas track a
+ * classic bar paints and over the art behind an overlay bar, which paints no track (macOS: Aurora
+ * Glass's sky, Terra Field's accent band). border-strong alone clears the canvas in every shipped
+ * scheme but nearly vanishes over that art.
+ */
+const ROOT_THUMB_STEP = 55;
+
 function schemeBlocks(
   assignments: readonly Assignment[],
   sets: SchemeSets,
@@ -375,7 +387,7 @@ function schemeBlocks(
       .map((selector) => `:root:has([data-appearance-boundary="document"]${selector})`)
       .join(
         ',\n',
-      )} {\n  color-scheme: ${setPolarity(set)};\n  background-color: ${sets[set]!.canvas};\n}\n`;
+      )} {\n  color-scheme: ${setPolarity(set)};\n  background-color: ${sets[set]!.canvas};\n  scrollbar-color: ${mix(sets[set]!['border-strong']!, sets[set]!['text-primary']!, ROOT_THUMB_STEP)} ${sets[set]!.canvas};\n}\n`;
   }
   if (!transitions) return css;
   for (const [set, selectors] of bySet) {

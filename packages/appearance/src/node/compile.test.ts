@@ -202,7 +202,7 @@ test('a scheme stylesheet starts with the layer order and holds only scheme-laye
   assert.ok(css.startsWith(`${LAYER_ORDER}\n`));
   assert.deepEqual(css.match(/@layer [a-z-]+ \{/g), ['@layer scheme {']);
   assert.ok(css.endsWith('}\n'));
-  // The root rules set only color-scheme and background-color, and the root's
+  // The root rules set only color-scheme, background-color and scrollbar-color, and the root's
   // view-transition rules (K-4 (a)) only the color roles.
   for (const rule of rules(css)) {
     if (rule.selectors.every((selector) => selector.endsWith('::view-transition'))) {
@@ -225,7 +225,10 @@ test('a scheme stylesheet starts with the layer order and holds only scheme-laye
           selector.startsWith(':root:has([data-appearance-boundary="document"]'),
         ),
       );
-      assert.deepEqual([...rule.declarations.keys()], ['color-scheme', 'background-color']);
+      assert.deepEqual(
+        [...rule.declarations.keys()],
+        ['color-scheme', 'background-color', 'scrollbar-color'],
+      );
     } else {
       assert.deepEqual(
         [...rule.declarations.keys()],
