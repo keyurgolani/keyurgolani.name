@@ -148,6 +148,43 @@ test("the reset declares the shared scales on each boundary, under every pack's 
   }
 });
 
+test("inside a boundary a scroll container's bar is the scheme's: a border-strong thumb on a clear track, at the browser's own width, never hidden", () => {
+  const reset = css.slice(css.indexOf('@layer reset {'), css.indexOf('@layer utilities {'));
+  const blocks = [...reset.matchAll(/\n {2}\[data-appearance-boundary\] \{\n([^}]*)\}/g)].map(
+    (match) => match[1]!,
+  );
+  assert.ok(
+    blocks.some((body) =>
+      body.includes('scrollbar-color: var(--color-border-strong) transparent;'),
+    ),
+    "a boundary's scrollbar-color",
+  );
+  assert.doesNotMatch(css, /scrollbar-width/, 'no width of its own, and none hidden');
+});
+
+test('WebKit, which reads no scrollbar-color, draws the same thumb through its scrollbar parts, in the reset', () => {
+  const bar = declarations('  [data-appearance-boundary] ::-webkit-scrollbar', '@layer reset');
+  assert.ok(bar.get('inline-size') && bar.get('block-size'), 'a bar to draw the parts in');
+  const thumb = declarations(
+    '  [data-appearance-boundary] ::-webkit-scrollbar-thumb',
+    '@layer reset',
+  );
+  assert.equal(thumb.get('background-color'), 'var(--color-border-strong)');
+  assert.equal(thumb.get('border-radius'), 'var(--ui-radius-badge)');
+  const track = declarations(
+    '  [data-appearance-boundary] ::-webkit-scrollbar-track,\n  [data-appearance-boundary] ::-webkit-scrollbar-corner',
+    '@layer reset',
+  );
+  assert.equal(track.get('background-color'), 'transparent');
+});
+
+test("under forced colors the scrollbars are the system's: the boundary and the document root drop the scheme's", () => {
+  const forced = declarations('    [data-appearance-boundary]', '@media (forced-colors: active)');
+  assert.equal(forced.get('scrollbar-color'), 'auto');
+  const root = declarations('    :root', '@media (forced-colors: active)');
+  assert.equal(root.get('scrollbar-color'), 'auto');
+});
+
 test('forced colors map every color role to a system color and drop the effects', () => {
   const forced = declarations('    [data-appearance-boundary]', '@media (forced-colors: active)');
   const roles = [...forced.keys()].filter((key) => key.startsWith('--color-'));
