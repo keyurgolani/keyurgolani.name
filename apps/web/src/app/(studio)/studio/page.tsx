@@ -2,6 +2,7 @@ import { frameSandbox } from '~/lib/preview-frame';
 import { getDeploymentState, requireDeploymentConfig } from '~/server/config-store';
 import { demoStudioSetup } from '~/server/demo-studio';
 import { pendingDiscard } from '~/server/pending-discard';
+import { requestNonce } from '~/server/request-nonce';
 import { servedPage } from '~/server/page-guard';
 import { previewAppearanceOptions } from '~/server/preview-options';
 import { signInLocation } from '~/server/return-to';
@@ -35,7 +36,7 @@ async function Studio() {
       : await requireOwnerPage('studio.view');
   if (!owner) {
     return (
-      <StudioLoadBoundary profile="demo">
+      <StudioLoadBoundary profile="demo" nonce={await requestNonce()}>
         <StudioEntry
           profile="demo"
           policy={studioPolicy('demo', null)}
@@ -59,7 +60,7 @@ async function Studio() {
       }
     : null;
   return (
-    <StudioLoadBoundary profile="owner">
+    <StudioLoadBoundary profile="owner" nonce={await requestNonce()}>
       <StudioEntry
         profile="owner"
         csrfToken={csrfToken}

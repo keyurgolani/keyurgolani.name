@@ -14,7 +14,7 @@ const STUDIO = { type: 'route', description: '/studio' };
 
 test.use({ appOptions: DEMO_APP });
 
-/** The shell's own wait (late-alert.tsx's STUDIO_LOAD_TIMEOUT_MS), and margin past it. */
+/** The shell's own wait (late-markup.ts's STUDIO_LOAD_TIMEOUT_MS), and margin past it. */
 const PAST_TIMEOUT_MS = 10_000;
 
 /**

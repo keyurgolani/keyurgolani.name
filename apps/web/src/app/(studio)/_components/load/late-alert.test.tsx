@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as React from 'react';
-import type { ReactNode } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import {
   createLateAlert,
   LATE_ALERT_TAG,
@@ -46,7 +44,11 @@ function fakePage(profile: string | null = null) {
       return node;
     },
   };
-  const reloadButton = { focus: () => void (focused = 'Reload Studio') };
+  const clicks: ((target: unknown) => void)[] = [];
+  const reloadButton: { focus(): void; closest(selectors: string): unknown } = {
+    focus: () => void (focused = 'Reload Studio'),
+    closest: (selectors) => (selectors === '[data-studio-reload]' ? reloadButton : null),
+  };
   const document = {
     body,
     createElement(tag: string): FakeNode {
@@ -60,7 +62,7 @@ function fakePage(profile: string | null = null) {
           if (node.parent) node.parent.children = node.parent.children.filter((n) => n !== node);
           node.parent = null;
         },
-        querySelector: (selectors) => (selectors === '.studio-alert button' ? reloadButton : null),
+        querySelector: (selectors) => (selectors === '[data-studio-reload]' ? reloadButton : null),
       };
       return node;
     },
@@ -87,12 +89,15 @@ function fakePage(profile: string | null = null) {
       cleared.push(timer);
       clearTimeout(timer as ReturnType<typeof setTimeout>);
     },
-    mount: (_node, alert: ReactNode) => {
-      rendered.push(renderToStaticMarkup(alert));
+    mount: (_node, html) => {
+      rendered.push(html);
       return () => void (unmounted += 1);
     },
     reload: () => void (reloads += 1),
+    capture: (run) => void clicks.push(run),
     later: (run) => queueMicrotask(run),
+    now: () => Date.now(),
+    inline: () => null,
   };
   return {
     host,
@@ -107,6 +112,14 @@ function fakePage(profile: string | null = null) {
       for (const node of [...body.children]) node.remove();
     },
     focused: () => focused,
+    /** A click on the shown alert's Reload Studio, as the page's capture listener hears it. */
+    click: () => {
+      for (const run of clicks) run(reloadButton);
+    },
+    /** A click anywhere else on the page: on an element outside Reload Studio. */
+    clickElsewhere: () => {
+      for (const run of clicks) run({ closest: () => null });
+    },
     unmounted: () => unmounted,
     reloads: () => reloads,
   };
@@ -114,7 +127,7 @@ function fakePage(profile: string | null = null) {
 
 /** The alert the late root renders: the one the boundary renders too, as a plain box. */
 const LATE_MARKUP =
-  '<div class="studio-shell__main" id="studio-load-failure" tabindex="-1"><h1 class="studio-shell__name">Portfolio Studio</h1><div class="studio-alert" role="alert"><p>Studio couldn&#x27;t load.</p><div class="studio-alert__actions"><button type="button" class="studio-button">Reload Studio</button></div></div></div>';
+  '<div class="studio-shell__main" id="studio-load-failure" tabindex="-1"><h1 class="studio-shell__name">Portfolio Studio</h1><div class="studio-alert" role="alert"><p>Studio couldn&#x27;t load.</p><div class="studio-alert__actions"><button type="button" class="studio-button" data-studio-reload="">Reload Studio</button></div></div></div>';
 
 test("a commit before 5 seconds stops the late alert's clock: no <studio-load-late>, even once the timers run past 5 seconds (row 88c)", (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -221,21 +234,12 @@ test('a hand-off after a client render of the page took <studio-load-late> out s
 test('once Reload Studio is pressed in the late alert, the page reloads, and a commit leaves <studio-load-late> and its root alone (row 88c)', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const page = fakePage();
-  let press: (() => void) | undefined;
-  const host: LateHost = {
-    ...page.host,
-    mount: (node, alert) => {
-      // The alert's Reload Studio, as its click calls it.
-      const element = alert as React.ReactElement<{ onReload: () => void }>;
-      press = element.props.onReload;
-      return page.host.mount(node, alert);
-    },
-  };
-  const late = createLateAlert(host);
+  const late = createLateAlert(page.host);
   late.start();
   t.mock.timers.tick(STUDIO_LOAD_TIMEOUT_MS);
   assert.equal(late.pressed(), false);
-  press?.();
+  // The alert's Reload Studio, as its click calls it.
+  page.click();
   assert.equal(page.reloads(), 1);
   assert.equal(late.pressed(), true);
   assert.equal(late.committed('live'), true, 'the boundary yields to it');
@@ -245,6 +249,21 @@ test('once Reload Studio is pressed in the late alert, the page reloads, and a c
   assert.equal(page.lateNodes(), 1);
   await Promise.resolve();
   assert.equal(page.unmounted(), 0, 'its root stays mounted');
+  t.mock.timers.reset();
+});
+
+test("the late alert hears clicks in the capture phase, ahead of the page's root, and answers Reload Studio's alone: a click anywhere else reloads nothing", (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const page = fakePage();
+  const late = createLateAlert(page.host);
+  late.start();
+  t.mock.timers.tick(STUDIO_LOAD_TIMEOUT_MS);
+  page.clickElsewhere();
+  assert.equal(page.reloads(), 0, 'a click elsewhere');
+  assert.equal(late.pressed(), false);
+  page.click();
+  assert.equal(page.reloads(), 1, 'Reload Studio');
+  assert.equal(late.pressed(), true);
   t.mock.timers.reset();
 });
 
@@ -265,4 +284,71 @@ test("the late alert offers Sign out under the profile the page's .studio-load w
   for (const profile of ['demo', null]) {
     assert.equal(shown(profile), LATE_MARKUP, `under ${String(profile)}`);
   }
+});
+
+// The page's inline clock (late-markup.ts) starts at HTML parse; the module adopts it.
+const inlineClock = (startedAt: number, node: FakeNode | null = null, pressed = false) => {
+  let cancelled = 0;
+  return {
+    clock: {
+      startedAt,
+      node: node as unknown as HTMLElement | null,
+      pressed,
+      cancel: () => void (cancelled += 1),
+    },
+    cancelled: () => cancelled,
+  };
+};
+
+test('an inline clock still running is adopted: its timer stops, and this one runs out the rest of its time from the same start, so one clock arms', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const page = fakePage();
+  const inline = inlineClock(8_000);
+  const late = createLateAlert({ ...page.host, now: () => 10_000, inline: () => inline.clock });
+  late.start();
+  late.start();
+  assert.equal(inline.cancelled(), 1, "the inline clock's timer stopped");
+  assert.deepEqual(page.armed, [STUDIO_LOAD_TIMEOUT_MS - 2_000], 'one clock, for what was left');
+  t.mock.timers.tick(STUDIO_LOAD_TIMEOUT_MS - 2_001);
+  assert.equal(page.lateNodes(), 0);
+  t.mock.timers.tick(1);
+  assert.equal(page.lateNodes(), 1, 'one <studio-load-late>, at the inline start plus the timeout');
+  assert.deepEqual(page.rendered, [LATE_MARKUP]);
+  t.mock.timers.reset();
+});
+
+test("an inline clock that already showed its alert is adopted: no clock arms, and the 'live' hand-off takes its node out and focuses #studio-main", (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const page = fakePage();
+  const node = (
+    page.host.document as unknown as { createElement(tag: string): FakeNode }
+  ).createElement(LATE_ALERT_TAG);
+  page.body.appendChild(node);
+  const inline = inlineClock(0, node);
+  const late = createLateAlert({ ...page.host, now: () => 9_000, inline: () => inline.clock });
+  late.start();
+  assert.deepEqual(page.armed, [], 'no second clock');
+  assert.equal(inline.cancelled(), 0);
+  assert.equal(late.pressed(), false);
+  assert.equal(late.committed('live'), false);
+  assert.equal(page.lateNodes(), 0, 'its node went');
+  assert.equal(page.focused(), 'studio-main');
+  t.mock.timers.reset();
+});
+
+test('an inline alert whose Reload Studio was pressed is left alone: the page reloads, and the boundary yields to it', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const page = fakePage();
+  const node = (
+    page.host.document as unknown as { createElement(tag: string): FakeNode }
+  ).createElement(LATE_ALERT_TAG);
+  page.body.appendChild(node);
+  const inline = inlineClock(0, node);
+  const late = createLateAlert({ ...page.host, now: () => 9_000, inline: () => inline.clock });
+  late.start();
+  inline.clock.pressed = true;
+  assert.equal(late.pressed(), true);
+  assert.equal(late.committed('live'), true);
+  assert.equal(page.lateNodes(), 1, 'its node stays');
+  t.mock.timers.reset();
 });

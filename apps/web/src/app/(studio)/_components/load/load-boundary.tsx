@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { lateCommitted, latePressed, StudioLoadAlert, type CommitPhase } from './late-alert';
+import { inlineLateClockScript } from './late-markup';
 
 // When Studio's shell doesn't load (row 88c): /studio's page wraps its entry,
 // under either profile, in this boundary, outside the shell's lazy chunk, so
@@ -75,10 +76,18 @@ type Phase = 'waiting' | 'live' | 'rejected';
 export function StudioLoadBoundary({
   children,
   profile,
+  nonce,
 }: {
   readonly children: ReactNode;
   /** The page's profile (row 88c-RC2 (b)): under owner the alerts offer Sign out. */
   readonly profile: 'owner' | 'demo';
+  /**
+   * The request's CSP nonce: with it, the server's markup carries the late alert's clock
+   * as one inline script under Studio's existing script-src, so a chunk that stalls before any
+   * module evaluates still gets "Studio couldn't load." in time. Without one, no script goes out,
+   * and late-alert.tsx starts the clock itself.
+   */
+  readonly nonce?: string;
 }) {
   const [phase, setPhase] = useState<Phase>('waiting');
   // Set in the same commit as the shell's mount or the refusal's catch, before this boundary's
@@ -114,6 +123,15 @@ export function StudioLoadBoundary({
 
   return (
     <>
+      {nonce ? (
+        // Run by the HTML parser, before any chunk; React never runs it again. A browser hides a
+        // nonce's value once it applies it, so the attribute reads differently at hydration.
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: inlineLateClockScript(profile) }}
+        />
+      ) : null}
       {alerting ? (
         <StudioLoadAlert
           main

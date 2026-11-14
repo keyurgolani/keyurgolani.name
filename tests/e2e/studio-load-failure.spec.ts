@@ -25,7 +25,7 @@ const secret = ownerSecret();
 test.use({ appOptions: ownerApp(secret.hash) });
 
 const SIGNED_OUT = '/studio/sign-in?state=signed_out';
-/** The shell's own wait (late-alert.tsx's STUDIO_LOAD_TIMEOUT_MS), and margin past it. */
+/** The shell's own wait (late-markup.ts's STUDIO_LOAD_TIMEOUT_MS), and margin past it. */
 const PAST_TIMEOUT_MS = 10_000;
 /** When a held shell is let through: after the 5 s alert. */
 const RELEASE_AT_MS = 6_000;

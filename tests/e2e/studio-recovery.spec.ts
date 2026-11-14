@@ -224,17 +224,18 @@ test(
 const OWNER_CHUNK = /["']draft\.applyEdits["']/;
 
 /**
- * How long the shell waits for its chunks before it says Studio couldn't load: late-alert.tsx's
- * STUDIO_LOAD_TIMEOUT_MS, read from its source, since the module itself renders React roots.
+ * How long the shell waits for its chunks before it says Studio couldn't load: late-markup.ts's
+ * STUDIO_LOAD_TIMEOUT_MS (the one constant the page's inline clock and late-alert.tsx
+ * share), read from its source, as the spec loads none of the app's modules.
  */
 const STUDIO_LOAD_TIMEOUT_MS = (() => {
   const source = readFileSync(
-    new URL('../../apps/web/src/app/(studio)/_components/load/late-alert.tsx', import.meta.url),
+    new URL('../../apps/web/src/app/(studio)/_components/load/late-markup.ts', import.meta.url),
     'utf8',
   );
   const found = /export const STUDIO_LOAD_TIMEOUT_MS = ([\d_]+);/.exec(source)?.[1];
   if (!found)
-    throw new Error('late-alert.tsx no longer exports STUDIO_LOAD_TIMEOUT_MS as a number');
+    throw new Error('late-markup.ts no longer exports STUDIO_LOAD_TIMEOUT_MS as a number');
   return Number(found.replaceAll('_', ''));
 })();
 
