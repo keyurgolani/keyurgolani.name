@@ -144,3 +144,19 @@ test('with no reference measured yet, every metric is read as measured, and the 
     'a reference names the run that measured it',
   );
 });
+
+test("the repository's reference is the one calibration run 43610104176 measured on six hosted runners: 198.216 ms, the median of every load, which names that run", () => {
+  const { referenceMs, measuredBy } = base.timing.calibration;
+  assert.equal(referenceMs, 198.216);
+  assert.match(measuredBy, /43610104176/);
+  // That run's fastest runner, at 137.002 ms, reads as 0.691 of the reference, and its TBT and
+  // idle work are read at the reference's speed.
+  const fast = five({ ...GOOD_RUN, calibrationMs: 137.002 } as PerfRun);
+  const result = timingResult(fast, 'medium', base);
+  assert.deepEqual(result.runner, {
+    calibrationMs: [137.002, 137.002, 137.002, 137.002, 137.002],
+    factor: 0.691,
+    referenceMs: 198.216,
+  });
+  assert.equal(result.rows.find((each) => each.metric === 'tbtMs')!.calibrated, true);
+});
