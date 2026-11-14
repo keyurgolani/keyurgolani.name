@@ -175,19 +175,19 @@ export interface ReleasePace {
 }
 
 /**
- * The pace RELEASE_CEILING is fitted at: inventory run 43166869592 of the release scope (c′), at
- * its median shard (lib/release-fit.ts's fitMedianPace over
+ * The pace RELEASE_CEILING is fitted at: inventory run 43166869592 of the release scope (c′) with
+ * its resume, 43530446147, at their median shard (lib/release-fit.ts's fitMedianPace over
  * tests/quality/fixtures/inventory-run-43166869592.json, which release-fit.test.ts holds this to).
- * The release weights are that run's own measured means (shard-durations.json's release.targets),
+ * The release weights are those runs' own measured means (shard-durations.json's release.targets),
  * so the pace is about 1 and a shard estimated at the ceiling takes 80 minutes at the median; the
- * 1.5x margin is the runners' spread, the slowest of its 486 shards at 1.5x the median pace and
- * its 90th percentile at 1.21x. Fitting a newer run sets these numbers and nothing else.
+ * 1.5x margin is the runners' spread, the slowest of their 613 timed shards at 1.5x the median pace
+ * and the 90th percentile at 1.2x. Fitting a newer run sets these numbers and nothing else.
  */
 export const RELEASE_PACE: ReleasePace = {
   source:
-    "Inventory run 43166869592 (f5212efb5, the release scope (c′) whole, 614 shards at 2 workers), its 486 finished shards at the median: a 78 s fixed part (each job's time outside its run step, on the mean, from the Actions API's step times), and the median shard's time past it per second of its estimate past FULL_FIXED, each shard's estimate its groups as that run dealt them, at the release weights that run measured.",
-  overheadSeconds: 78,
-  pace: 1.018,
+    "Inventory run 43166869592 (f5212efb5, the release scope (c′) whole, 614 shards at 2 workers) with its resume, run 43530446147 (the same plan), their 613 timed shards at the median (309 ran as two parts): a 77 s fixed part (each job's time outside its run step, on the mean, from the Actions API's step times), and the median shard's time past it per second of its estimate past FULL_FIXED, each shard's estimate its groups as the plan dealt them, at the release weights those runs measured.",
+  overheadSeconds: 77,
+  pace: 1.022,
 };
 
 /**
@@ -215,7 +215,7 @@ export function fitReleaseCeiling(
  * The slowest a release shard may be estimated at, in seconds, its fixed part included: the release
  * plan's per-shard target, which rc-quality-plan counts its shards by (releaseFor). It's
  * fitReleaseCeiling(RELEASE_PACE), the 120-minute cap (RELEASE_TIMEOUT_MINUTES) over
- * TIMEOUT_MARGIN at the pace measured on CI Linux: 5,058 s at the inventory run's median.
+ * TIMEOUT_MARGIN at the pace measured on CI Linux: 5,041 s at the inventory's median.
  */
 export const RELEASE_CEILING = fitReleaseCeiling(RELEASE_PACE);
 /**
