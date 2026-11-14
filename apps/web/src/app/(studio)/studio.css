@@ -6,6 +6,8 @@
    it has no --studio-sentinel on its root. */
 :root {
   --studio-sentinel: present;
+  /* The page's own scrollbar and controls follow the reader's light or dark, as Studio does. */
+  color-scheme: light dark;
 }
 
 .studio {
@@ -16,6 +18,14 @@
   --studio-muted: #4f4f4f;
   --studio-rule: #e3e3e3;
   --studio-edge: #8a8a8a;
+  /* The browser's own parts in Studio's scheme: its scrollbars a thumb that reads 3:1 on the
+     canvas, its controls the scheme's, its caret and checks the ink, a selection grey. */
+  --studio-thumb: var(--studio-edge);
+  --studio-selection: #d4d4d4;
+  color-scheme: light;
+  accent-color: var(--studio-ink);
+  caret-color: var(--studio-ink);
+  scrollbar-color: var(--studio-thumb) transparent;
   background: var(--studio-canvas);
   color: var(--studio-ink);
   min-height: 100vh;
@@ -38,7 +48,24 @@
     --studio-muted: #b5b5b5;
     --studio-rule: #383838;
     --studio-edge: #8f8f8f;
+    --studio-selection: #4a4a4a;
+    color-scheme: dark;
   }
+}
+
+.studio ::selection {
+  background-color: var(--studio-selection);
+  color: var(--studio-ink);
+}
+
+.studio ::placeholder {
+  color: var(--studio-muted);
+}
+
+/* An autofilled field keeps its surface and ink over the browser's wash. */
+.studio :autofill {
+  -webkit-text-fill-color: var(--studio-ink);
+  box-shadow: inset 0 0 0 100vmax var(--studio-surface);
 }
 
 .studio-sign-in {
@@ -1109,6 +1136,8 @@ body:has(> studio-load-late) .studio-load {
   --st-rule: #e3e3e3;
   --st-edge: #d0d0d0;
   --st-edge-strong: #8a8a8a;
+  /* A scrollbar's thumb: 3:1 on every ground the workspace scrolls over. */
+  --st-thumb: var(--st-edge-strong);
   --st-frame-line: rgb(0 0 0 / 0.16);
   /* The one hue. The mockup's #1f45d6 measures 2.99:1 on the #a6a6a6 stage, so a step
      darker keeps 3:1 there (3.6:1) and 8.4:1 on the rail. */
@@ -1127,6 +1156,9 @@ body:has(> studio-load-late) .studio-load {
   --st-t-l: 0.9375rem;
   --studio-accent: var(--st-focus);
   --studio-rail-ground: var(--st-bg);
+  accent-color: var(--st-focus);
+  caret-color: var(--st-ink);
+  scrollbar-color: var(--st-thumb) transparent;
   display: block;
   max-width: none;
   margin: 0;
@@ -1973,7 +2005,6 @@ body:has(> studio-load-late) .studio-load {
   border-right: 1px solid var(--st-rule);
   background: var(--st-bg);
   scrollbar-width: thin;
-  scrollbar-color: #c4c4c4 transparent;
   /* A control scrolled into view clears the sticky head (studio-split.tsx measures it). */
   scroll-padding-block: calc(var(--studio-head, 0px) + 0.5rem) 1rem;
 }
@@ -3501,7 +3532,7 @@ body:has(> studio-load-late) .studio-load {
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-padding-inline: 1.5rem 3.5rem;
-  scrollbar-width: none;
+  scrollbar-width: thin;
 }
 
 .studio-picker__top .studio-families[data-more='start'] {
@@ -4320,7 +4351,7 @@ details[open] > summary .studio-info__chevron {
     overflow-x: auto;
     scroll-snap-type: x proximity;
     scroll-padding-inline: 1rem;
-    scrollbar-width: none;
+    scrollbar-width: thin;
   }
 
   .studio-recipes__run,
@@ -5522,7 +5553,7 @@ details[open] > summary .studio-info__chevron {
     overflow-x: auto;
     scroll-snap-type: x proximity;
     scroll-padding-inline: 1rem;
-    scrollbar-width: none;
+    scrollbar-width: thin;
   }
 
   /* Compositions on a phone: one strip, the ready drawings first, then one card for everything
@@ -5746,6 +5777,7 @@ details[open] > summary .studio-info__chevron {
     --st-ink-2: #333333;
     --st-ink-3: #3d3d3d;
     --st-edge: #767676;
+    --st-thumb: var(--st-edge);
     --st-rule: #8f8f8f;
     --st-attn: #6b3500;
     --st-ok: #124a2b;
@@ -5807,5 +5839,13 @@ details[open] > summary .studio-info__chevron {
   .studio-thumbs > .studio-choice,
   .studio-thumbs > .studio-pend-card {
     width: 7rem;
+  }
+}
+
+/* Forced colors draw scrollbars in the system's colors, not Studio's. */
+@media (forced-colors: active) {
+  .studio,
+  .studio * {
+    scrollbar-color: auto;
   }
 }
