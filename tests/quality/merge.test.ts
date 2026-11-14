@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -331,5 +332,131 @@ test("quality:merge takes the mode and the shard jobs' result, as quality-pr-ver
     ['shards', '--jobs', 'Bad Result'],
   ]) {
     assert.throws(() => parseMergeArgs(bad), /usage: pnpm quality:merge/, bad.join(' '));
+  }
+});
+
+test('the shards of one run share one plan in memory: a plan.json written the same is read once, and one written apart is still judged by its content', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-merge-one-plan-'));
+  try {
+    writeShards(root, [
+      { ...SHARD_1, shard: '1/3' },
+      { ...SHARD_2, shard: '2/3' },
+      { shard: '3/3', tests: [] },
+    ]);
+    const shards = readShards(root);
+    assert.equal(shards.length, 3);
+    assert.ok(shards[0]!.plan, 'the first shard keeps its plan');
+    for (const shard of shards.slice(1)) {
+      assert.equal(
+        shard.plan,
+        shards[0]!.plan,
+        `${shard.dir} holds the first shard's plan, not a copy`,
+      );
+    }
+    // The same plan in other whitespace is the same plan: read apart, judged equal.
+    const other = path.join(root, 'reports-quality-full-3', 'quality', 'plan.json');
+    writeFileSync(other, JSON.stringify(JSON.parse(readFileSync(other, 'utf8')), null, 2));
+    const spaced = mergeShards(readShards(root), { expected: 3, mode: 'full' });
+    assert.deepEqual(
+      spaced.failures.filter(({ rule }) => rule === 'shard-mismatch'),
+      [],
+      'a plan.json in other whitespace is the same plan',
+    );
+    // Another plan is still another run's.
+    const planned = JSON.parse(readFileSync(other, 'utf8')) as { tests: number };
+    writeFileSync(other, JSON.stringify({ ...planned, tests: planned.tests + 1 }));
+    const mismatched = mergeShards(readShards(root), { expected: 3, mode: 'full' });
+    assert.ok(
+      mismatched.failures.some(
+        ({ rule, message }) =>
+          rule === 'shard-mismatch' && /reports-quality-full-3's plan isn't/.test(message),
+      ),
+      'a shard of another plan fails the merge',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a release run's shards merge whatever their count: 30 shards of a 2 MB plan read and judged in a 64 MB heap", () => {
+  // A release shard's plan.json is the whole plan (about 28 MB at 91,224 tests), and a release run
+  // has hundreds of shards: their plans held at once, one copy each, run out of any runner's heap.
+  // Here 30 shards of a 2 MB plan, about 75 MB parsed if each were held, in a heap of 64 MB.
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-merge-heap-'));
+  try {
+    const planned = Array.from({ length: 10_000 }, (_, at) => ({
+      cell: `composition:fallback complete / fallback/language-${at % 97}/scheme-${at % 89}/type-${at % 13}/system`,
+      viewport: ['390x844', '1024x768', '1440x900'][at % 3]!,
+      row: 'default',
+      skip: null,
+      engineSkips: {},
+      conditions: true,
+    }));
+    const plan = JSON.stringify(
+      {
+        mode: 'full',
+        cells: planned.length,
+        tests: planned.length,
+        targets: [{ kind: 'composition', id: 'fallback' }],
+        reasons: [],
+        changes: [],
+        changed: [],
+        coverage: { rows: [], tuples: 0, accepted: 0, uncoverable: [] },
+        planned,
+      },
+      null,
+      2,
+    );
+    assert.ok(plan.length > 2_000_000, 'the plan is about 2 MB');
+    const count = 30;
+    for (let index = 1; index <= count; index += 1) {
+      const dir = path.join(root, 'shards', `reports-quality-release-${index}`, 'quality');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, 'plan.json'), plan);
+      writeFileSync(
+        path.join(dir, 'verdict.json'),
+        JSON.stringify({
+          ok: true,
+          failures: [],
+          flaky: [],
+          counts: {},
+          mode: 'full',
+          shard: `${index}/${count}`,
+          engines: ['chromium'],
+          canary: { before: [], after: [] },
+        }),
+      );
+    }
+    const script = path.join(root, 'merge.mts');
+    writeFileSync(
+      script,
+      [
+        `import { mergeShards, readShards } from ${JSON.stringify(path.resolve('tests/quality/lib/shards.ts'))};`,
+        `const verdict = mergeShards(readShards(${JSON.stringify(path.join(root, 'shards'))}), { expected: ${count}, mode: 'full' });`,
+        `console.log(JSON.stringify({ shards: verdict.shards.length, rules: [...new Set(verdict.failures.map((each) => each.rule))] }));`,
+      ].join('\n'),
+    );
+    const child = spawnSync(
+      process.execPath,
+      ['--max-old-space-size=64', '--import', 'tsx', script],
+      {
+        cwd: path.resolve('.'),
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(
+      child.status,
+      0,
+      `the merge ran out of its heap: ${child.stderr.split('\n').find((line) => /heap|memory/i.test(line)) ?? child.stderr.slice(-400)}`,
+    );
+    const merged = JSON.parse(child.stdout.trim().split('\n').at(-1)!) as {
+      shards: number;
+      rules: string[];
+    };
+    assert.equal(merged.shards, count);
+    assert.ok(!merged.rules.includes('shard-mismatch'), merged.rules.join(', '));
+    assert.ok(!merged.rules.includes('missing-shard'), merged.rules.join(', '));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
