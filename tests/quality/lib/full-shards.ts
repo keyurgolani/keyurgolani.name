@@ -175,18 +175,19 @@ export interface ReleasePace {
 }
 
 /**
- * The pace RELEASE_CEILING is fitted at: rc.2's release run, 42966517304, fitted to its slowest
- * shard (lib/release-fit.ts's fitShardPace over tests/quality/fixtures/release-run-42966517304.json,
- * which release-fit.test.ts holds this to). Its 89 shards were each estimated at about 3,521 s and
- * ran 5.9 to 40.1 minutes, 23.4 on the mean, against the 80 the old 4,800 s ceiling allowed, so
- * the weights run about twice high on the mean and 1.3x high for the slowest. Fitting a newer run
- * sets these numbers and nothing else.
+ * The pace RELEASE_CEILING is fitted at: inventory run 43166869592 of the release scope (c′), at
+ * its median shard (lib/release-fit.ts's fitMedianPace over
+ * tests/quality/fixtures/inventory-run-43166869592.json, which release-fit.test.ts holds this to).
+ * The release weights are that run's own measured means (shard-durations.json's release.targets),
+ * so the pace is about 1 and a shard estimated at the ceiling takes 80 minutes at the median; the
+ * 1.5x margin is the runners' spread, the slowest of its 486 shards at 1.5x the median pace and
+ * its 90th percentile at 1.21x. Fitting a newer run sets these numbers and nothing else.
  */
 export const RELEASE_PACE: ReleasePace = {
   source:
-    "rc.2's release run 42966517304 (14c88446e, scope default-packs), its slowest shard: 2,407 s for a 3,521 s estimate, past a 51 s fixed part (each job's time outside its run step, on the mean, from the Actions API's step times); every shard's estimate as rc-quality-plan gave it, worked out again at 14c88446e.",
-  overheadSeconds: 51,
-  pace: 0.76,
+    "Inventory run 43166869592 (f5212efb5, the release scope (c′) whole, 614 shards at 2 workers), its 486 finished shards at the median: a 78 s fixed part (each job's time outside its run step, on the mean, from the Actions API's step times), and the median shard's time past it per second of its estimate past FULL_FIXED, each shard's estimate its groups as that run dealt them, at the release weights that run measured.",
+  overheadSeconds: 78,
+  pace: 1.018,
 };
 
 /**
@@ -214,8 +215,7 @@ export function fitReleaseCeiling(
  * The slowest a release shard may be estimated at, in seconds, its fixed part included: the release
  * plan's per-shard target, which rc-quality-plan counts its shards by (releaseFor). It's
  * fitReleaseCeiling(RELEASE_PACE), the 120-minute cap (RELEASE_TIMEOUT_MINUTES) over
- * TIMEOUT_MARGIN at the pace measured on CI Linux: 6,668 s at rc.2's (4,800 s at the plan's own
- * assumptions, a pace of 1).
+ * TIMEOUT_MARGIN at the pace measured on CI Linux: 5,058 s at the inventory run's median.
  */
 export const RELEASE_CEILING = fitReleaseCeiling(RELEASE_PACE);
 /**
@@ -228,9 +228,9 @@ export const RELEASE_CEILING = fitReleaseCeiling(RELEASE_PACE);
 export const NIGHTLY_CEILING = fitReleaseCeiling(RELEASE_PACE, NIGHTLY_TIMEOUT_MINUTES);
 /**
  * The most one group may weigh, in seconds: it runs on one worker, after the shard's fixed part.
- * 3,180 s, what a 90-minute night's ceiling left one worker before row 151. It stays when the
- * nights' ceiling rose to 6,668 s: parts that size deal the nights and the release's shards
- * evenly, and parts of a whole worker's time leave nights lumpy past every cycle.
+ * 3,180 s, what the old 90-minute night's ceiling left one worker. It stays under the nights'
+ * higher ceiling: parts that size deal the nights and the release's shards evenly, and parts of a
+ * whole worker's time leave nights lumpy past every cycle.
  */
 export const FULL_GROUP_BUDGET = 3180;
 
@@ -240,12 +240,14 @@ export const timeoutMinutes = (ceiling: number) => Math.ceil((ceiling * TIMEOUT_
 export const releaseTimeoutMinutes = () => RELEASE_TIMEOUT_MINUTES;
 
 /**
- * The weights the release plan sizes its shards by: `durations` with its `release` block over
- * `conditions`, `pack` and `perf`, the p90 of each key as a release candidate's preflight measured
- * it (shard-durations.json). With every key at its p90, a shard's estimate is the sum of its tests'
- * per-key p90 weights (not the p90 of the shard's span), which
- * the release ceiling holds to two-thirds of rc-quality's timeout (TIMEOUT_MARGIN). The nightly
- * keeps the PR weights.
+ * The weights the release plan and the nightly size their shards by: `durations` with its
+ * `release` block (shard-durations.json): its `targets`, each cell test's mean time by `<target>
+ * <viewport> <row>` as an inventory run of the release scope measured it, and its `skipped`, which
+ * a test of a measured key and a skipped test take first (testWeight()); and its p90s of
+ * `conditions`, `pack` and `perf` from a candidate's preflight, over the PR weights, for any test
+ * the inventory didn't time. A shard's estimate is then its fixed part and its workers' time at
+ * those means, which the release ceiling holds to two-thirds of rc-quality's timeout
+ * (TIMEOUT_MARGIN) at the run's median pace (RELEASE_PACE).
  */
 export function releaseDurations(durations: ShardDurations = loadDurations()): ShardDurations {
   const release = durations.release;
@@ -255,6 +257,8 @@ export function releaseDurations(durations: ShardDurations = loadDurations()): S
     conditions: { ...durations.conditions, ...release.conditions },
     pack: { ...durations.pack, ...release.pack },
     perf: release.perf,
+    ...(release.skipped === undefined ? {} : { skipped: release.skipped }),
+    ...(release.targets === undefined ? {} : { targets: release.targets }),
   };
 }
 

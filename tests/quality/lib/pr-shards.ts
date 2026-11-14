@@ -131,10 +131,22 @@ export interface ShardDurations {
    * keeps the weight above.
    */
   readonly release?: {
+    /** Where these weights were measured. */
+    readonly source?: string;
     readonly conditions: Readonly<Record<string, number>>;
     readonly pack: Readonly<Record<string, number>>;
     readonly perf: number;
+    /**
+     * Each cell test's measured mean by `<target> <viewport> <row>`, its target a composition or
+     * surface id, from an inventory run of the release scope: what a test of that key weighs,
+     * before any weight above (testWeight()).
+     */
+    readonly targets?: Readonly<Record<string, number>>;
+    /** A skipped test's measured mean in that run: its worker's page and fixtures, before it skips. */
+    readonly skipped?: number;
   };
+  /** The release's `targets` (releaseDurations()), when these are the release's weights. */
+  readonly targets?: Readonly<Record<string, number>>;
 }
 
 /** Whether a cell's tuple names a pack other than the platform default on any axis. */
@@ -192,14 +204,17 @@ const median = (values: readonly number[]) => {
 
 /** What testWeight() reads of a planned test. */
 export type WeighedTest = Pick<Plan['tests'][number], 'skip' | 'engineSkips' | 'conditions'> & {
-  readonly cell: Pick<Plan['tests'][number]['cell'], 'kind' | 'state' | 'tuple' | 'sweep'>;
+  readonly cell: Pick<Plan['tests'][number]['cell'], 'kind' | 'state' | 'tuple' | 'sweep'> &
+    Partial<Pick<Plan['tests'][number]['cell'], 'target'>>;
   readonly viewport: { readonly id: string };
   readonly row: { readonly id: string };
 };
 
 /**
- * About how long one planned cell test takes on `engine`: none skipped; a
- * swept cell's its row's `sweep` weight; a test with the reload conditions its row's measured mean, from `pack` on a
+ * About how long one planned cell test takes on `engine`: a skipped one
+ * `skipped`; a swept cell's its row's `sweep` weight; with the release's
+ * measured `targets`, a test of a measured `<target> <viewport> <row>` that
+ * mean; a test with the reload conditions its row's measured mean, from `pack` on a
  * pack's tuple, else `conditions`; a composition's complete cell without
  * them `composition`'s; and any other, a stand-in state's or a surface's,
  * `plain`. A row with no measured weight takes `fallback`.
@@ -213,6 +228,9 @@ export function testWeight(
   if (test.skip !== undefined || test.engineSkips[engine] !== undefined) return durations.skipped;
   const key = `${test.viewport.id} ${test.row.id}`;
   if (test.cell.sweep) return durations.sweep[key] ?? fallback;
+  const measured =
+    test.cell.target === undefined ? undefined : durations.targets?.[`${test.cell.target} ${key}`];
+  if (measured !== undefined) return measured;
   if (!test.conditions) {
     return test.cell.kind === 'composition' && test.cell.state === APPEARANCE_STATE.id
       ? (durations.composition[key] ?? fallback)

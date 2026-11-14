@@ -236,3 +236,32 @@ export function fitShardPace(run: ShardRun): Pick<ReleasePace, 'overheadSeconds'
   );
   return { overheadSeconds, pace: Math.ceil(slowest * 1000) / 1000 };
 }
+
+/**
+ * The pace a run measured at its median shard, for weights measured from that same run (each key's
+ * mean time, shard-durations.json's release.targets): the fixed part as fitShardPace takes it, and
+ * the pace the median shard took past it per second of its estimate past FULL_FIXED, rounded up to
+ * a thousandth. A shard estimated at the ceiling then takes the cap over the margin at the median,
+ * and the margin is the room for the runners' spread around it, which `spread` gives: the median,
+ * 90th percentile and most of each shard's pace over the fitted one.
+ */
+export function fitMedianPace(run: ShardRun): Pick<ReleasePace, 'overheadSeconds' | 'pace'> & {
+  readonly spread: { readonly p50: number; readonly p90: number; readonly max: number };
+} {
+  const overheadSeconds = Math.round(
+    run.shards.reduce((sum, each) => sum + (each.jobSeconds - each.runSeconds), 0) /
+      run.shards.length,
+  );
+  const paces = run.shards
+    .map((each) => (each.jobSeconds - overheadSeconds) / (each.estimate - FULL_FIXED))
+    .sort((a, b) => a - b);
+  const at = (share: number) =>
+    paces[Math.min(paces.length - 1, Math.floor(paces.length * share))]!;
+  const pace = Math.ceil(at(0.5) * 1000) / 1000;
+  const over = (value: number) => Math.round((value / pace) * 100) / 100;
+  return {
+    overheadSeconds,
+    pace,
+    spread: { p50: over(at(0.5)), p90: over(at(0.9)), max: over(paces.at(-1)!) },
+  };
+}
