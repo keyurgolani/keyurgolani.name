@@ -1731,6 +1731,15 @@
   text-decoration: none;
 }
 
+/* The way on's two cells are each the link, and rule only their own block-start and inline-start, so
+   a ring 2 px outside one lay its far sides on its neighbours' 3 px rules, the next cell's and the next
+   row's, where the change is under 3:1. Each rings a step further out instead, past those rules, on
+   its neighbours' ground (a focused cell lifts over them, above): --space-3xs, at least 4.5 px, more
+   than --layout-rule's 3 px (tests/quality/raw-grid-next-ring.test.ts holds the two). */
+[data-variant='raw-grid'] :is(.rg-next__go, .rg-next__all):focus-visible {
+  --ui-focus-offset: var(--space-3xs);
+}
+
 [data-variant='raw-grid'] .rg-next__go {
   background-color: var(--color-surface-prominent);
 }
