@@ -6,7 +6,11 @@ import path from 'node:path';
 import { anchorV1 } from '../derive';
 import { LENGTH_KEYS } from '../language-grammar';
 import { LAYER_ORDER } from '../layers';
-import type { DesignLanguageManifest, TypographyManifest } from '../manifests';
+import {
+  TypographyManifestSchema,
+  type DesignLanguageManifest,
+  type TypographyManifest,
+} from '../manifests';
 import { schemeSets, type ColorSetName, type SchemeSets } from '../sets';
 import { COLOR_ROLES, LANGUAGE_KEYS } from '../tokens';
 import { fileURLToPath } from 'node:url';
@@ -495,6 +499,63 @@ test('a typography profile scopes its roles and namespaces each font it ships', 
       css,
       /\/\* Measures: characters at Body Face's 0\.5000em average advance, times --layout-measure-scale, which a composition that applies font-size-adjust sets from --type-body-aspect, 0\.5200, held from 0\.5 to 2\. \*\/\n {2}\[data-typography="acme-type"\] \{\n[^}]*--type-measure-body: calc\(34em \* clamp\(0\.5, var\(--layout-measure-scale, 1\), 2\)\);\n {4}--type-measure-compact: calc\(26em \* clamp\(0\.5, var\(--layout-measure-scale, 1\), 2\)\);\n {4}--type-body-aspect: 0\.5200;\n/,
     );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a face whose manifest entry says display: optional loads optional, and every other face swaps', () => {
+  const dir = packDir({
+    'faces/body.woff2': minimalWoff2(),
+    'faces/display.woff2': minimalWoff2({ ...SAMPLE_METRICS, advance: 560 }),
+  });
+  try {
+    const manifest: TypographyManifest = {
+      ...HUMANIST_UI,
+      id: 'acme-type',
+      roles: {
+        ...HUMANIST_UI.roles,
+        body: { ...HUMANIST_UI.roles.body, 'font-family': 'Body Face, sans-serif' },
+        display: { ...HUMANIST_UI.roles.display, 'font-family': 'Display Face, serif' },
+      },
+      fontAssets: [
+        {
+          family: 'Body Face',
+          file: './faces/body.woff2',
+          weight: 400,
+          style: 'normal',
+          unicodeRange: 'U+0000-00FF',
+        },
+        {
+          family: 'Display Face',
+          file: './faces/display.woff2',
+          weight: [100, 900],
+          style: 'normal',
+          unicodeRange: 'U+0000-00FF',
+          display: 'optional',
+        },
+      ],
+    };
+    assert.ok(TypographyManifestSchema.safeParse(manifest).success);
+    const result = compilePack({ kind: 'typography', manifest, dir });
+    assert.ok(result.ok, JSON.stringify(result.ok ? null : result.problems));
+    const css = new TextDecoder().decode(result.pack.stylesheet!.bytes);
+    const display = (family: string) =>
+      new RegExp(
+        `font-family: "acme-type ${family}";\\n {4}src: url\\([^)]+\\) format\\("woff2"\\);\\n[^}]*font-display: (\\w+);`,
+      ).exec(css)?.[1];
+    assert.equal(display('Display Face'), 'optional');
+    assert.equal(display('Body Face'), 'swap');
+    // Only swap and optional: a face that blocks or falls back by its own clock isn't one.
+    for (const value of ['block', 'fallback', 'auto'])
+      assert.equal(
+        TypographyManifestSchema.safeParse({
+          ...manifest,
+          fontAssets: [{ ...manifest.fontAssets[1]!, display: value }],
+        }).success,
+        false,
+        value,
+      );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1457,14 +1518,18 @@ test("every pack writes each family, weight, and style's Latin face after its ot
     );
     const faces = [
       ...css.matchAll(
-        /@font-face \{\s*font-family: "([^"]+)";\s*src: url\("([^"]+)"\) format\("woff2"\);\s*font-weight: ([^;]+);\s*font-style: (\w+);\s*font-display: swap;\s*unicode-range: ([^;]+);/g,
+        /@font-face \{\s*font-family: "([^"]+)";\s*src: url\("([^"]+)"\) format\("woff2"\);\s*font-weight: ([^;]+);\s*font-style: (\w+);\s*font-display: (swap|optional);\s*unicode-range: ([^;]+);/g,
       ),
-    ].map(([, family, url, weight, style, range]) => ({
+    ].map(([, family, url, weight, style, display, range]) => ({
       key: `${family} ${weight} ${style}`,
+      display: display!,
       range: range!,
       ...byUrl.get(url!)!,
     }));
     assert.equal(faces.length, manifest.fontAssets.length, id);
+    // Each face swaps in, or loads optional where its manifest entry says so.
+    for (const face of faces)
+      assert.equal(face.display, face.asset.display ?? 'swap', `${id}: ${face.key}'s font-display`);
     for (const key of new Set(faces.map((face) => face.key))) {
       const group = faces.filter((face) => face.key === key);
       const latin = group.findIndex((face) => covers(face.asset.unicodeRange, 0x61));
