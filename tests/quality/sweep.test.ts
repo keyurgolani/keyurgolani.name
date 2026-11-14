@@ -361,6 +361,63 @@ test("a cell test's timeout is its own 240 s plus the time it waited for the iso
   }
 });
 
+// The default row reloads under every condition, the keyboard walk's included, and CI Linux runs it
+// slowest. Inventory sample run 43621049594 reran its 25 timed-out default cells at the release's
+// two workers with no perf test beside them: 22 passed in 162 to 240 s, and 3 ran to 246 to 252 s
+// and timed out again. In inventory runs 43166869592 and 43530446147 (no perf test in a cell
+// shard, so no lock wait) Playwright's clock read at most 258 s for a default cell, a timeout's,
+// and the slowest that passed took 240 s.
+const SAMPLE_SLOWEST_DEFAULT_MS = 252_000;
+const INVENTORY_SLOWEST_DEFAULT_MS = 258_000;
+
+test("a default-row cell's own budget is at least 1.25 times the slowest default cell CI Linux ran (252 s, so 315 s) and more than the inventory's slowest (258 s), and every other row keeps 240 s", async () => {
+  const plan = planCells({ meta: twoPacks(), registrations, mode: 'pr', changes: CHANGES });
+  const plain = plan.cells.find((each) => !each.sweep)!;
+  const budget = async (rowId: string) => {
+    const own = plan.tests.find((each) => each.cell === plain && each.row.id === rowId)!;
+    assert.ok(own, `a ${rowId} test of ${plain.id}`);
+    const { dir, testInfo, expect, page } = stubRun(null);
+    const set: number[] = [];
+    testInfo.setTimeout = (ms: number) => void set.push(ms);
+    await runCell(
+      {
+        page: page as never,
+        cell: plain,
+        viewport: own.viewport,
+        row: own.row,
+        conditions: own.conditions,
+        testInfo: testInfo as never,
+        expect: expect as never,
+        origin: 'http://127.0.0.1:3000',
+      },
+      stubPass,
+    );
+    rmSync(dir, { recursive: true, force: true });
+    return set.at(-1)!;
+  };
+  const defaultRow = await budget('default');
+  assert.deepEqual(
+    [
+      ...(defaultRow >= 1.25 * SAMPLE_SLOWEST_DEFAULT_MS
+        ? []
+        : [
+            `${defaultRow} ms is under 1.25 times the sample's slowest (${1.25 * SAMPLE_SLOWEST_DEFAULT_MS} ms)`,
+          ]),
+      ...(defaultRow > INVENTORY_SLOWEST_DEFAULT_MS
+        ? []
+        : [
+            `${defaultRow} ms isn't over the inventory's slowest (${INVENTORY_SLOWEST_DEFAULT_MS} ms)`,
+          ]),
+    ],
+    [],
+    "the default row's budget",
+  );
+  for (const row of PREFERENCE_ROWS.filter((each) => each.id !== 'default')) {
+    if (!plan.tests.some((each) => each.cell === plain && each.row.id === row.id)) continue;
+    assert.equal(await budget(row.id), 240_000, row.id);
+  }
+});
+
 /** A stand-in for a Playwright run of one cell test: its output in a temp dir, its soft expectations kept. */
 function stubRun(throwOn: string | null) {
   const dir = mkdtempSync(path.join(tmpdir(), 'sweep-run-'));
