@@ -39,6 +39,8 @@
   /* The composition's own lengths, each named. */
   --layout-underline: 0.3em;
   --layout-hairline: 1px;
+  /* The room a link set among words keeps either side: its focus ring's reach, and 2px more. */
+  --layout-ring-clear: calc(var(--ui-focus-width) + max(0px, var(--ui-focus-offset)) + 2px);
   --layout-pool-foot: 40%;
   --layout-plate: 60svh;
   /* The entrance's work: at most this tall, so its foot stands just above the floor line, and this wide. */
@@ -592,6 +594,15 @@
   a:focus-visible {
   background-color: var(--color-text-primary);
   color: var(--color-text-inverse);
+}
+
+/*
+ * A room title's catalogue line sets its link among words, the comma right after it, so the link
+ * keeps its ring's reach and 2px more clear of them on both sides, at rest too: focused, its
+ * ground and ring cover no glyph beside it, and focus moves nothing.
+ */
+[data-variant='obsidian-atelier'] :is(.oa-entrance__statement, .oa-installation__title) .oa-no a {
+  margin-inline: var(--layout-ring-clear);
 }
 
 /*
