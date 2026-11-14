@@ -483,7 +483,7 @@ test("the visitor's Appearance floats over the page, in Flux's ink: under its ow
   assert.match(CSS, /\.fx-bar__in \{\s*position: relative;\s*\}/);
 });
 
-test('the phone dock: the tools keep their size, the destination being read keeps its own, and the name gives way whole before fewer than five of its letters would show (B1, M1)', () => {
+test('the phone dock: the tools keep their size, the destination being read keeps its own, and the name wraps onto two lines, then gives way whole before fewer than five of its letters would fit a line (B1, M1)', () => {
   const phone = (selector: string) => rulesFor(selector, onPhones)[0]?.body ?? '';
   assert.equal(valueOf(phone('.fx-bar__nav'), 'flex'), '1 1 0');
   assert.equal(valueOf(phone('.fx-bar__nav'), 'min-inline-size'), 'min-content');
@@ -494,6 +494,21 @@ test('the phone dock: the tools keep their size, the destination being read keep
   assert.equal(valueOf(phone('.fx-tabs__dest'), 'flex'), 'none');
   assert.equal(valueOf(phone('.fx-tab--name'), 'min-inline-size'), '0');
   assert.equal(valueOf(phone('.fx-tab--name .fx-tab__word'), 'min-inline-size'), '0');
+  // Never cut on its one line: the name wraps where it doesn't fit, at its own size and leading,
+  // and past two lines its own text box clamps it (never the tab, whose focus ring would go with
+  // it). Two lines inside the control sit at the top of the row's line, so they don't stretch it.
+  const word = phone('.fx-tab--name .fx-tab__word');
+  assert.equal(valueOf(word, 'white-space'), 'normal');
+  assert.equal(valueOf(word, 'overflow-wrap'), 'break-word');
+  assert.equal(valueOf(word, 'display'), '-webkit-box');
+  assert.equal(valueOf(word, '-webkit-box-orient'), 'vertical');
+  assert.equal(valueOf(word, '-webkit-line-clamp'), '2');
+  assert.equal(valueOf(word, 'overflow'), 'hidden');
+  for (const property of ['font-size', 'line-height', 'font'])
+    assert.equal(valueOf(word, property), undefined, property);
+  const tab = phone('.fx-tab--name');
+  assert.equal(valueOf(tab, 'vertical-align'), 'top');
+  assert.equal(valueOf(tab, 'overflow'), undefined);
   const gone = RULES.filter(
     (rule) => rule.at.includes('@container fx-name (inline-size < 5rem)') && onPhones(rule),
   );

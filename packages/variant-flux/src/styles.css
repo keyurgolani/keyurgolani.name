@@ -2610,9 +2610,9 @@
 
   /* The dock's row: the tools keep their size, and the nav takes the rest. In it the destination
      being read keeps its own (its word up to 14ch) and the name takes what's left: it gives way
-     first, to an ellipsis, and once fewer than about five of its letters would show it goes
-     whole (its li a query container), so the dock never shows a cut-down name that reads as
-     someone else's, and the destination never shrinks onto the tools (B1, M1). */
+     first, onto a second line, and once fewer than about five of its letters would fit a line it
+     goes whole (its li a query container), so the dock never cuts a name on its one line to read
+     as someone else's, and the destination never shrinks onto the tools (B1, M1). */
   /* Never narrower than the destination, so the drop (the nav's width) never cuts its pill flat. */
   [data-variant='flux'] .fx-bar__nav {
     flex: 1 1 0;
@@ -2629,13 +2629,25 @@
     flex: none;
   }
 
+  /* At the top of its line, so a name on two lines inside the control never stretches the row. */
   [data-variant='flux'] .fx-tab--name {
     min-inline-size: 0;
     max-inline-size: 100%;
+    vertical-align: top;
   }
 
+  /* The name wraps where it doesn't fit, at its own size and leading: between words and after
+     hyphens first, inside a word only where that one word is wider than the tab. Past two lines
+     it ends in an ellipsis on the second, clipped by its own text box alone, never the tab's, so
+     its focus ring shows whole; the page still holds the whole name, the link's accessible name. */
   [data-variant='flux'] .fx-tab--name .fx-tab__word {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     min-inline-size: 0;
+    overflow: hidden;
+    white-space: normal;
+    overflow-wrap: break-word;
   }
 
   @container fx-name (inline-size < 5rem) {
