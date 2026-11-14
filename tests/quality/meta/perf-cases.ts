@@ -18,7 +18,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { REPO_ROOT } from '../../../quality/thresholds';
+import { loadThresholds, REPO_ROOT } from '../../../quality/thresholds';
 import { overBudgetProblems } from '../../../ci/budgets.mjs';
 import { checkBudgets, reportRecord } from '../../../ci/lib/budgets.mjs';
 import { loadValidator } from '../../../ci/summarize.mjs';
@@ -49,6 +49,9 @@ const HEADLINE: LcpEntry = {
   selector: 'main > h1',
 };
 
+/** The repository's reference runner speed (timing.calibration.referenceMs): a load at it reads as measured. */
+const REFERENCE_MS = loadThresholds().timing.calibration.referenceMs ?? 400;
+
 /** A load that's fine: a server-rendered heading as its LCP element, well within every ceiling. */
 export const GOOD_RUN: PerfRun = {
   status: 200,
@@ -57,9 +60,9 @@ export const GOOD_RUN: PerfRun = {
   lcpMs: 900,
   cls: 0,
   tbtMs: 40,
-  // One 90 ms task after FCP, TBT's 40 ms, and a runner at the reference's speed (row 141).
+  // One 90 ms task after FCP, TBT's 40 ms, and a runner at the reference's speed.
   blockingTasks: [90],
-  calibrationMs: 400,
+  calibrationMs: REFERENCE_MS,
   idleTaskMs: 12,
   heapMiB: 4,
   growthMiB: 0.1,

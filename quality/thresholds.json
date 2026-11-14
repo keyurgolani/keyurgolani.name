@@ -79,9 +79,9 @@
     "runs": 5,
     "releaseTolerance": 0.1,
     "calibration": {
-      "description": "Row 141: the hosted runner's speed is read before each perf load by a fixed workload, run in a blank page under the lab's CPU throttle and taken as its TaskDuration in ms (calibrationMs). tbtMs and idleTaskMs are judged at the reference runner's speed: each long task is scaled by referenceMs over calibrationMs before TBT's 50 ms cut, and the idle window's task time is scaled the same way. The raw readings stay in each row, and the runner's speed beside them. referenceMs is the workload's median on the CI runs measuredBy names. While it's null, every metric is read as measured, as before row 141, and row 141 stays open.",
-      "referenceMs": null,
-      "measuredBy": ""
+      "description": "The hosted runner's speed is read before each perf load by a fixed workload, run in a blank page under the lab's CPU throttle and taken as its TaskDuration in ms (calibrationMs). tbtMs and idleTaskMs are judged at the reference runner's speed: each long task is scaled by referenceMs over calibrationMs before TBT's 50 ms cut, and the idle window's task time is scaled the same way. The raw readings stay in each row, and the runner's speed beside them. referenceMs is the workload's median on the CI runs measuredBy names. While it's null, every metric is read as measured.",
+      "referenceMs": 198.216,
+      "measuredBy": "Calibration run 43610104176: every perf cell on six hosted ubuntu-24.04 runners, the workload read before each load; the median of all its loads. Its runners' medians ran from 137.002 ms to 247.893 ms."
     }
   },
   "exceptions": {

@@ -32,6 +32,9 @@ import {
 } from './samples';
 import { TIMING_GATE, timingFailures, timingMarkdown, timingTrend } from './timing';
 
+/** A load's TBT, `ms` at the reference's speed, with the one long task it's read from. */
+const withTbt = (ms: number) => ({ tbtMs: ms, blockingTasks: [ms + 50] });
+
 // The performance gates (#11, 11-3). quality:meta's perf, timing, and
 // budgets cases hold each gate to a known-bad and a known-good input; these
 // hold the pieces under them.
@@ -71,7 +74,7 @@ test('the median is the middle load, or the mean of the middle two, whatever the
 
 test('a timing result takes each metric over every load, and one stalled load leaves the median alone', () => {
   const stalled = timingResult(
-    [GOOD_RUN, { ...GOOD_RUN, lcpMs: 9000, tbtMs: 3000 }, GOOD_RUN, GOOD_RUN, GOOD_RUN],
+    [GOOD_RUN, { ...GOOD_RUN, lcpMs: 9000, ...withTbt(3000) }, GOOD_RUN, GOOD_RUN, GOOD_RUN],
     'light',
   );
   assert.deepEqual(
@@ -429,7 +432,7 @@ test("an LCP element is server-rendered when the response body's markup, outside
 
 test('the timing trend reports each median over its ceiling, and never fails a pull request', () => {
   const over = perfSummaryTest('a', {
-    perf: { timing: timingResult(five({ ...GOOD_RUN, tbtMs: 260 }), 'light') },
+    perf: { timing: timingResult(five({ ...GOOD_RUN, ...withTbt(260) }), 'light') },
   });
   const trend = timingTrend({ tests: [over] });
   assert.equal(trend.gating, 'report-only');
@@ -438,10 +441,10 @@ test('the timing trend reports each median over its ceiling, and never fails a p
   ]);
   const markdown = timingMarkdown(trend);
   assert.match(markdown, /report only: a release run gates it/);
-  // No reference measured yet (row 141), so the raw median column is empty.
+  // With a reference measured, the raw median shows beside it, with the runner's speed.
   assert.match(
     markdown,
-    /\| composition:fallback \| light \| tbtMs \| 260 \| {2}\| 200 \| 0 \| over \|/,
+    /\| composition:fallback \| light \| tbtMs \| 260 \| 260 \(runner 1x the reference\) \| 200 \| 0 \| over \|/,
   );
   assert.match(timingMarkdown(timingTrend({ tests: [] })), /No perf test ran\./);
   // The release gate fails that one: 260 is 30% over.
@@ -474,28 +477,28 @@ test("a candidate's scope can list a target's metric as reported, not gated: ove
     );
   // Over its bar, the listed metric fails nothing; under it, nothing either: a reading is noisy
   // run to run, so a listed one coming in under isn't held against the candidate.
-  assert.deepEqual(failed([load('composition:fallback', { tbtMs: 367 })]), []);
-  assert.deepEqual(failed([load('composition:fallback', { tbtMs: 150 })]), []);
+  assert.deepEqual(failed([load('composition:fallback', withTbt(367))]), []);
+  assert.deepEqual(failed([load('composition:fallback', withTbt(150))]), []);
   // Without the list it fails as before.
-  assert.deepEqual(failed([load('composition:fallback', { tbtMs: 367 })], []), [
+  assert.deepEqual(failed([load('composition:fallback', withTbt(367))], []), [
     "timing-over: composition:fallback: tbtMs's median 367 is over 220, its light ceiling 200 plus 10%.",
   ]);
   // The target's other metrics still gate, and so does the same metric on another target.
-  assert.deepEqual(failed([load('composition:fallback', { tbtMs: 367, heapMiB: 30 })]), [
+  assert.deepEqual(failed([load('composition:fallback', { ...withTbt(367), heapMiB: 30 })]), [
     "timing-over: composition:fallback: heapMiB's median 30 is over 17.6, its light ceiling 16 plus 10%.",
   ]);
-  assert.deepEqual(failed([load('composition:flux', { tbtMs: 367 })]), [
+  assert.deepEqual(failed([load('composition:flux', withTbt(367))]), [
     "timing-over: composition:flux: tbtMs's median 367 is over 220, its light ceiling 200 plus 10%.",
   ]);
   // A listed target's perf test still has to run, once, with every load and every value.
   assert.deepEqual(
-    failed([{ ...load('composition:fallback', { tbtMs: 367 }), outcome: 'flaky' }]).map(
+    failed([{ ...load('composition:fallback', withTbt(367)), outcome: 'flaky' }]).map(
       (line) => line.split(':')[0],
     ),
     ['timing-retried'],
   );
   assert.deepEqual(
-    failed([{ ...load('composition:fallback', { tbtMs: 367 }), status: 'not run' }]).map(
+    failed([{ ...load('composition:fallback', withTbt(367)), status: 'not run' }]).map(
       (line) => line.split(':')[0],
     ),
     ['timing-missing'],
@@ -505,7 +508,7 @@ test("a candidate's scope can list a target's metric as reported, not gated: ove
       target: 'composition:fallback',
       perf: { timing: timingResult(runs, 'light') },
     });
-  const listedRun = { ...GOOD_RUN, tbtMs: 367 };
+  const listedRun = { ...GOOD_RUN, ...withTbt(367) };
   assert.deepEqual(
     failed([loads(five(listedRun).slice(0, 4))]).map((line) => line.split(':')[0]),
     ['timing-runs'],
@@ -543,7 +546,7 @@ test('TIMING_GATE takes the reported list from the release scope its env names, 
     JSON.stringify({
       tests: [
         perfSummaryTest('a', {
-          perf: { timing: timingResult(five({ ...GOOD_RUN, tbtMs: 367 }), 'light') },
+          perf: { timing: timingResult(five({ ...GOOD_RUN, ...withTbt(367) }), 'light') },
         }),
       ],
     }),
