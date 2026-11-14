@@ -147,6 +147,7 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'runner/missing-browser-not-installed',
     'runner/target-without-results-surface-uncollected',
     'runner/ignored-media-emulation-ignored',
+    'runner/wrong-display-mode-served',
     // 11-3's performance gates: the deterministic rules, the release timing
     // gate, and VR1's bundle size through #6's check.
     'perf/missing-lcp-entry',

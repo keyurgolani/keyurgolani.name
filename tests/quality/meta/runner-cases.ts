@@ -23,6 +23,7 @@ import { plantCanary, scanArtifacts, scrubArtifacts, writeZip } from '../lib/art
 import { CANARY_FORMS, everyForm, UNKNOWN_FORM } from '../lib/canary-forms.mjs';
 import { requiredChecks, VISUAL_CHECKS } from '../lib/checks';
 import { checkEmulation } from '../lib/emulation';
+import * as emulation from '../lib/emulation';
 import { egressFailure, installBrowserPolicy, serverEgressFailure } from '../lib/egress';
 import { PREFERENCE_ROWS } from '../lib/matrix';
 import { judge as verdictOf, type VerdictInput, type VerdictTest } from '../lib/verdict';
@@ -231,6 +232,30 @@ async function emulationOutcome(emulated: boolean): Promise<MetaOutcome> {
     await tab.setContent(PAGE);
     const row = PREFERENCE_ROWS.find((each) => each.id === 'reduced-motion')!;
     const problems = await checkEmulation(tab, row);
+    return { passed: problems.length === 0, findings: problems };
+  } finally {
+    await browser.close();
+  }
+}
+
+/**
+ * The display-mode check on a dark composition cell's page, its document boundary rendering
+ * `rendered`, with the color-scheme the mode's own styles give it.
+ */
+async function displayModeOutcome(rendered: string): Promise<MetaOutcome> {
+  const { chromium } = await import('playwright');
+  const browser = await chromium.launch();
+  try {
+    const tab = await (await browser.newContext()).newPage();
+    await tab.setContent(
+      '<!doctype html><html lang="en"><head><title>Stand-in</title><style>' +
+        '[data-display-mode="light"] { color-scheme: light; } [data-display-mode="dark"] { color-scheme: dark; }' +
+        `</style></head><body><div data-appearance-boundary="document" data-display-mode="${rendered}" data-mode-locked="false">` +
+        '<main><h1>Stand-in</h1></main></div></body></html>',
+    );
+    const row = PREFERENCE_ROWS.find((each) => each.id === 'default')!;
+    const cell = { kind: 'composition', tuple: { displayMode: 'dark' } } as const;
+    const { problems } = await emulation.checkDisplayMode(tab, cell, row);
     return { passed: problems.length === 0, findings: problems };
   } finally {
     await browser.close();
@@ -663,6 +688,26 @@ export const RUNNER_CASES: readonly MetaCase[] = [
     expect: 'pass',
     browser: true,
     run: () => emulationOutcome(true),
+  },
+
+  // a composition cell's page served another display mode than its tuple's
+  {
+    id: `${GATE}/wrong-display-mode-served`,
+    gate: GATE,
+    input: "a dark cell's page whose document boundary renders light",
+    expect: 'fail',
+    reason:
+      /^default: a boundary renders light, its color-scheme light, not the cell's dark: the tuple's display mode wasn't served$/,
+    browser: true,
+    run: () => displayModeOutcome('light'),
+  },
+  {
+    id: `${GATE}/wrong-display-mode-as-asked`,
+    gate: GATE,
+    input: "a dark cell's page whose document boundary renders dark",
+    expect: 'pass',
+    browser: true,
+    run: () => displayModeOutcome('dark'),
   },
 
   // egress, from the browser and from the server

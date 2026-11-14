@@ -13,6 +13,7 @@ const RULES = [
   'missing-browser',
   'target-without-results',
   'ignored-media-emulation',
+  'wrong-display-mode',
   'plan-coverage',
   'empty-project',
   'canary-probe-missing',
