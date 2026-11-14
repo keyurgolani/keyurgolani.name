@@ -444,6 +444,13 @@ const FontAsset = z
     unicodeRange: z
       .string()
       .regex(UNICODE_RANGE, { message: 'must be a unicode-range, such as U+0000-00FF, U+0131.' }),
+    /**
+     * How the face takes over from its metric fallback: `swap` (the default) whenever it arrives,
+     * `optional` only if it's there as the text first lays out, so a face whose late arrival would
+     * move the page (a line that wraps differently in it) never does. A view it misses keeps the
+     * fallback; the next, from the cache, has the face from the first frame.
+     */
+    display: z.enum(['swap', 'optional']).optional(),
   })
   .strict();
 
