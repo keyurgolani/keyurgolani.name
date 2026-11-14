@@ -1,5 +1,5 @@
 {
-  "source": "The inventory's first run, 43166869592 (f5212efb5, the release scope (c′) in 614 shards): its 486 finished shards' reports. Its resume, 43530446147, is harvested after it ends, with this run's records carried in.",
-  "runs": ["43166869592"],
-  "earlier": null
+  "source": "The inventory's resume, 43530446147 (e4eae68ea on f5212efb5, the first run's 127 unfinished shards, 309 as 309-1 and 309-2): its finished shards' reports, with the first run's harvest, 43536185595 (run 43166869592's 486 finished shards), carried in, so the records cover all 614 shards.",
+  "runs": ["43530446147"],
+  "earlier": "43536185595"
 }
