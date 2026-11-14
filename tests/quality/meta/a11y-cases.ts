@@ -1303,6 +1303,16 @@ const NAV_REVEALS = built(
 );
 
 /**
+ * The same nav, its links naming what they hold on hover alone: hovered at its centre, the middle
+ * link's words show, and focusing that link shows nothing, so the check still finds the gap.
+ */
+const NAV_HOVER_ONLY = built(
+  'A nav of hover-only reveals',
+  'nav { margin-block-start: 6rem; } nav ol { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; padding: 0; list-style: none; } nav li { position: relative; } nav a { display: block; padding: 1rem; } nav:hover li:not(:hover) { opacity: 0.45; } .holds { position: absolute; inset-block-end: 100%; visibility: hidden; } nav a:hover .holds { visibility: visible; }',
+  '<nav aria-label="Chapters"><ol><li><a href="#one">One<span class="holds">What one holds</span></a></li><li><a href="#two">Two<span class="holds">What two holds</span></a></li><li><a href="#three">Three<span class="holds">What three holds</span></a></li></ol></nav>',
+);
+
+/**
  * A page with a link before and after a sandboxed frame of `links` links, as
  * Demo Studio's Content task frames the sample: opaque, scripts alone. With
  * `trap`, the frame's document keeps Tab on its first link.
@@ -2392,6 +2402,14 @@ export const A11Y_CASES: readonly MetaCase[] = [
     browser: true,
     run: () => onPage(NAV_REVEALS, hoverFindings),
   },
+  builtCase(
+    'nav-hover-only',
+    'hover',
+    'a nav of three links that each name what they hold on hover alone, the nav quieting the others on hover',
+    NAV_HOVER_ONLY,
+    /^hover parity: .*$/,
+    hoverFindings,
+  ),
   good('hover', hoverFindings),
   bad('fixed-width', 'reflow-wide.html', 'reflow', 'reflow|zoom', (page) =>
     reflowFindings(page, '/'),
