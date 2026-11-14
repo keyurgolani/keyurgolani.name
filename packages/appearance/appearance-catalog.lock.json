@@ -196,10 +196,10 @@
     "field-serif": {
       "axis": "typography",
       "package": "@portfolio/appearance-typography",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "tier": "extended",
       "license": "OFL-1.1",
-      "digest": "sha256-6bd7a083b353658fd5eeb8eaab45c77f0b545f4bb14309579e1e95c6adb340f7"
+      "digest": "sha256-b6a4b5a88a05ec4de0a2f6f4f25be6607d6bf355c6f681118c358f422be81eff"
     },
     "fluent-2-inspired": {
       "axis": "designLanguage",
@@ -480,10 +480,10 @@
     "paste-up": {
       "axis": "typography",
       "package": "@portfolio/appearance-typography",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "tier": "extended",
       "license": "OFL-1.1",
-      "digest": "sha256-aedaa71d47ce1bf07c8f80bff291cbf9f0be40856f1107257ae162b7c5fe9690"
+      "digest": "sha256-48e224adf8e9165a8edb0afcd669f2d15991354167a41f5d4d9936e163483057"
     },
     "pastel-sorbet": {
       "axis": "colorScheme",
