@@ -599,7 +599,7 @@ test('rc-preflight takes a commit id on dispatch from main, refuses one off main
   }
 });
 
-test('rc-preflight reads only, holds no secret, reads no cache, keeps shard reports three days and the verdict one, builds no image, and never tags or publishes', () => {
+test('rc-preflight reads only, holds no secret, reads no cache, keeps shard reports seven days and the verdict one, builds no image, and never tags or publishes', () => {
   assert.deepEqual(PREFLIGHT.permissions, { contents: 'read' });
   const text = readFileSync(path.join(ROOT, '.github/workflows/rc-preflight.yml'), 'utf8');
   const jobs = JSON.stringify(PREFLIGHT.jobs);
@@ -643,7 +643,7 @@ test('rc-preflight reads only, holds no secret, reads no cache, keeps shard repo
       upload.name,
     );
     // The shards' reports outlast every wave of a long release; the verdict's keep one day.
-    assert.equal(upload['retention-days'], upload.name.endsWith('-verdict') ? 1 : 3, upload.name);
+    assert.equal(upload['retention-days'], upload.name.endsWith('-verdict') ? 1 : 7, upload.name);
   }
   // Its verdict never counts for promotion: promote-verify takes only a
   // pushed release.yml run on the tag, and none of the jobs it names is one of these.
@@ -801,7 +801,7 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
       delete step.run;
       for (const each of job.steps) {
         const upload = /^actions\/upload-artifact@/.test(each.uses ?? '');
-        if (upload) assert.equal(each.with['retention-days'], 3);
+        if (upload) assert.equal(each.with['retention-days'], 7);
       }
     }
     assert.deepEqual(own, release, `inventory-${k}`);
