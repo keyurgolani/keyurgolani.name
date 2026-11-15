@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { finalScopeRefusal, readScope, SCOPE_FILE, scopeMismatch } from './verify-scope.mjs';
 
 const scope = (release) => ({ release, scope: 'default-packs', records: 'records.json' });
@@ -15,6 +16,11 @@ test("a candidate tag whose scope file is its own passes, and the checked-in fil
     readFileSync(new URL(`../../${SCOPE_FILE}`, import.meta.url), 'utf8'),
   );
   assert.equal(scopeMismatch('v1.0.0-rc.3', checkedIn), null);
+});
+
+test("the checked-in scope and records list are a final's: the reachable scope, an empty list and no timing reported, so promotion's scope rule names nothing", () => {
+  const checkedIn = readScope(fileURLToPath(new URL('../../', import.meta.url)));
+  assert.equal(finalScopeRefusal(checkedIn.scope, checkedIn.records), null);
 });
 
 test("a candidate tag whose scope file is another release's, or names none, is refused", () => {

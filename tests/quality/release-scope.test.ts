@@ -120,58 +120,18 @@ function verdict(failures: readonly SummaryFailure[] | 'passed', listed: Verdict
 
 const rules = (failures: readonly { rule: string }[]) => failures.map((each) => each.rule).sort();
 
-test("the checked-in scope is RC3 on its default packs, its records list 637 keys, each a valid entry routed to a row on a platform-neutral cell, main's Spatial Bento root-text record still among them, and it loads, and its timingReported lists mission-control's and raw-grid's tbtMs under row 141, horizontal-cinema's tbtMs under row 143 and kinetic-cosmos's idleTaskMs under row 144", () => {
+test("the checked-in scope is 1.0.0-rc.3's final gate: the reachable scope as the inventory runs it, an empty records list, no timing reported instead of gated, and it loads", () => {
   const loaded = loadReleaseScope({ [SCOPE_ENV]: SCOPE_FILE })!;
   assert.equal(loaded.scope.release, '1.0.0-rc.3');
-  assert.equal(loaded.scope.scope, 'default-packs');
-  // rc.3 reports these timings instead of gating them: rc.2's two (its preflights read them over
-  // where rc.1's release run, 42540152468, read them under, and an A/B of rc.1's code found them no
-  // slower; the coordinator, 2026-11-10), routed to row 141, and the two rc.2's release run
-  // (42966517304) read over on unchanged code (the coordinator, 2026-11-11), routed to rows 143 and
-  // 144; each row blocks v1.0.0.
-  assert.deepEqual(
-    (loaded.scope.timingReported ?? []).map(
-      ({ target, metric, row }) => `${target} ${metric} ${row}`,
-    ),
-    [
-      'composition:mission-control tbtMs row 141',
-      'composition:raw-grid tbtMs row 141',
-      'composition:horizontal-cinema tbtMs row 143',
-      'composition:kinetic-cosmos idleTaskMs row 144',
-    ],
-  );
-  // Preflight 1's list for the candidate (run 42489261932, 89 shards): the keys that still fail on
-  // it, less those rows 108 and 116 fixed, plus row 129's four from rc.1's release run (42540152468,
-  // shards 39, 48, 82 and 84), less row 119's seven and row 129's four, which rc.3's evidence read gone
-  // on CI Linux (#239/#240, #242/#243); every one a valid entry, each key once.
-  assert.equal(loaded.records.length, 637);
+  assert.equal(loaded.scope.scope, 'reachable');
+  // The candidate a final promotes from runs the matrix the inventory ran, whole: nothing listed as
+  // failing, and every timing gated.
+  const inventory = loadReleaseScope({ [SCOPE_ENV]: 'quality/inventory/scope.json' })!;
+  assert.equal(loaded.scope.scope, inventory.scope.scope);
+  assert.equal(loaded.scope.unswept, inventory.scope.unswept);
+  assert.deepEqual(loaded.scope.timingReported ?? [], []);
+  assert.deepEqual(loaded.records, []);
   assert.deepEqual(recordsProblems(loaded.records, loaded.scope), []);
-  assert.equal(new Set(loaded.records.map(recordKey)).size, loaded.records.length);
-  for (const each of loaded.records) assert.match(each.routed, /^row [1-9]\d*[a-z]?$/, each.cell);
-  // Each on a cell of RC1's plan, its default pack: an entry on a pack the plan doesn't run is
-  // listed-unplanned in the release run's verdict, which fails it.
-  for (const each of loaded.records) {
-    const pack = each.cell.split(' ').at(-1)?.split('/')[1];
-    assert.equal(pack, 'platform-neutral', `${each.cell} is on the platform-neutral pack`);
-  }
-  // Main's one entry before preflight 1, the one cell RC1's plan has that shows row 50's record
-  // (push 3 r4, item 2), still listed.
-  assert.ok(
-    loaded.records.some(
-      (each) =>
-        each.cell ===
-          'composition:spatial-bento complete / spatial-bento/platform-neutral/warm-parchment/humanist-ui/system' &&
-        each.viewport === '1440x900' &&
-        each.row === 'default' &&
-        each.engine === 'chromium' &&
-        each.check === 'reflow' &&
-        each.rule === 'root-text' &&
-        each.target === '@1024x768 html' &&
-        each.owner === 'lane E' &&
-        each.routed === 'row 75',
-    ),
-    "Spatial Bento's root-text record on the platform-neutral pack, row 75",
-  );
   // No scope env, no scope: quality:full plans the whole matrix as before.
   assert.equal(loadReleaseScope({}), null);
 });
