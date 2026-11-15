@@ -469,7 +469,9 @@ function asPreflight(id) {
   for (const [own, release] of Object.entries(PREFLIGHT_OF)) {
     text = text.replaceAll(`needs.${release}.`, `needs.${own}.`);
   }
-  text = text.replaceAll('reports-quality-release-', 'reports-quality-preflight-');
+  text = text
+    .replaceAll('reports-quality-release-', 'reports-quality-preflight-')
+    .replaceAll('verdict-quality-release-', 'verdict-quality-preflight-');
   const job = JSON.parse(text);
   // Its own needs, and no tag to wait for.
   delete job.needs;
@@ -626,12 +628,20 @@ test('rc-preflight reads only, holds no secret, reads no cache, keeps shard repo
   assert.deepEqual(
     uploads.map((u) => u.name),
     [
-      ...PREFLIGHT_QUALITY.map(() => 'reports-quality-preflight-${{ matrix.shard }}'),
+      ...PREFLIGHT_QUALITY.flatMap(() => [
+        'verdict-quality-preflight-${{ matrix.shard }}',
+        'reports-quality-preflight-${{ matrix.shard }}',
+      ]),
       'reports-quality-preflight-verdict',
     ],
   );
   for (const upload of uploads) {
-    assert.equal(upload.path, 'reports/');
+    // Each shard's verdict files go up apart from its reports, which keep the reports directory.
+    assert.equal(
+      upload.path,
+      upload.name.startsWith('verdict-') ? '${{ runner.temp }}/verdict/' : 'reports/',
+      upload.name,
+    );
     // The shards' reports outlast every wave of a long release; the verdict's keep one day.
     assert.equal(upload['retention-days'], upload.name.endsWith('-verdict') ? 1 : 3, upload.name);
   }
@@ -742,13 +752,30 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
     'inventory-summary',
   ]);
   const text = JSON.stringify(INVENTORY.jobs);
-  assert.doesNotMatch(text, /secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN/);
+  // One token, the summary's download's: it lists the run's verdicts through the REST API.
+  const tokens = [];
+  for (const [id, job] of Object.entries(INVENTORY.jobs)) {
+    for (const [at, each] of job.steps.entries()) {
+      if (/secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN/.test(JSON.stringify(each)))
+        tokens.push([id, at, each.with?.['github-token']]);
+    }
+  }
+  const summaryDownload = INVENTORY.jobs['inventory-summary'].steps.findIndex((each) =>
+    /^actions\/download-artifact@/.test(each.uses ?? ''),
+  );
+  assert.deepEqual(tokens, [['inventory-summary', summaryDownload, '${{ github.token }}']]);
+  assert.doesNotMatch(text, /secrets\./);
   assert.doesNotMatch(
     text,
     /docker |buildx|build-push-action|login-action|attest|imagetools|grype|retag|git (tag|push)|gh release|ghcr|promote/i,
   );
   for (const [id, job] of Object.entries(INVENTORY.jobs)) {
-    assert.equal(job.permissions, undefined, `${id} keeps contents: read`);
+    // The summary adds actions: read for its REST listing; every other job keeps contents: read.
+    assert.deepEqual(
+      job.permissions,
+      id === 'inventory-summary' ? { actions: 'read', contents: 'read' } : undefined,
+      `${id}'s permissions`,
+    );
     assert.ok(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes'] > 0, id);
     for (const checkout of job.steps.filter((s) => /^actions\/checkout@/.test(s.uses ?? '')))
       assert.equal(checkout.with['persist-credentials'], false, id);
@@ -765,7 +792,8 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
     let release = JSON.stringify(RELEASE.jobs[`rc-quality-${k}`])
       .replaceAll('needs.rc-quality-plan.', 'needs.inventory-plan.')
       .replaceAll('quality/release/scope.json', 'quality/inventory/scope.json')
-      .replaceAll('reports-quality-release-', 'reports-inventory-');
+      .replaceAll('reports-quality-release-', 'reports-inventory-')
+      .replaceAll('verdict-quality-release-', 'verdict-inventory-');
     release = JSON.parse(release);
     release.name = release.name.replace(/^rc-quality \(/, 'inventory (');
     release.needs = ['inventory-plan'];
@@ -793,7 +821,7 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
   assert.equal(count.run, 'pnpm exec tsx tests/quality/full-plan.ts');
   assert.equal(count.env.QUALITY_RELEASE_SCOPE, 'quality/inventory/scope.json');
   assert.match(plan.steps.find((s) => s.id === 'workers').run, /quality\/inventory\/workers\.json/);
-  // The summary: every shard's reports, however the shards ended, and the inventory's command.
+  // The summary: every shard's verdict files, however the shards ended, and the inventory's command.
   const summary = INVENTORY.jobs['inventory-summary'];
   assert.deepEqual(summary.needs, ['inventory-plan', 'inventory-1', 'inventory-2', 'inventory-3']);
   assert.equal(summary.if, "${{ !cancelled() && needs.inventory-plan.result == 'success' }}");
@@ -802,7 +830,7 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
   assert.equal(merge.env.SHARD_COUNT, '${{ needs.inventory-plan.outputs.count }}');
   assert.equal(merge.env.QUALITY_RELEASE_SCOPE, undefined, 'it gates on no records list');
   const download = summary.steps.find((s) => /^actions\/download-artifact@/.test(s.uses ?? ''));
-  assert.equal(download.with.pattern, 'reports-inventory-*');
+  assert.equal(download.with.pattern, 'verdict-inventory-*');
   const { scripts } = read('package.json');
   assert.equal(
     scripts['ci:inventory-summary'],

@@ -718,19 +718,29 @@ test(`the release plan fits rc-quality's timeout in the fewest shards that do, a
     SCRIPTS['ci:quality-full'],
     'node ci/run.mjs quality-full -- pnpm quality:full -- --external-variant',
   );
-  // Scrubbed however it ended, and uploaded only when the scrub passed.
+  // Scrubbed however it ended, and its reports uploaded only when the scrub passed and the pack
+  // couldn't call the shard clean.
   const scrub = step(job, (each) => each.id === 'scrub', 'the scrub');
   assert.equal(scrub.run, 'node tests/quality/scrub.mjs');
   assert.equal(scrub.if, '${{ always() }}');
-  const upload = step(job, (each) => /^actions\/upload-artifact@/.test(each.uses ?? ''), 'upload');
-  assert.equal(upload.if, "${{ always() && steps.scrub.outcome == 'success' }}");
+  const upload = step(
+    job,
+    (each) =>
+      /^actions\/upload-artifact@/.test(each.uses ?? '') &&
+      each.with?.name === 'reports-quality-release-${{ matrix.shard }}',
+    'the reports upload',
+  );
+  assert.equal(
+    upload.if,
+    "${{ always() && steps.scrub.outcome == 'success' && steps.pack.outputs.clean != 'true' }}",
+  );
   assert.ok(job.steps.indexOf(scrub) < job.steps.indexOf(upload));
   const download = step(
     RELEASE['rc-quality-verdict']!,
     (each) => /^actions\/download-artifact@/.test(each.uses ?? ''),
     'the download',
   );
-  assert.equal(download.with?.pattern, 'reports-quality-release-*');
+  assert.equal(download.with?.pattern, 'verdict-quality-release-*');
   assert.equal(upload.with?.name, 'reports-quality-release-${{ matrix.shard }}');
 });
 

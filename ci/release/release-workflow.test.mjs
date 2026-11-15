@@ -654,7 +654,7 @@ test("rc-verify's two checks run unconditioned, and every step if: on a candidat
       ['node ci/release/verify-rc.mjs', undefined],
     ],
   );
-  // The only step conditions of the tag path: the reports' and the scans' own.
+  // The only step conditions of the tag path: the reports', the shards' verdict files' and the scans' own.
   const conditioned = [...RC_JOBS, ...FINAL_JOBS, 'classify'].flatMap((id) =>
     stepsOf(id)
       .filter((each) => each.if !== undefined)
@@ -664,7 +664,13 @@ test("rc-verify's two checks run unconditioned, and every step if: on a candidat
     ...QUALITY_JOBS.flatMap((id) => [
       [id, 'Scrub reports', '${{ always() }}'],
       [id, 'Failure summary', '${{ always() }}'],
-      [id, 'Upload reports', "${{ always() && steps.scrub.outcome == 'success' }}"],
+      [id, 'Pack the verdict files', "${{ always() && steps.scrub.outcome == 'success' }}"],
+      [id, 'Upload the verdict files', "${{ always() && steps.pack.outcome == 'success' }}"],
+      [
+        id,
+        'Upload reports',
+        "${{ always() && steps.scrub.outcome == 'success' && steps.pack.outputs.clean != 'true' }}",
+      ],
     ]),
     ['rc-quality-verdict', 'Failure summary', '${{ always() }}'],
     ['rc-quality-verdict', 'Upload reports', '${{ always() }}'],
