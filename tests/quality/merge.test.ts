@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -459,4 +467,102 @@ test("a release run's shards merge whatever their count: 30 shards of a 2 MB pla
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+/** ci/release/shard-verdict.mjs, by its URL, so the type check doesn't need it to exist before it's written. */
+async function loadShardVerdict() {
+  const url = new URL('../../ci/release/shard-verdict.mjs', import.meta.url).href;
+  const mod = (await import(url).catch(() => null)) as {
+    packShard(reports: string, out: string): void;
+    unpackShards(downloaded: string, shards: string): void;
+  } | null;
+  assert.ok(mod, "ci/release/shard-verdict.mjs packs and unpacks a shard's verdict files");
+  return mod;
+}
+
+test("a release's shards, their verdict files packed apart from their reports and unpacked, merge to the same verdict as the shards as they were written", async (t) => {
+  const mod = await loadShardVerdict();
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-merge-packed-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const raw = path.join(root, 'raw');
+  writeShards(raw, [SHARD_1, SHARD_2]);
+  for (const dir of readdirSync(raw)) {
+    mod.packShard(path.join(raw, dir), path.join(root, 'verdicts', dir));
+  }
+  const unpacked = path.join(root, 'unpacked');
+  mod.unpackShards(path.join(root, 'verdicts'), unpacked);
+  assert.deepEqual(
+    mergeShards(readShards(unpacked), { expected: 2 }),
+    mergeShards(readShards(raw), { expected: 2 }),
+  );
+});
+
+test("611 shards' verdict files with one shard's never uploaded, as a shard whose scrub failed uploads none, merge to a verdict that refuses the gap by name; all 611 merge with none", async (t) => {
+  const mod = await loadShardVerdict();
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-merge-gap-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const count = 611;
+  const plan = JSON.stringify({
+    mode: 'full',
+    cells: 1,
+    tests: 1,
+    targets: [{ kind: 'composition', id: 'fallback' }],
+    reasons: [],
+    changes: [],
+    changed: [],
+    coverage: { rows: [], tuples: 0, accepted: 0, uncoverable: [] },
+    planned: [
+      {
+        cell: 'composition:fallback complete / fallback/en/light/default/system',
+        viewport: '1440x900',
+        row: 'default',
+        skip: null,
+        engineSkips: {},
+        conditions: true,
+      },
+    ],
+  });
+  const packed = path.join(root, 'verdicts');
+  for (let index = 1; index <= count; index += 1) {
+    const quality = path.join(root, 'reports', String(index), 'quality');
+    mkdirSync(quality, { recursive: true });
+    writeFileSync(path.join(quality, 'plan.json'), plan);
+    writeFileSync(
+      path.join(quality, 'verdict.json'),
+      JSON.stringify({
+        ok: true,
+        failures: [],
+        flaky: [],
+        counts: {},
+        mode: 'full',
+        shard: `${index}/${count}`,
+        engines: ['chromium'],
+        canary: { before: [], after: [] },
+      }),
+    );
+    mod.packShard(
+      path.join(root, 'reports', String(index)),
+      path.join(packed, `verdict-quality-release-${index}`),
+    );
+  }
+  const merged = (shards: string) =>
+    mergeShards(readShards(shards), { expected: count, mode: 'full' });
+  const missing = (verdict: ReturnType<typeof merged>) =>
+    verdict.failures.filter((each) => each.rule === 'missing-shard').map((each) => each.message);
+  mod.unpackShards(packed, path.join(root, 'whole'));
+  const whole = merged(path.join(root, 'whole'));
+  assert.equal(whole.shards.length, count);
+  assert.deepEqual(missing(whole), []);
+  // Shard 307's scrub failed, so it packed and uploaded nothing: 610 artifacts of 611.
+  renameSync(
+    path.join(packed, 'verdict-quality-release-307'),
+    path.join(root, 'verdict-quality-release-307'),
+  );
+  mod.unpackShards(packed, path.join(root, 'gap'));
+  const gap = merged(path.join(root, 'gap'));
+  assert.equal(gap.shards.length, count - 1);
+  assert.equal(gap.ok, false);
+  assert.deepEqual(missing(gap), [
+    'Shard 307/611 left no report, so its tests are unaccounted for.',
+  ]);
 });
