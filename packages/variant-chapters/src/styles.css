@@ -549,6 +549,14 @@
 [data-variant='chapters'] :is(.tp-begin, .pl__case a, .ch-endpaper__mail a):focus-visible {
   text-decoration-line: none;
 }
+/* Dropping the line isn't enough for the address: the focus check compares the ring's pixels
+   focused and at rest, and at rest the underline is there, a few pixels below the address's box
+   (0.25em and its 2px, less the font's descent). So while the address is focused its ring is drawn
+   past it, at the space scale's 2xs, set as the offset the platform's ring reads. Only the
+   focused address changes. */
+[data-variant='chapters'] .ch-endpaper__mail a:focus-visible {
+  --ui-focus-offset: var(--space-2xs);
+}
 [data-variant='chapters'] :is(.tp-more, .fp__go, .ch-endpaper__actions, .it__links) {
   display: flex;
   flex-wrap: wrap;
