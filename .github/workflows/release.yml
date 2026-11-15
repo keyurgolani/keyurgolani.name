@@ -453,8 +453,27 @@ jobs:
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
-      - name: Upload reports
+      # The three files the merge reads of this shard, its quality plan, summary and verdict,
+      # its perf cells' readings and its failure records, gzipped and apart from its reports
+      # (ci/release/shard-verdict.mjs), so the verdict downloads a few MB a shard where every
+      # shard's reports would be tens of GB. The pack also says whether the shard is clean.
+      - name: Pack the verdict files
+        id: pack
         if: ${{ always() && steps.scrub.outcome == 'success' }}
+        run: node ci/release/shard-verdict.mjs pack reports "$RUNNER_TEMP/verdict"
+      - name: Upload the verdict files
+        if: ${{ always() && steps.pack.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verdict-quality-release-${{ matrix.shard }}
+          path: ${{ runner.temp }}/verdict/
+          if-no-files-found: ignore
+          retention-days: 3
+      # The reports only when the pack can't call the shard clean, a missing or failed pack
+      # included: the verdict's download lists at most 1,000 of the run's artifacts, so a run
+      # whose every shard is clean holds one artifact a shard.
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' && steps.pack.outputs.clean != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-quality-release-${{ matrix.shard }}
@@ -512,8 +531,20 @@ jobs:
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
-      - name: Upload reports
+      - name: Pack the verdict files
+        id: pack
         if: ${{ always() && steps.scrub.outcome == 'success' }}
+        run: node ci/release/shard-verdict.mjs pack reports "$RUNNER_TEMP/verdict"
+      - name: Upload the verdict files
+        if: ${{ always() && steps.pack.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verdict-quality-release-${{ matrix.shard }}
+          path: ${{ runner.temp }}/verdict/
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' && steps.pack.outputs.clean != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-quality-release-${{ matrix.shard }}
@@ -571,8 +602,20 @@ jobs:
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
-      - name: Upload reports
+      - name: Pack the verdict files
+        id: pack
         if: ${{ always() && steps.scrub.outcome == 'success' }}
+        run: node ci/release/shard-verdict.mjs pack reports "$RUNNER_TEMP/verdict"
+      - name: Upload the verdict files
+        if: ${{ always() && steps.pack.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verdict-quality-release-${{ matrix.shard }}
+          path: ${{ runner.temp }}/verdict/
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' && steps.pack.outputs.clean != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-quality-release-${{ matrix.shard }}
@@ -606,11 +649,18 @@ jobs:
           package-manager-cache: false
       - name: Install, with no cache
         run: corepack enable && pnpm install --frozen-lockfile
-      - name: Download the shards' reports
+      # Only the shards' verdict files, packed apart from their reports, which at 611 shards
+      # would be tens of GB on this runner. The unpack writes each shard's directory as the
+      # merge reads it, the plan the shards share written once and linked into each.
+      - name: Download the shards' verdict files
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: reports-quality-release-*
-          path: ${{ runner.temp }}/quality-shards
+          pattern: verdict-quality-release-*
+          path: ${{ runner.temp }}/verdicts
+      - name: Unpack the shards' verdict files
+        env:
+          SHARD_COUNT: ${{ needs.rc-quality-plan.outputs.count }}
+        run: node ci/release/shard-verdict.mjs unpack "$RUNNER_TEMP/verdicts" "$RUNNER_TEMP/quality-shards" --expected "$SHARD_COUNT"
       - name: pnpm ci:quality-release --merged
         env:
           SHARDS: ${{ runner.temp }}/quality-shards
