@@ -121,6 +121,7 @@ const read = (file: string) =>
   ).jobs;
 const SCHEDULED = read('scheduled.yml');
 const RELEASE = read('release.yml');
+const INVENTORY = read('inventory.yml');
 const SCRIPTS = (
   JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
     scripts: Record<string, string>;
@@ -634,6 +635,61 @@ test("the #20 model is a fixed input: CATALOG's shipping packs, the platform def
   } as BuildMeta;
   assert.equal(modesOf((shipped.PACKS ?? []).at(-1)!), 'none');
   assert.deepEqual(ids(catalogMeta(shipped)), ids(model));
+});
+
+/** The token-free artifact listing of the run's own artifacts stops at this many (download-artifact). */
+const RUN_LISTING_CAP = 1000;
+
+/** How many artifacts the jobs of `jobs` but `shardJobs` upload: each upload step once a matrix leg. */
+function otherUploads(jobs: Record<string, Job>, shardJobs: readonly string[]): number {
+  const isUpload = (each: Step) => /^actions\/upload-artifact@/.test(each.uses ?? '');
+  let others = 0;
+  for (const [id, job] of Object.entries(jobs)) {
+    if (shardJobs.includes(id)) continue;
+    const matrix = (job.strategy?.matrix ?? {}) as Record<string, unknown>;
+    const legs = Object.values(matrix).reduce<number>(
+      (product, values) => product * (Array.isArray(values) ? values.length : 1),
+      1,
+    );
+    others += job.steps.filter(isUpload).length * legs;
+  }
+  return others;
+}
+
+test("a release run whose every shard is clean, and an inventory run however its shards end, hold fewer artifacts than the 1,000 their merge's download lists: one verdict artifact a shard at the most shards, and every other upload once", () => {
+  const isUpload = (each: Step) => /^actions\/upload-artifact@/.test(each.uses ?? '');
+  // A clean shard skips the uploads that wait on the pack calling it unclean.
+  const cleanSkips = (each: Step) => /steps\.pack\.outputs\.clean != 'true'/.test(each.if ?? '');
+  const shardJobs = RELEASE_JOBS.map((job) => job.id);
+  for (const id of shardJobs) {
+    assert.deepEqual(
+      RELEASE[id]!.steps.filter((each) => isUpload(each) && !cleanSkips(each)).map(
+        (each) => each.with?.name,
+      ),
+      ['verdict-quality-release-${{ matrix.shard }}'],
+      `${id}: a clean shard's one artifact`,
+    );
+  }
+  const others = otherUploads(RELEASE, shardJobs);
+  assert.ok(
+    MAX_RELEASE_PLAN + others < RUN_LISTING_CAP,
+    `${MAX_RELEASE_PLAN} shards' verdicts and ${others} other artifacts reach the listing's ${RUN_LISTING_CAP}`,
+  );
+  // The inventory's shards mostly fail, so each uploads its verdict files alone, its failure
+  // records among them, whether or not it's clean.
+  const inventoryJobs = ['inventory-1', 'inventory-2', 'inventory-3'];
+  for (const id of inventoryJobs) {
+    assert.deepEqual(
+      INVENTORY[id]!.steps.filter(isUpload).map((each) => each.with?.name),
+      ['verdict-inventory-${{ matrix.shard }}'],
+      `${id}: a shard's one artifact`,
+    );
+  }
+  const inventoryOthers = otherUploads(INVENTORY, inventoryJobs);
+  assert.ok(
+    MAX_RELEASE_PLAN + inventoryOthers < RUN_LISTING_CAP,
+    `${MAX_RELEASE_PLAN} shards' verdicts and ${inventoryOthers} other artifacts reach the listing's ${RUN_LISTING_CAP}`,
+  );
 });
 
 test(`the release plan fits rc-quality's timeout in the fewest shards that do, at the release's weights in its checked-in scope: the registry's own count, and ${CATALOG_SHARDS} for #20's model, under the most, every group once`, (t) => {
