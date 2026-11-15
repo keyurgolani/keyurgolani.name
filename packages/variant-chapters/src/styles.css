@@ -611,6 +611,7 @@
 [data-variant='chapters'] .fp {
   display: grid;
   gap: var(--space-s);
+  container: ch-fp / inline-size;
 }
 [data-variant='chapters'] :is(.fp__img, .pl__img) {
   inline-size: 100%;
@@ -642,6 +643,21 @@
 }
 [data-variant='chapters'] .fp__text {
   color: var(--color-text-secondary);
+}
+/*
+ * The label's column is in rem, so the caption's own breakpoint is too: a container query's rem
+ * follows the root text, where the one-page media query's stays 16px. On a frontispiece under 18rem
+ * (on the spread, only past 100% root text) the caption stacks as it does on one page, so the text
+ * keeps the figure's width and a date that keeps to one line stays on the page.
+ */
+@container ch-fp (width < 18rem) {
+  [data-variant='chapters'] .fp__cap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='chapters'] :is(.fp__cap > *, .fp__label) {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
 
 /* The contents: chapter numerals in their inks, a tick for each page. */
