@@ -203,6 +203,21 @@ jobs:
           # last wave's end before the verdict downloads them (past about 290 shards at the
           # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
           retention-days: 3
+      # The three files the merge reads of this shard, its quality plan, summary and verdict,
+      # gzipped and apart from its reports (ci/release/shard-verdict.mjs), so the verdict
+      # downloads a few MB a shard where every shard's reports would be tens of GB.
+      - name: Pack the verdict files
+        id: pack
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        run: node ci/release/shard-verdict.mjs pack reports "$RUNNER_TEMP/verdict"
+      - name: Upload the verdict files
+        if: ${{ always() && steps.pack.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verdict-quality-preflight-${{ matrix.shard }}
+          path: ${{ runner.temp }}/verdict/
+          if-no-files-found: ignore
+          retention-days: 3
 
   preflight-quality-2:
     name: preflight-quality (${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }})
@@ -262,6 +277,18 @@ jobs:
           # Three days, not one: at 16 at a time, the first wave's reports must outlast the
           # last wave's end before the verdict downloads them (past about 290 shards at the
           # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
+          retention-days: 3
+      - name: Pack the verdict files
+        id: pack
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        run: node ci/release/shard-verdict.mjs pack reports "$RUNNER_TEMP/verdict"
+      - name: Upload the verdict files
+        if: ${{ always() && steps.pack.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verdict-quality-preflight-${{ matrix.shard }}
+          path: ${{ runner.temp }}/verdict/
+          if-no-files-found: ignore
           retention-days: 3
 
   preflight-quality-3:
@@ -323,6 +350,18 @@ jobs:
           # last wave's end before the verdict downloads them (past about 290 shards at the
           # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
           retention-days: 3
+      - name: Pack the verdict files
+        id: pack
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        run: node ci/release/shard-verdict.mjs pack reports "$RUNNER_TEMP/verdict"
+      - name: Upload the verdict files
+        if: ${{ always() && steps.pack.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verdict-quality-preflight-${{ matrix.shard }}
+          path: ${{ runner.temp }}/verdict/
+          if-no-files-found: ignore
+          retention-days: 3
 
   # release.yml's rc-quality-verdict: the merged verdict over every shard
   # preflight-plan counted, then the release-only gates. It runs only when
@@ -351,11 +390,16 @@ jobs:
           package-manager-cache: false
       - name: Install, with no cache
         run: corepack enable && pnpm install --frozen-lockfile
-      - name: Download the shards' reports
+      # Only the shards' verdict files, packed apart from their reports, which at 611 shards
+      # would be tens of GB on this runner. The unpack writes each shard's directory as the
+      # merge reads it, the plan the shards share written once and linked into each.
+      - name: Download the shards' verdict files
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: reports-quality-preflight-*
-          path: ${{ runner.temp }}/quality-shards
+          pattern: verdict-quality-preflight-*
+          path: ${{ runner.temp }}/verdicts
+      - name: Unpack the shards' verdict files
+        run: node ci/release/shard-verdict.mjs unpack "$RUNNER_TEMP/verdicts" "$RUNNER_TEMP/quality-shards"
       - name: pnpm ci:quality-release --merged
         env:
           SHARDS: ${{ runner.temp }}/quality-shards

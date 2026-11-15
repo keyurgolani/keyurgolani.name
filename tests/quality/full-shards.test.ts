@@ -697,7 +697,7 @@ test(`the release plan fits rc-quality's timeout in the fewest shards that do, a
     (each) => /^actions\/download-artifact@/.test(each.uses ?? ''),
     'the download',
   );
-  assert.equal(download.with?.pattern, 'reports-quality-release-*');
+  assert.equal(download.with?.pattern, 'verdict-quality-release-*');
   assert.equal(upload.with?.name, 'reports-quality-release-${{ matrix.shard }}');
 });
 
