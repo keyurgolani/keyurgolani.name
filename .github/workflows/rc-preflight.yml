@@ -26,7 +26,7 @@
 # It never tags, builds an image, or publishes, and its verdict never counts
 # for promotion: promote-verify reads only the tag's own release.yml run
 # (ci/release/promote-check.mjs). It holds contents: read and no secret, its
-# shards' reports keep three days and its verdict's one, and no job reads or
+# shards' reports keep seven days and its verdict's one, and no job reads or
 # writes a cache: setup-node runs with its cache off and the installs are
 # fresh, as in release.yml.
 name: rc-preflight
@@ -143,7 +143,7 @@ jobs:
   # shards preflight-plan hands it, skipping with none, 6, 5 and 5 at a time,
   # 16 together, as a candidate runs them, so PR CI keeps the other 4 job
   # slots. Each shard's reports are scrubbed however the run ended, and
-  # upload only when that scrub succeeds, for three days.
+  # upload only when that scrub succeeds, for seven days.
   preflight-quality-1:
     name: preflight-quality (${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }})
     needs: [preflight-verify, preflight-plan]
@@ -207,7 +207,7 @@ jobs:
           name: verdict-quality-preflight-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
       # The reports only when the pack can't call the shard clean, a missing or failed pack
       # included: the verdict's download lists at most 1,000 of the run's artifacts, so a run
       # whose every shard is clean holds one artifact a shard.
@@ -218,10 +218,10 @@ jobs:
           name: reports-quality-preflight-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
-          # last wave's end before the verdict downloads them (past about 290 shards at the
-          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
-          retention-days: 3
+          # Seven days: at 16 at a time the first wave's reports must outlast the last wave's
+          # end before the verdict downloads them, about 51 hours at the release scope's 611
+          # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
+          retention-days: 7
 
   preflight-quality-2:
     name: preflight-quality (${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }})
@@ -282,7 +282,7 @@ jobs:
           name: verdict-quality-preflight-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
       - name: Upload reports
         if: ${{ always() && steps.scrub.outcome == 'success' && steps.pack.outputs.clean != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -290,10 +290,10 @@ jobs:
           name: reports-quality-preflight-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
-          # last wave's end before the verdict downloads them (past about 290 shards at the
-          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
-          retention-days: 3
+          # Seven days: at 16 at a time the first wave's reports must outlast the last wave's
+          # end before the verdict downloads them, about 51 hours at the release scope's 611
+          # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
+          retention-days: 7
 
   preflight-quality-3:
     name: preflight-quality (${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }})
@@ -354,7 +354,7 @@ jobs:
           name: verdict-quality-preflight-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
       - name: Upload reports
         if: ${{ always() && steps.scrub.outcome == 'success' && steps.pack.outputs.clean != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -362,10 +362,10 @@ jobs:
           name: reports-quality-preflight-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
-          # last wave's end before the verdict downloads them (past about 290 shards at the
-          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
-          retention-days: 3
+          # Seven days: at 16 at a time the first wave's reports must outlast the last wave's
+          # end before the verdict downloads them, about 51 hours at the release scope's 611
+          # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
+          retention-days: 7
 
   # release.yml's rc-quality-verdict: the merged verdict over every shard
   # preflight-plan counted, then the release-only gates. It runs only when
