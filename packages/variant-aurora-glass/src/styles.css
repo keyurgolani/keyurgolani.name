@@ -235,6 +235,19 @@
   background-color: var(--color-accent-hover);
 }
 
+/*
+ * Focused, a button's ring is drawn inside its edge, in on-accent, its label's colour, over its own
+ * fill, which on-accent already reads against. Outside it the language's card shadow lies where the
+ * ring would be drawn, and the focus check compares the ring's pixels with the same pixels at rest;
+ * inside the box no shadow falls. Set as the platform's inset ring (the focus width, negated) and a
+ * focus colour the platform allows, so under forced colors the ring is still the system's colour.
+ * Nothing changes at rest.
+ */
+[data-variant='aurora-glass'] .ag-btn:focus-visible {
+  --ui-focus-offset: calc(var(--ui-focus-width) * -1);
+  --color-focus: var(--color-on-accent);
+}
+
 /* The lifts move things, so they wait for no-preference and the page's motion. */
 @media (prefers-reduced-motion: no-preference) {
   [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static']) .ag-btn:hover {
