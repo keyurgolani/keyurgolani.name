@@ -8,7 +8,7 @@
 # shards to inventory-1 to inventory-3, release.yml's rc-quality-1 to -3 step for step but for
 # their names, scope file and artifacts: three matrices of at most 256, 6, 5 and 5 at a time, at
 # rc-quality's 120 minutes, at the worker count quality/inventory/workers.json names, which the
-# worker probe settles and the release run keeps too. Each shard's reports upload for three days.
+# worker probe settles and the release run keeps too. Each shard's reports upload for seven days.
 # inventory-summary merges every shard (tests/quality/inventory.ts): failures counted by
 # composition, rule, check and viewport, with their record keys. It never gates on a records
 # list; it fails only when a shard is missing or a report doesn't hold its tests.
@@ -128,8 +128,8 @@ jobs:
           name: reports-inventory-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days: the first wave's reports outlast the last wave's end, as rc-quality's.
-          retention-days: 3
+          # Seven days: the first wave's reports outlast the last wave's end, as rc-quality's.
+          retention-days: 7
       # The three files the merge reads of this shard, its quality plan, summary and verdict,
       # gzipped and apart from its reports (ci/release/shard-verdict.mjs), so the verdict
       # downloads a few MB a shard where every shard's reports would be tens of GB.
@@ -144,7 +144,7 @@ jobs:
           name: verdict-inventory-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
 
   inventory-2:
     name: inventory (${{ matrix.shard }}/${{ needs.inventory-plan.outputs.count }})
@@ -205,8 +205,8 @@ jobs:
           name: reports-inventory-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days: the first wave's reports outlast the last wave's end, as rc-quality's.
-          retention-days: 3
+          # Seven days: the first wave's reports outlast the last wave's end, as rc-quality's.
+          retention-days: 7
       - name: Pack the verdict files
         id: pack
         if: ${{ always() && steps.scrub.outcome == 'success' }}
@@ -218,7 +218,7 @@ jobs:
           name: verdict-inventory-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
 
   inventory-3:
     name: inventory (${{ matrix.shard }}/${{ needs.inventory-plan.outputs.count }})
@@ -279,8 +279,8 @@ jobs:
           name: reports-inventory-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days: the first wave's reports outlast the last wave's end, as rc-quality's.
-          retention-days: 3
+          # Seven days: the first wave's reports outlast the last wave's end, as rc-quality's.
+          retention-days: 7
       - name: Pack the verdict files
         id: pack
         if: ${{ always() && steps.scrub.outcome == 'success' }}
@@ -292,7 +292,7 @@ jobs:
           name: verdict-inventory-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
 
   # Every shard's reports merged into the inventory: what failed in (c′), by composition, rule,
   # check and viewport, with each record's key, in its artifact and the job summary. It runs
