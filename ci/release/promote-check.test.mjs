@@ -204,9 +204,10 @@ test("promotion is refused while the candidate's quality scope is narrowed or it
   assert.equal(timed.ok, false);
   assert.match(timed.reasons.join(), /its timingReported lists 1 timing reported, not gated\./);
   assert.match(evaluatePromotion(input({ quality: null })).reasons.join(), /wasn't read/);
-  // The checked-in RC2 scope, on its default packs, can't promote to 1.0.0.
+  // The checked-in scope, the reachable one with an empty list and every timing gated, promotes.
   const checkedIn = readScope(fileURLToPath(new URL('../../', import.meta.url)));
-  assert.equal(evaluatePromotion(input({ quality: checkedIn })).ok, false);
+  const final = evaluatePromotion(input({ quality: checkedIn }));
+  assert.equal(final.ok, true, final.reasons.join());
 });
 
 test("the baseline-pending list's ids are read sorted, and only from an object", () => {
