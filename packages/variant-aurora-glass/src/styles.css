@@ -840,6 +840,16 @@
 }
 
 /*
+ * The capsule's contact action, focused, the same way: it keeps the capsule's radius, the badge's,
+ * so its ring follows the capsule's round end a padding inside its edge. Above 75rem it is the
+ * capsule's last item, and with the control radius its ring's corners ran past that end onto the
+ * capsule's border and the sky.
+ */
+[data-variant='aurora-glass'] .ag-capsule > .ag-capsule__cta:focus-visible {
+  border-radius: var(--ui-radius-badge);
+}
+
+/*
  * While its control is focused the slot reaches a pixel further out: a pixel more padding, given
  * back as margin, so the control and the slot's neighbours stay where they are. On the round ends'
  * upper halves the slot's edge (its border and the card shadow under it) met the ring's outer
