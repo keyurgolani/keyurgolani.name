@@ -237,15 +237,31 @@ function shippingCounts(meta: BuildMeta): Record<string, number> {
   return counts;
 }
 
-/** The model's cycle, and its release shard count in the checked-in release scope. */
+/**
+ * The model's cycle, and its release shard count in the checked-in release scope: the reachable
+ * scope, which plans every reachable tuple of #20's catalog, not a cut of its default packs.
+ */
 const CATALOG_NIGHTS = 56;
-const CATALOG_SHARDS = 28;
+const CATALOG_SHARDS = 280;
 
 /** The scope file release.yml's and rc-preflight.yml's quality jobs name, and the env that names it. */
 const SCOPE_FILE = 'quality/release/scope.json';
 const SCOPE = { [SCOPE_ENV]: SCOPE_FILE };
-/** The checked-in release scope, which the release's shards plan by. */
-const scoped = (each: Plan): Plan => scopePlan(each, loadReleaseScope(SCOPE)!.scope);
+/**
+ * The checkout's plan, or #20's model's, in the checked-in release scope, which the release's shards
+ * plan by: a scope cut from the full plan (`full`, `default-packs`) is cut, and the reachable scope,
+ * which the planner plans rather than cuts, is planned.
+ */
+function releaseModel(catalog: boolean): Plan {
+  const scope = loadReleaseScope(SCOPE)!.scope;
+  return scope.scope === 'reachable'
+    ? fullModel(registrations, { catalog, scope: 'reachable' })
+    : scopePlan(fullModel(registrations, { catalog }), scope);
+}
+/** The checkout's plan in the checked-in release scope. */
+let scopedPlan: Plan;
+/** #20's model's plan in the checked-in release scope. */
+let scopedCatalog: Plan;
 
 /**
  * The first cycle, and a release shard count, which the synthetic plans here
@@ -276,7 +292,11 @@ const PR_WEIGHTS = loadDurations();
  */
 function fullModel(
   registrations: Registrations,
-  { catalog = false, extra = [] as string[] } = {},
+  {
+    catalog = false,
+    extra = [] as string[],
+    scope,
+  }: { catalog?: boolean; extra?: string[]; scope?: 'reachable' } = {},
 ): Plan {
   const own = withTierPacks(catalog ? catalogMeta(checkoutMeta()) : checkoutMeta());
   const sourced = new Set<string>(CATALOG_SOURCE.compositions);
@@ -311,6 +331,7 @@ function fullModel(
       ],
     },
     mode: 'full',
+    ...(scope ? { scope } : {}),
   });
 }
 
@@ -324,6 +345,8 @@ test.before(async () => {
   plan = fullModel(registrations);
   catalog = fullModel(registrations, { catalog: true });
   assert.ok(plan.targets.some((target) => target.id === 'acme-reference'));
+  scopedPlan = releaseModel(false);
+  scopedCatalog = releaseModel(true);
 });
 
 const total = (groups: readonly ShardGroup[]) =>
@@ -701,17 +724,16 @@ test(`the release plan fits rc-quality's timeout in the fewest shards that do, a
   assert.equal(RELEASE_CEILING, fitReleaseCeiling(RELEASE_PACE));
   assert.ok(releaseTimeoutMinutes() <= JOB_LIMIT_MINUTES);
   const weights = releaseDurations();
-  for (const [name, unscoped] of [
-    ['this checkout', plan],
-    ['the model', catalog],
+  for (const [name, each] of [
+    ['this checkout', scopedPlan],
+    ['the model', scopedCatalog],
   ] as const) {
-    const each = scoped(unscoped);
     const groups = fullGroups(each, ENGINES, weights);
     const { count, shards, slowest } = fewestShards(groups, weights);
     t.diagnostic(
       `${name}: ${count} shards, the slowest about ${Math.round(slowest)}s of ${RELEASE_CEILING}s, ${Math.round(RELEASE_CEILING - slowest)}s to spare`,
     );
-    if (unscoped === catalog) assert.equal(count, CATALOG_SHARDS);
+    if (each === scopedCatalog) assert.equal(count, CATALOG_SHARDS);
     // Every planned test once, and every harness, perf, and visual group once.
     assert.deepEqual(
       shards.flatMap((shard) => shard.groups.flatMap((group) => group.tests)).sort(),
@@ -794,11 +816,10 @@ function weighedAgain(shard: Pick<PrShard, 'groups'>, weights: readonly ShardGro
 test("today's weights size the release past rc-quality's timeout at its measured p90s, and the release's own weights keep every shard's sum of p90 weights within the ceiling", (t) => {
   const timeout = releaseTimeoutMinutes() * 60;
   const weights = releaseDurations();
-  for (const [name, whole] of [
-    ['this checkout', plan],
-    ['the model', catalog],
+  for (const [name, each] of [
+    ['this checkout', scopedPlan],
+    ['the model', scopedCatalog],
   ] as const) {
-    const each = scoped(whole);
     const measured = fullGroups(each, ENGINES, weights);
     // Today's: the PR weights, each key at its mean of quality:pr's runs.
     const today = releaseFor(fullGroups(each, ENGINES, loadDurations()), loadDurations());
@@ -1513,8 +1534,15 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
   // What this checkout's plan gives, worked out here on its own.
   const own = await loadPlan({ QUALITY_WEB: web, QUALITY_MODE: 'full', ...SCOPE });
   const { count, shards } = releaseOf(own);
-  // The nightly's cycle by the release's weights, as each night plans (row 151).
-  const { nights } = rotationFor(fullGroups(own, ENGINES, releaseDurations()), releaseDurations());
+  // The nightly's cycle by the release's weights, as each night plans, for the record: the nightly
+  // runs its own scope, and a release plan past every cycle is logged as such and written as 0.
+  let nights = 0;
+  let noCycle: string | null = null;
+  try {
+    ({ nights } = rotationFor(fullGroups(own, ENGINES, releaseDurations()), releaseDurations()));
+  } catch (error) {
+    noCycle = (error as Error).message;
+  }
   const slices = releaseSlices(count);
   assert.equal(
     readFileSync(output, 'utf8'),
@@ -1524,9 +1552,13 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
     slices.flat(),
     Array.from({ length: count }, (_, at) => at + 1),
   );
-  assert.match(
-    lines.join('\n'),
-    new RegExp(`the release in ${count} shards.*a ${nights}-night cycle`),
+  const cycle = lines.find((line) => line.includes(`the release in ${count} shards`));
+  assert.ok(cycle, lines.join('\n'));
+  assert.ok(
+    noCycle === null
+      ? cycle.includes(`a ${nights}-night cycle`)
+      : cycle.endsWith(`the nightly fits no cycle: ${noCycle}`),
+    cycle,
   );
   // The release's size, worked out from the plan, in the log and the job summary alike: its
   // shard count, and its runner-minutes with every shard at rc-quality's timeout.
@@ -1564,7 +1596,7 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
 
 test("a release shard runs the count it's handed, and a count too small for the ceiling fails rather than taking another", () => {
   // The count rc-quality-plan worked out is the one each shard plans with.
-  const own = scoped(plan);
+  const own = scopedPlan;
   const { count } = releaseOf(own);
   const handed = fullShard(own, ENGINES, `1/${count}`, null);
   assert.equal(handed.shard.count, count);
