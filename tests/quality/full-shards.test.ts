@@ -636,6 +636,39 @@ test("the #20 model is a fixed input: CATALOG's shipping packs, the platform def
   assert.deepEqual(ids(catalogMeta(shipped)), ids(model));
 });
 
+/** The token-free artifact listing of the run's own artifacts stops at this many (download-artifact). */
+const RUN_LISTING_CAP = 1000;
+
+test("a release run whose every shard is clean holds fewer artifacts than the 1,000 its verdict's download lists: one verdict artifact a shard at the most shards, and every other upload once", () => {
+  const isUpload = (each: Step) => /^actions\/upload-artifact@/.test(each.uses ?? '');
+  // A clean shard skips the uploads that wait on the pack calling it unclean.
+  const cleanSkips = (each: Step) => /steps\.pack\.outputs\.clean != 'true'/.test(each.if ?? '');
+  const shardJobs = RELEASE_JOBS.map((job) => job.id);
+  for (const id of shardJobs) {
+    assert.deepEqual(
+      RELEASE[id]!.steps.filter((each) => isUpload(each) && !cleanSkips(each)).map(
+        (each) => each.with?.name,
+      ),
+      ['verdict-quality-release-${{ matrix.shard }}'],
+      `${id}: a clean shard's one artifact`,
+    );
+  }
+  let others = 0;
+  for (const [id, job] of Object.entries(RELEASE)) {
+    if (shardJobs.includes(id)) continue;
+    const matrix = (job.strategy?.matrix ?? {}) as Record<string, unknown>;
+    const legs = Object.values(matrix).reduce<number>(
+      (product, values) => product * (Array.isArray(values) ? values.length : 1),
+      1,
+    );
+    others += job.steps.filter(isUpload).length * legs;
+  }
+  assert.ok(
+    MAX_RELEASE_PLAN + others < RUN_LISTING_CAP,
+    `${MAX_RELEASE_PLAN} shards' verdicts and ${others} other artifacts reach the listing's ${RUN_LISTING_CAP}`,
+  );
+});
+
 test(`the release plan fits rc-quality's timeout in the fewest shards that do, at the release's weights in its checked-in scope: the registry's own count, and ${CATALOG_SHARDS} for #20's model, under the most, every group once`, (t) => {
   // #20's catalog in the scope leaves headroom: its count is under the most the plan takes.
   assert.ok(CATALOG_SHARDS < MAX_RELEASE_PLAN);

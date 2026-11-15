@@ -809,3 +809,105 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
     'node ci/run.mjs inventory-summary -- tsx tests/quality/inventory.ts',
   );
 });
+
+test("each release, preflight and inventory shard packs its verdict files after the scrub, uploads its reports only when the pack can't call it clean, and the merge downloads only the verdicts, every one the run planned", () => {
+  const INVENTORY = read('.github/workflows/inventory.yml');
+  const sets = [
+    {
+      file: RELEASE,
+      prefix: 'rc-quality',
+      merge: 'rc-quality-verdict',
+      name: 'verdict-quality-release-',
+      reports: 'reports-quality-release-',
+      rest: false,
+    },
+    {
+      file: PREFLIGHT,
+      prefix: 'preflight-quality',
+      merge: 'preflight-verdict',
+      name: 'verdict-quality-preflight-',
+      reports: 'reports-quality-preflight-',
+      rest: false,
+    },
+    {
+      file: INVENTORY,
+      prefix: 'inventory',
+      merge: 'inventory-summary',
+      name: 'verdict-inventory-',
+      reports: 'reports-inventory-',
+      rest: true,
+    },
+  ];
+  const uploadNamed = (steps, name) =>
+    steps.findIndex(
+      (s) =>
+        /^actions\/upload-artifact@/.test(s.uses ?? '') &&
+        s.with?.name === `${name}\${{ matrix.shard }}`,
+    );
+  for (const { file, prefix, merge, name, reports, rest } of sets) {
+    for (const k of [1, 2, 3]) {
+      const id = `${prefix}-${k}`;
+      const steps = file.jobs[id].steps;
+      const scrub = steps.findIndex((s) => s.id === 'scrub');
+      const pack = steps.findIndex((s) => s.id === 'pack');
+      assert.ok(scrub >= 0 && pack > scrub, `${id} packs its verdict files after its scrub`);
+      assert.equal(
+        steps[pack].run,
+        'node ci/release/shard-verdict.mjs pack reports "$RUNNER_TEMP/verdict"',
+        id,
+      );
+      assert.equal(steps[pack].if, "${{ always() && steps.scrub.outcome == 'success' }}", id);
+      const upload = uploadNamed(steps, name);
+      assert.ok(upload > pack, `${id} uploads ${name}<shard> after the pack`);
+      assert.equal(steps[upload].if, "${{ always() && steps.pack.outcome == 'success' }}", id);
+      assert.equal(steps[upload].with.path, '${{ runner.temp }}/verdict/', id);
+      // The reports go up only when the pack couldn't call the shard clean, a missing or failed
+      // pack included: a run whose every shard is clean holds one artifact a shard.
+      const own = uploadNamed(steps, reports);
+      assert.ok(own > pack, `${id} uploads its reports after the pack reads them`);
+      assert.equal(
+        steps[own].if,
+        "${{ always() && steps.scrub.outcome == 'success' && steps.pack.outputs.clean != 'true' }}",
+        id,
+      );
+    }
+    const job = file.jobs[merge];
+    const steps = job.steps;
+    const downloads = steps.filter((s) => /^actions\/download-artifact@/.test(s.uses ?? ''));
+    assert.deepEqual(
+      downloads.map((s) => [s.with.pattern, s.with.path]),
+      [[`${name}*`, '${{ runner.temp }}/verdicts']],
+      `${merge} downloads only the shards' verdict files`,
+    );
+    if (rest) {
+      // The inventory's red shards upload their reports too, past the token-free listing's 1,000:
+      // its summary, which no release waits on, lists through the REST API, paginated.
+      assert.equal(downloads[0].with['github-token'], '${{ github.token }}', merge);
+      assert.equal(downloads[0].with['run-id'], '${{ github.run_id }}', merge);
+      assert.equal(downloads[0].env?.ACTIONS_ARTIFACT_MAX_ARTIFACT_COUNT, '2000', merge);
+      assert.deepEqual(job.permissions, { actions: 'read', contents: 'read' }, merge);
+    } else {
+      // A release's merge holds no token: the listing is the run's own.
+      assert.equal(downloads[0].with['github-token'], undefined, merge);
+      assert.equal(downloads[0].with['run-id'], undefined, merge);
+      assert.equal(job.permissions, undefined, merge);
+    }
+    const unpack = steps.findIndex((s) => /shard-verdict\.mjs unpack/.test(s.run ?? ''));
+    const reads = steps.findIndex((s) => /\$SHARDS/.test(s.run ?? ''));
+    assert.ok(unpack >= 0 && unpack < reads, `${merge} unpacks before it reads`);
+    assert.match(
+      steps[unpack].run,
+      /^node ci\/release\/shard-verdict\.mjs unpack "\$RUNNER_TEMP\/verdicts" "\$RUNNER_TEMP\/[a-z-]+-shards" --expected "\$SHARD_COUNT"$/,
+    );
+    assert.equal(steps[unpack].env.SHARD_COUNT, steps[reads].env.SHARD_COUNT, merge);
+    assert.equal(
+      steps[reads].env.SHARDS,
+      steps[unpack].run
+        .split(' ')
+        .at(-3)
+        .replaceAll('"', '')
+        .replace('$RUNNER_TEMP', '${{ runner.temp }}'),
+      merge,
+    );
+  }
+});
