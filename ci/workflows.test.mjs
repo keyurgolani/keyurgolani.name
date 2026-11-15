@@ -672,7 +672,14 @@ test("only release.yml's, rc-preflight.yml's and inventory.yml's quality jobs na
     .filter((file) => readFileSync(new URL(file, dir), 'utf8').includes('QUALITY_RELEASE_SCOPE'))
     .sort();
   // inventory.yml runs (c′) whole on its own branches, by its own scope file, and gates on no list.
-  assert.deepEqual(naming, ['inventory.yml', 'rc-preflight.yml', 'release.yml']);
+  // verdict-611-evidence.yml, on its evidence branch only and never merged, runs rc-quality-verdict's
+  // merge step as it is.
+  assert.deepEqual(naming, [
+    'inventory.yml',
+    'rc-preflight.yml',
+    'release.yml',
+    'verdict-611-evidence.yml',
+  ]);
   for (const workflow of [RELEASE, PREFLIGHT]) {
     // Never for a whole workflow or job: only on the steps that plan, run or judge the release.
     assert.equal(workflow.env?.QUALITY_RELEASE_SCOPE, undefined);
