@@ -404,7 +404,7 @@ jobs:
   # plan leaves a shard over that ceiling, naming its heaviest group. It
   # installs fresh, with no cache, in the pinned Playwright image, and holds
   # contents: read and no secret. Each shard's reports are scrubbed however
-  # the run ended, and upload only when that scrub succeeds, for three days,
+  # the run ended, and upload only when that scrub succeeds, for seven days,
   # so the first wave's outlast the last wave's timeout.
   rc-quality-1:
     name: rc-quality (${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }})
@@ -468,7 +468,7 @@ jobs:
           name: verdict-quality-release-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
       # The reports only when the pack can't call the shard clean, a missing or failed pack
       # included: the verdict's download lists at most 1,000 of the run's artifacts, so a run
       # whose every shard is clean holds one artifact a shard.
@@ -479,10 +479,10 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
-          # last wave's end before the verdict downloads them (past about 290 shards at the
-          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
-          retention-days: 3
+          # Seven days: at 16 at a time the first wave's reports must outlast the last wave's
+          # end before the verdict downloads them, about 51 hours at the release scope's 611
+          # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
+          retention-days: 7
 
   rc-quality-2:
     name: rc-quality (${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }})
@@ -542,7 +542,7 @@ jobs:
           name: verdict-quality-release-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
       - name: Upload reports
         if: ${{ always() && steps.scrub.outcome == 'success' && steps.pack.outputs.clean != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -550,10 +550,10 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
-          # last wave's end before the verdict downloads them (past about 290 shards at the
-          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
-          retention-days: 3
+          # Seven days: at 16 at a time the first wave's reports must outlast the last wave's
+          # end before the verdict downloads them, about 51 hours at the release scope's 611
+          # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
+          retention-days: 7
 
   rc-quality-3:
     name: rc-quality (${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }})
@@ -613,7 +613,7 @@ jobs:
           name: verdict-quality-release-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
       - name: Upload reports
         if: ${{ always() && steps.scrub.outcome == 'success' && steps.pack.outputs.clean != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -621,10 +621,10 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Three days, not one: at 16 at a time, the first wave's reports must outlast the
-          # last wave's end before the verdict downloads them (past about 290 shards at the
-          # ceiling's 80 minutes, a day is too short; three hold 864, past the plan's 768).
-          retention-days: 3
+          # Seven days: at 16 at a time the first wave's reports must outlast the last wave's
+          # end before the verdict downloads them, about 51 hours at the release scope's 611
+          # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
+          retention-days: 7
 
   # The release's quality gate over every shard's reports: the merged
   # verdict, which must be the whole plan, not a night's slice, then the

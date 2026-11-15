@@ -9,7 +9,7 @@
 # their names, scope file and artifacts: three matrices of at most 256, 6, 5 and 5 at a time, at
 # rc-quality's 120 minutes, at the worker count quality/inventory/workers.json names, which the
 # worker probe settles and the release run keeps too. Unlike rc-quality's, no shard uploads its
-# reports: its verdict files, its failure records among them, upload for three days, and its
+# reports: its verdict files, its failure records among them, upload for seven days, and its
 # job log holds its failure table, so no screenshot or trace of an inventory run is kept.
 # inventory-summary merges every shard (tests/quality/inventory.ts): failures counted by
 # composition, rule, check and viewport, with their record keys. It never gates on a records
@@ -138,7 +138,7 @@ jobs:
           name: verdict-inventory-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
 
   inventory-2:
     name: inventory (${{ matrix.shard }}/${{ needs.inventory-plan.outputs.count }})
@@ -203,7 +203,7 @@ jobs:
           name: verdict-inventory-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
 
   inventory-3:
     name: inventory (${{ matrix.shard }}/${{ needs.inventory-plan.outputs.count }})
@@ -268,7 +268,7 @@ jobs:
           name: verdict-inventory-${{ matrix.shard }}
           path: ${{ runner.temp }}/verdict/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
 
   # Every shard's reports merged into the inventory: what failed in (c′), by composition, rule,
   # check and viewport, with each record's key, in its artifact and the job summary. It runs
