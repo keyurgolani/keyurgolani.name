@@ -410,7 +410,7 @@ test('scan findings upload for one day only, and the logs get counts from scan-g
   );
   const reports = uploads.filter((u) => u.path === 'reports/');
   // The quality gate's shards (each of its three jobs') and verdict among them: the shards keep
-  // three days, the rest one.
+  // seven days, the rest one.
   assert.deepEqual(reports.map((u) => u.name).sort(), [
     ...QUALITY_JOBS.map(() => 'reports-quality-release-${{ matrix.shard }}'),
     'reports-quality-release-verdict',
@@ -421,8 +421,8 @@ test('scan findings upload for one day only, and the logs get counts from scan-g
     'reports-release-smoke-${{ matrix.arch }}',
   ]);
   for (const upload of reports) {
-    // The quality shards' reports keep three days, to outlast every wave before the verdict reads them.
-    const days = upload.name === 'reports-quality-release-${{ matrix.shard }}' ? 3 : 1;
+    // The quality shards' reports keep seven days, to outlast every wave before the verdict reads them.
+    const days = upload.name === 'reports-quality-release-${{ matrix.shard }}' ? 7 : 1;
     assert.equal(upload['retention-days'], days, upload.name);
   }
   // Nothing else uploads the reports directory, where Grype's JSON goes.
@@ -684,4 +684,22 @@ test("rc-verify's two checks run unconditioned, and every step if: on a candidat
     ['rc-smoke', 'Upload reports', '${{ always() }}'],
     ['promote-scan', 'Upload reports', '${{ always() }}'],
   ]);
+});
+
+test("each quality shard's reports and verdict files keep seven days, so a run at 12 at a time or a retag's wait still finds the first wave's", () => {
+  // At 16 at a time the release scope's 611 shards run about 51 hours, so the first wave's
+  // uploads are that old when the verdict reads them; at 12 about 67, within hours of three days.
+  for (const id of QUALITY_JOBS) {
+    const uploads = JOBS[id].steps.filter((s) =>
+      (s.uses ?? '').startsWith('actions/upload-artifact@'),
+    );
+    assert.deepEqual(
+      uploads.map((s) => [s.with.name, s.with['retention-days']]),
+      [
+        ['reports-quality-release-${{ matrix.shard }}', 7],
+        ['verdict-quality-release-${{ matrix.shard }}', 7],
+      ],
+      id,
+    );
+  }
 });
