@@ -230,7 +230,7 @@ export function focusPerimeter(tuple: string, cases: readonly PerimeterCase[]) {
               ),
             );
             const rounded = (active.rounding?.width ?? 0) > 0;
-            const ring = await ringContrast(page, control);
+            const ring = rounded ? await ringContrast(page, control) : null;
             const read = rounded
               ? await everyPoint(page, control, active)
               : { points: 0, weak: [] as string[], sides: {}, samples: [] as string[] };
