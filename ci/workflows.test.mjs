@@ -469,7 +469,9 @@ function asPreflight(id) {
   for (const [own, release] of Object.entries(PREFLIGHT_OF)) {
     text = text.replaceAll(`needs.${release}.`, `needs.${own}.`);
   }
-  text = text.replaceAll('reports-quality-release-', 'reports-quality-preflight-');
+  text = text
+    .replaceAll('reports-quality-release-', 'reports-quality-preflight-')
+    .replaceAll('verdict-quality-release-', 'verdict-quality-preflight-');
   const job = JSON.parse(text);
   // Its own needs, and no tag to wait for.
   delete job.needs;
@@ -626,12 +628,20 @@ test('rc-preflight reads only, holds no secret, reads no cache, keeps shard repo
   assert.deepEqual(
     uploads.map((u) => u.name),
     [
-      ...PREFLIGHT_QUALITY.map(() => 'reports-quality-preflight-${{ matrix.shard }}'),
+      ...PREFLIGHT_QUALITY.flatMap(() => [
+        'verdict-quality-preflight-${{ matrix.shard }}',
+        'reports-quality-preflight-${{ matrix.shard }}',
+      ]),
       'reports-quality-preflight-verdict',
     ],
   );
   for (const upload of uploads) {
-    assert.equal(upload.path, 'reports/');
+    // Each shard's verdict files go up apart from its reports, which keep the reports directory.
+    assert.equal(
+      upload.path,
+      upload.name.startsWith('verdict-') ? '${{ runner.temp }}/verdict/' : 'reports/',
+      upload.name,
+    );
     // The shards' reports outlast every wave of a long release; the verdict's keep one day.
     assert.equal(upload['retention-days'], upload.name.endsWith('-verdict') ? 1 : 3, upload.name);
   }
@@ -759,17 +769,30 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
     );
   }
   // Each matrix job is release.yml's rc-quality job of its number, but for its names, its scope
-  // file, its artifacts, and a run step that reports rather than gates.
+  // file, its artifacts, a run step that reports rather than gates, and one step it hasn't.
   for (const k of [1, 2, 3]) {
     const own = structuredClone(INVENTORY.jobs[`inventory-${k}`]);
     let release = JSON.stringify(RELEASE.jobs[`rc-quality-${k}`])
       .replaceAll('needs.rc-quality-plan.', 'needs.inventory-plan.')
       .replaceAll('quality/release/scope.json', 'quality/inventory/scope.json')
-      .replaceAll('reports-quality-release-', 'reports-inventory-');
+      .replaceAll('reports-quality-release-', 'reports-inventory-')
+      .replaceAll('verdict-quality-release-', 'verdict-inventory-');
     release = JSON.parse(release);
     release.name = release.name.replace(/^rc-quality \(/, 'inventory (');
     release.needs = ['inventory-plan'];
     release.if = `\${{ needs.inventory-plan.outputs.shards${k} != '[]' }}`;
+    // The one step it hasn't: the reports upload. Most of the inventory's shards fail, so their
+    // reports would take the run past the 1,000 artifacts its summary's token-free download
+    // lists. Its verdict files carry its failure records instead, and the job log its failure
+    // table: no screenshot or trace of an inventory run is kept.
+    const reportsUpload = (each) => each.with?.name === 'reports-inventory-${{ matrix.shard }}';
+    assert.equal(
+      release.steps.filter(reportsUpload).length,
+      1,
+      `rc-quality-${k} uploads its reports`,
+    );
+    assert.equal(own.steps.filter(reportsUpload).length, 0, `inventory-${k} uploads no reports`);
+    release.steps = release.steps.filter((each) => !reportsUpload(each));
     const run = (job) => job.steps.find((s) => /pnpm ci:quality-full/.test(s.run ?? ''));
     assert.match(run(own).run, /pnpm ci:quality-full "--shard=\$SHARD" \|\| status=\$\?/);
     assert.deepEqual(run(own).env, run(release).env);
@@ -793,7 +816,7 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
   assert.equal(count.run, 'pnpm exec tsx tests/quality/full-plan.ts');
   assert.equal(count.env.QUALITY_RELEASE_SCOPE, 'quality/inventory/scope.json');
   assert.match(plan.steps.find((s) => s.id === 'workers').run, /quality\/inventory\/workers\.json/);
-  // The summary: every shard's reports, however the shards ended, and the inventory's command.
+  // The summary: every shard's verdict files, however the shards ended, and the inventory's command.
   const summary = INVENTORY.jobs['inventory-summary'];
   assert.deepEqual(summary.needs, ['inventory-plan', 'inventory-1', 'inventory-2', 'inventory-3']);
   assert.equal(summary.if, "${{ !cancelled() && needs.inventory-plan.result == 'success' }}");
@@ -802,7 +825,7 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
   assert.equal(merge.env.SHARD_COUNT, '${{ needs.inventory-plan.outputs.count }}');
   assert.equal(merge.env.QUALITY_RELEASE_SCOPE, undefined, 'it gates on no records list');
   const download = summary.steps.find((s) => /^actions\/download-artifact@/.test(s.uses ?? ''));
-  assert.equal(download.with.pattern, 'reports-inventory-*');
+  assert.equal(download.with.pattern, 'verdict-inventory-*');
   const { scripts } = read('package.json');
   assert.equal(
     scripts['ci:inventory-summary'],
