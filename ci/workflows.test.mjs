@@ -809,3 +809,73 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
     'node ci/run.mjs inventory-summary -- tsx tests/quality/inventory.ts',
   );
 });
+
+test('each release, preflight and inventory shard packs its verdict files apart from its reports after the scrub, and the merge downloads only those', () => {
+  const INVENTORY = read('.github/workflows/inventory.yml');
+  const sets = [
+    {
+      file: RELEASE,
+      prefix: 'rc-quality',
+      merge: 'rc-quality-verdict',
+      name: 'verdict-quality-release-',
+    },
+    {
+      file: PREFLIGHT,
+      prefix: 'preflight-quality',
+      merge: 'preflight-verdict',
+      name: 'verdict-quality-preflight-',
+    },
+    {
+      file: INVENTORY,
+      prefix: 'inventory',
+      merge: 'inventory-summary',
+      name: 'verdict-inventory-',
+    },
+  ];
+  for (const { file, prefix, merge, name } of sets) {
+    for (const k of [1, 2, 3]) {
+      const id = `${prefix}-${k}`;
+      const steps = file.jobs[id].steps;
+      const scrub = steps.findIndex((s) => s.id === 'scrub');
+      const pack = steps.findIndex((s) => s.id === 'pack');
+      assert.ok(scrub >= 0 && pack > scrub, `${id} packs its verdict files after its scrub`);
+      assert.equal(
+        steps[pack].run,
+        'node ci/release/shard-verdict.mjs pack reports "$RUNNER_TEMP/verdict"',
+        id,
+      );
+      assert.equal(steps[pack].if, "${{ always() && steps.scrub.outcome == 'success' }}", id);
+      const upload = steps.find(
+        (s) =>
+          /^actions\/upload-artifact@/.test(s.uses ?? '') &&
+          s.with?.name === `${name}\${{ matrix.shard }}`,
+      );
+      assert.ok(upload, `${id} uploads ${name}<shard>`);
+      assert.equal(upload.if, "${{ always() && steps.pack.outcome == 'success' }}", id);
+      assert.equal(upload.with.path, '${{ runner.temp }}/verdict/', id);
+    }
+    const steps = file.jobs[merge].steps;
+    const downloads = steps.filter((s) => /^actions\/download-artifact@/.test(s.uses ?? ''));
+    assert.deepEqual(
+      downloads.map((s) => [s.with.pattern, s.with.path]),
+      [[`${name}*`, '${{ runner.temp }}/verdicts']],
+      `${merge} downloads only the shards' verdict files`,
+    );
+    const unpack = steps.findIndex((s) => /shard-verdict\.mjs unpack/.test(s.run ?? ''));
+    const reads = steps.findIndex((s) => /\$SHARDS/.test(s.run ?? ''));
+    assert.ok(unpack >= 0 && unpack < reads, `${merge} unpacks before it reads`);
+    assert.match(
+      steps[unpack].run,
+      /^node ci\/release\/shard-verdict\.mjs unpack "\$RUNNER_TEMP\/verdicts" "\$RUNNER_TEMP\/[a-z-]+-shards"$/,
+    );
+    assert.equal(
+      steps[reads].env.SHARDS,
+      steps[unpack].run
+        .split(' ')
+        .at(-1)
+        .replaceAll('"', '')
+        .replace('$RUNNER_TEMP', '${{ runner.temp }}'),
+      merge,
+    );
+  }
+});
