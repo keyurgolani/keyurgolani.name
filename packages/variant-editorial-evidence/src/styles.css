@@ -211,8 +211,10 @@
   background: var(--color-canvas);
 }
 
+/* On two lines, as in larger type on a phone, the name keeps its ring a reach inside the masthead. */
 [data-variant='editorial-evidence'] .ee-masthead__name {
   justify-self: start;
+  margin-block: var(--layout-ee-ring);
   font-family: var(--type-title-font-family);
   font-weight: var(--type-title-font-weight);
   letter-spacing: var(--type-title-letter-spacing);
