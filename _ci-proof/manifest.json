@@ -1,0 +1,37 @@
+{
+  "name": "bento-reading-links-read",
+  "summary": "Spatial Bento's overview, writing and contact links and their focus rings under accessible-reading type, read at the landing",
+  "head": "d9a9fab0ee48bc066eae8d392fd26aa19f185123",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "cells": [
+    {
+      "label": "reading-390",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:spatial-bento complete / spatial-bento/(minimal-flat/neutral-slate|platform-neutral/warm-parchment)/accessible-reading/system 390x844 default ",
+      "shards": ["find"],
+      "tests": 2,
+      "passed": 0,
+      "failed": 2
+    }
+  ],
+  "look": [
+    {
+      "label": "links-390",
+      "spec": "look/sb-fam2-look-390.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 12
+    },
+    {
+      "label": "links-1440",
+      "spec": "look/sb-fam2-look-1440.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 6
+    }
+  ],
+  "kit": "b67ee7dabde7",
+  "kitScripts": "75dcf5c8906b"
+}
