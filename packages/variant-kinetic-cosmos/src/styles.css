@@ -1574,6 +1574,18 @@
   color: var(--color-text-secondary);
 }
 
+/*
+ * Below 64rem the signature work's words follow its system, whose moons' plates sit just above
+ * them and paint over what reaches under them (their own ground, or forced colours' backplate). A
+ * focus halo and a little more between the two keeps the title link's ring clear of the plates,
+ * its inline box's overhang included.
+ */
+@media (max-width: 63.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-work--signature .kc-work__text {
+    margin-block-start: calc(var(--layout-focus-halo) + var(--space-3xs));
+  }
+}
+
 [data-variant='kinetic-cosmos'] .kc-cover,
 [data-variant='kinetic-cosmos'] .kc-hang__image {
   display: block;
