@@ -1,0 +1,23 @@
+{
+  "name": "kc-230-scan",
+  "summary": "Every composition's texts under forced colours, judged in pixels against the backplate laid under them, with and without the candidate role map",
+  "head": "599ea4c7e1cf497bdf577fe4e6ed58ed75010ba7",
+  "base": "b31f1d839f485237f696dd7e2e8305c2287f33fc",
+  "e2e": [
+    {
+      "label": "smoke",
+      "specs": ["tests/e2e/zz-kc-probe7d-raw-grid.spec.ts"],
+      "grep": "probe7d raw-grid / light 1024",
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "scan",
+      "specs": ["tests/e2e/zz-kc-probe7d-*.spec.ts"],
+      "tests": 240,
+      "files": 15
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
