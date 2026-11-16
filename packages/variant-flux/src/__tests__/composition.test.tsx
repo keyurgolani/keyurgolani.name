@@ -631,6 +631,21 @@ test("the line of figures sets each figure in the text's own role, never an ink:
   );
 });
 
+test("a line of small links holds a 24px target in each link's own box: the Index's section links and a row's links", () => {
+  // Wrapped flex lines of label-sized links, a few pixels apart: 'Experience title' in the Index's
+  // section list was 90x15 and 'Episode link' in a row's links 93.5x14.4 at 390 without script, so
+  // a 24px target round each one met the next link's, and axe's target-size failed (WCAG 2.5.8).
+  // Each link is an inline block a target tall, its line in the middle, so the targets stand apart
+  // whatever the type's line.
+  const links = rulesFor(':is(.fx-index__sections a, .fx-row__links > a)');
+  assert.equal(links.length, 1, 'one rule for both lists');
+  const body = links[0]!.body;
+  assert.equal(valueOf(body, 'display'), 'inline-block');
+  assert.equal(valueOf(body, 'min-block-size'), '24px');
+  assert.equal(valueOf(body, 'min-inline-size'), '24px');
+  assert.equal(valueOf(body, 'padding-block'), 'max(0px, calc((24px - 1lh) / 2))');
+});
+
 test("folds run together only to a ring's reach and 1px: the next fold's hairline sits clear of a focused summary's ring", () => {
   // A fold's summary carries a hairline on its top edge, and the folds after the first pull up by
   // the sheet's gap so they run together. That put the next fold's hairline about 3.5px under the
