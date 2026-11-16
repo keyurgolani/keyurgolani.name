@@ -78,3 +78,19 @@ for (const [width, height] of [
       expect(described(failing), 'the figure under the large-text ratio').toEqual([]);
     },
   );
+
+for (const [width, height] of [
+  [1024, 768],
+  [1440, 900],
+] as const)
+  test(
+    `under more contrast, at ${width}, the stats figure reaches the high-contrast large-text ratio`,
+    { annotation },
+    async ({ page }) => {
+      await openHome(page, { width, height, row: 'contrast-more' });
+      const failing = (await contrastFindings(page, FIGURE)).filter(
+        (f) => f.rule === 'high-contrast-large-text',
+      );
+      expect(described(failing), 'the figure under the high-contrast large-text ratio').toEqual([]);
+    },
+  );
