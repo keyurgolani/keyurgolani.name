@@ -1,0 +1,28 @@
+{
+  "name": "singular-fold-line-read",
+  "summary": "Singular's closed record rows at 320 px on accessible-reading, read on Linux before a fix: the e2e red and the record's own quality cell",
+  "head": "59da43bd218ce5568cafe023ee0b9ae6a50a371c",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "reds": [
+    {
+      "label": "fold-line",
+      "at": "559fdab43a5c204b3ef41e4d496aba84db254493",
+      "specs": ["tests/e2e/singular-fold-line-reflow.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "fold-line-cell",
+      "kind": "cells",
+      "at": "559fdab43a5c204b3ef41e4d496aba84db254493",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:singular\\ complete\\ /\\ singular/platform\\-neutral/warm\\-parchment/accessible\\-reading/system\\ 1440x900\\ default\\ ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    }
+  ],
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
