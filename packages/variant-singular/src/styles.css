@@ -1631,6 +1631,11 @@
   white-space: nowrap;
 }
 
+/* A count wraps rather than clipping: how many and over which years is no teaser to cut short, and in a wide face at 320 px its end ran a few pixels past the line. */
+[data-variant='singular'] .sg-fold__line--count {
+  white-space: normal;
+}
+
 [data-variant='singular'] .sg-fold__sum::-webkit-details-marker {
   display: none;
 }
