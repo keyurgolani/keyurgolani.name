@@ -1,0 +1,28 @@
+{
+  "name": "hc-next-ring-read",
+  "summary": "Horizontal Cinema's bar Next links in Bauhaus Geometric, walked from the keyboard on CI Linux, read where their focus rings fall short",
+  "head": "ad036fd775832c30378accdbd9164cb55d877245",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "reds": [
+    {
+      "label": "next",
+      "at": "ad036fd775832c30378accdbd9164cb55d877245",
+      "specs": ["tests/e2e/horizontal-cinema-next-ring.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "look": [
+    {
+      "label": "next",
+      "spec": "look/look-169-ci.spec.ts",
+      "project": "chromium",
+      "tests": 4,
+      "files": 1,
+      "shots": 16
+    }
+  ],
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
