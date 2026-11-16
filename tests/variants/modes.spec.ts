@@ -2,6 +2,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { expect, test, type Page, type Route, type TestInfo } from '@playwright/test';
 import { ENHANCEMENT_PENDING } from '../../packages/variant-contract/src/settle';
 import { BUSY_LIMIT_MS, STILL_ENHANCING, watchEnhancements } from '../quality/lib/a11y/conditions';
+import { decodePng } from '../quality/lib/pixels';
 import {
   capturePage,
   checkMode,
@@ -12,6 +13,7 @@ import {
   expectReadable,
   failEveryEnhancement,
   loadImages,
+  prepareShot,
   settle,
 } from './modes';
 
@@ -583,6 +585,42 @@ test.describe('the settle before the shot', () => {
       expect(message).toContain('script animation on p.row');
       expect(message).toMatch(/script animation on p\.row: [0-9]+ ms left/);
       expect(Date.now() - started).toBeLessThan(3_000);
+    } finally {
+      watch.stop();
+    }
+  });
+});
+
+test.describe("the capture's own resize", () => {
+  /**
+   * A page taller than the window whose resize listener paints its first
+   * block red: a full-page capture past the window fires a resize at the
+   * page, and what a listener does then is in the shot (CI Linux and macOS,
+   * 2026-11-16).
+   */
+  const RESIZED = `<main><div id="block" style="height: 200px; background: #fff"></div><div style="height: 3000px"></div></main>
+<script>
+  addEventListener('resize', () => {
+    document.getElementById('block').style.background = 'rgb(255, 0, 0)';
+  });
+</script>`;
+  /** The block's colour in a shot, as red, green and blue. */
+  const block = (png: Buffer) => {
+    const image = decodePng(png);
+    const at = (100 * image.width + 10) * 4;
+    return [image.data[at], image.data[at + 1], image.data[at + 2]];
+  };
+
+  test("a page's resize listener doesn't hear the capture's own resize, so the shot is the page as it settled", async ({
+    page,
+  }) => {
+    const watch = await prepareShot(page);
+    try {
+      await open(page, RESIZED);
+      await settle(page, true);
+      expect(block(await capturePage(page, watch)), 'the block in the shot').toEqual([
+        255, 255, 255,
+      ]);
     } finally {
       watch.stop();
     }
