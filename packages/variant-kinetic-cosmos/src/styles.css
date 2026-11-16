@@ -1049,6 +1049,14 @@
     pointer-events: auto;
   }
 
+  /*
+   * A focused plate lifts over its neighbours: the plates stack close down the map, and the next
+   * plate's ground would otherwise paint over the focused one's ring along its foot.
+   */
+  [data-variant='kinetic-cosmos'] .kc-plate:has(> .kc-plate__link:focus-visible) {
+    z-index: 1;
+  }
+
   [data-variant='kinetic-cosmos'] .kc-plate__link {
     padding-block: 0;
   }
