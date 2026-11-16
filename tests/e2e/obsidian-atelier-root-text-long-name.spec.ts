@@ -11,7 +11,9 @@ import { home, SUMMARY } from './obsidian-atelier-appearance';
 // contract fixture's home, whose words run long (a name of hyphenated surnames, an address, a
 // compound term), the page lays out inside the window and every line of its text stands inside
 // it, every line of the chrome's name and the Appearance summary stand above the entrance's first
-// part, and every line box of the name clears Index's plate and the Appearance summary.
+// part, and every line box of the name clears Index's plate and the Appearance summary. On the
+// essay's title page, whose padding at 200% left its title a column a few letters wide, every
+// word stays whole on one line, unless it alone is wider than the wall the page hangs on.
 // In Warm Parchment, light.
 
 const FIXTURE = contractFixture('long-text');
@@ -126,5 +128,58 @@ test(
       summaryAboveTheEntrance: true,
       everyLineClearsIndexAndTheSummary: true,
     });
+  },
+);
+
+test(
+  "at 390 with the root text at 200%, every word of the essay's title page stays whole on one line",
+  { annotation },
+  async ({ page, app }) => {
+    await home(page, app.origin, { mode: 'light', rootText: '200%' });
+    const read = await page.evaluate(() => {
+      const r = (n: number) => Math.round(n * 10) / 10;
+      const pages = [...document.querySelectorAll<HTMLElement>('.oa-vitrine .oa-folio')];
+      const split: string[] = [];
+      let words = 0;
+      for (const folio of pages) {
+        // The room a word may take: the wall's own content box, which no inset of the title
+        // page can narrow. A word broken inside a page squeezed narrower than its wall counts.
+        const wall = folio.closest<HTMLElement>('.oa-vitrine')!;
+        const ws = getComputedStyle(wall);
+        const room =
+          wall.clientWidth - Number.parseFloat(ws.paddingLeft) - Number.parseFloat(ws.paddingRight);
+        const nodes: Text[] = [];
+        const walker = document.createTreeWalker(folio, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text);
+        for (const node of nodes) {
+          for (const match of (node.textContent ?? '').matchAll(/\S+/g)) {
+            words += 1;
+            const range = document.createRange();
+            range.setStart(node, match.index);
+            range.setEnd(node, match.index + match[0].length);
+            const rects = [...range.getClientRects()].filter((rect) => rect.width > 0);
+            const lines = new Set(rects.map((rect) => Math.round(rect.top))).size;
+            if (lines < 2) continue;
+            // The word's own width on one line, in its own font, measured off the page's flow.
+            const probe = document.createElement('span');
+            probe.textContent = match[0];
+            probe.style.cssText = 'position: absolute; visibility: hidden; white-space: nowrap;';
+            node.parentElement!.append(probe);
+            const unbroken = probe.getBoundingClientRect().width;
+            probe.remove();
+            // Only a word wider than the wall's whole room may break; any other stays on one line.
+            if (unbroken <= room + 0.5)
+              split.push(
+                `"${match[0]}" on ${lines} lines, ${r(unbroken)} wide unbroken, in a wall of ${r(room)}`,
+              );
+          }
+        }
+      }
+      return { pages: pages.length, words, split: split.slice(0, 12) };
+    });
+    expect(
+      { found: read.pages > 0 && read.words > 0, split: read.split },
+      JSON.stringify(read),
+    ).toEqual({ found: true, split: [] });
   },
 );
