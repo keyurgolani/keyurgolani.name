@@ -1,0 +1,54 @@
+{
+  "name": "hc-current-view-ink",
+  "summary": "Horizontal Cinema's Strip | List switch under forced colours: the current view reads in its ground's pair, not the link colour, in both palettes",
+  "head": "19d18c52bbb9a381b7136193e7bbb7cd2e3b74ed",
+  "base": "2a65ded5c3cb3eced3b4948dbb8d27a48bdc09f1",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget"
+    ]
+  },
+  "reds": [
+    {
+      "label": "forced",
+      "at": "e09ce08f8325144aa297592c0d9480242e93c366",
+      "specs": ["tests/e2e/horizontal-cinema-forced-inks.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "forced",
+      "specs": ["tests/e2e/horizontal-cinema-forced-inks.spec.ts"],
+      "tests": 4,
+      "files": 1
+    },
+    {
+      "label": "hc",
+      "specs": ["tests/e2e/horizontal-cinema*.spec.ts"],
+      "tests": 209,
+      "files": 24
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "look": [
+    {
+      "label": "views",
+      "spec": "look/look-234-strip.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
