@@ -42,6 +42,7 @@ test.use({
 });
 
 interface Setting {
+  language?: string;
   scheme: 'low-stimulus-warm' | 'warm-parchment';
   mode: 'dark' | 'system';
   condition: 'default' | 'forced' | 'more';
@@ -52,7 +53,7 @@ async function load(page: Page, origin: string, setting: Setting) {
     {
       name: 'portfolio_appearance',
       value: new URLSearchParams({
-        language: 'bauhaus-geometric',
+        language: setting.language ?? 'bauhaus-geometric',
         scheme: setting.scheme,
         type: 'humanist-ui',
         mode: setting.mode,
@@ -66,7 +67,10 @@ async function load(page: Page, origin: string, setting: Setting) {
     `the page settles with its enhancements: ${loaded.held ?? ''}`,
   ).toEqual({ settled: true, enhanced: true });
   const boundary = page.locator('[data-appearance-boundary]').first();
-  await expect(boundary).toHaveAttribute('data-design-language', 'bauhaus-geometric');
+  await expect(boundary).toHaveAttribute(
+    'data-design-language',
+    setting.language ?? 'bauhaus-geometric',
+  );
   await expect(boundary).toHaveAttribute('data-color-scheme', setting.scheme);
   await expect(boundary).toHaveAttribute('data-typography', 'humanist-ui');
   await expect(boundary).toHaveAttribute('data-display-mode', setting.mode);
@@ -255,3 +259,38 @@ test.describe('1024 more contrast', () => {
     },
   );
 });
+
+// The shipped languages whose card radius is the largest: at a phone's padding, a corner that
+// large could still reach a bar's end. Each scene's Next links and chapter numbers lie inside its
+// corners, at 390 and at 1440, in Low Stimulus Warm's dark.
+const ROUND = [
+  'material-expressive-inspired',
+  'claymorphic',
+  'glassmorphism',
+  'soft-organic',
+  'neumorphic',
+] as const;
+
+for (const [width, height] of [
+  [390, 844],
+  [1440, 900],
+] as const) {
+  test.describe(`${width} round cards`, () => {
+    test.use({ viewport: { width, height } });
+    for (const language of ROUND) {
+      test(
+        `at ${width} in ${language}, every bar's Next link and chapter number lies inside its scene's corners`,
+        { annotation },
+        async ({ page, app }) => {
+          await load(page, app.origin, {
+            language,
+            scheme: 'low-stimulus-warm',
+            mode: 'dark',
+            condition: 'default',
+          });
+          expect(await outsideTheCorners(page), 'inside its scene').toEqual([]);
+        },
+      );
+    }
+  });
+}
