@@ -712,18 +712,24 @@ test("only a composition whose manifest opts in to cross-document view transitio
   }
 });
 
-test("only a composition whose manifest reserves the window's block end gets the host's root scroll-padding, after its layer", async () => {
+test("only a composition whose manifest reserves the window's block start or block end gets the host's root scroll-padding, after its layer", async () => {
   const docked = variantPackage('@acme/docked', 'acme-docked', {
     manifest: manifestFor('acme-docked', {
       contract: '2.1',
       scrollReserve: { blockEnd: '5rem', media: '(max-width: 39.99rem)' },
     }),
   });
+  const headed = variantPackage('@acme/headed', 'acme-headed', {
+    manifest: manifestFor('acme-headed', {
+      contract: '2.1',
+      scrollReserve: { blockStart: 'calc(3.5rem + 1.25rem)', media: '(min-height: 32rem)' },
+    }),
+  });
   const plain = variantPackage('@acme/plain', 'acme-plain', {
     manifest: manifestFor('acme-plain', { contract: '2.1' }),
   });
   const result = await readRegistry({
-    hostDir: testHost([FALLBACK, TILED, docked, plain, ...TEST_FALLBACK_PACKS, SERIF]),
+    hostDir: testHost([FALLBACK, TILED, docked, headed, plain, ...TEST_FALLBACK_PACKS, SERIF]),
     packs: TEST_PACK_HOOKS,
     stylesheets: LAYERS,
   });
@@ -740,6 +746,13 @@ test("only a composition whose manifest reserves the window's block end gets the
   const before = ownCss.slice(0, ownCss.length - rule.length);
   assert.ok(before.includes('@layer variant-layout {'));
   assert.equal(before.split('{').length, before.split('}').length);
+  assert.doesNotMatch(ownCss, /scroll-padding-block-start/);
+  // The block start alone, in its height query, for a header row stuck at the top.
+  const headCss = css('acme-headed');
+  const headRule =
+    '@media (min-height: 32rem) {\n  :root:has([data-variant="acme-headed"]) {\n    scroll-padding-block-start: calc(3.5rem + 1.25rem);\n  }\n}\n';
+  assert.ok(headCss.endsWith(headRule), headCss);
+  assert.doesNotMatch(headCss, /scroll-padding-block-end/);
   for (const id of ['acme-tiles', 'acme-plain', 'fallback']) {
     assert.doesNotMatch(css(id), /scroll-padding/, id);
   }

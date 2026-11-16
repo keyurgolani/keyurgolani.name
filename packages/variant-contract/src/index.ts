@@ -108,6 +108,7 @@ export {
   MAX_SCROLL_RESERVE_LENGTH,
   MAX_SCROLL_RESERVE_PX,
   SCROLL_RESERVE_MINOR,
+  SCROLL_RESERVE_SIDES,
   scrollReserveMediaProblem,
   scrollReserveProblem,
   scrollReservePx,

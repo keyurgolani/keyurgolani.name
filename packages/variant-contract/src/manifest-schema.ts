@@ -312,10 +312,11 @@ const Transitions = z
   })
   .strict();
 
-/** The window's block end a bar pinned there reserves (./scroll-reserve). */
+/** The window's block start or block end a bar pinned there reserves (./scroll-reserve). */
 const ScrollReserve = z
   .object({
-    blockEnd: z.string().max(MAX_SCROLL_RESERVE_LENGTH),
+    blockStart: z.string().max(MAX_SCROLL_RESERVE_LENGTH).optional(),
+    blockEnd: z.string().max(MAX_SCROLL_RESERVE_LENGTH).optional(),
     media: z.string().max(MAX_SCROLL_RESERVE_LENGTH).optional(),
   })
   .strict();
