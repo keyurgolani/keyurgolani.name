@@ -1,0 +1,17 @@
+{
+  "name": "swiss-signal-232-probe",
+  "summary": "Swiss Signal's part openers on CI Linux: under every typography each part's display word at 320, 390 and 768 with 200% root text and at 320 and 390 at 100%, its opener's width, its size, its widest word's em a letter, and the words broken in it, as it is and sized from its column at 0.85 and 0.95em a letter",
+  "head": "44a4d1cbd5874fcbc7aefe105cc48cef38de256a",
+  "base": "84e6845db764b6a4cc8e07d33833480be6aad358",
+  "gate": false,
+  "look": [
+    {
+      "label": "partprobe",
+      "spec": "look/swiss-232-probe.spec.ts",
+      "project": "chromium",
+      "tests": 16
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
