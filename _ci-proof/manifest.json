@@ -1,0 +1,27 @@
+{
+  "name": "schematic-226-tb-probe",
+  "summary": "Schematic's foot title block at 100% text on CI Linux: under every typography and two design languages from 1024 to 1440, its width in rem and the words broken in four columns, two to a row and one to a row; and the words-whole red at its commit with the 100% case",
+  "head": "12560d4d319740e7a1d5c3ef144c1c7386f6b9a4",
+  "base": "e6a3fd4a7b9d7e3e1ca3108fc90f64496d8876c2",
+  "gate": false,
+  "reds": [
+    {
+      "label": "r226",
+      "at": "677ad6fe1f42397c2d90b18433c9867195770a2f",
+      "specs": ["tests/e2e/schematic-words-whole.spec.ts"],
+      "tests": 6,
+      "files": 1,
+      "failed": 5
+    }
+  ],
+  "look": [
+    {
+      "label": "tbprobe",
+      "spec": "look/schematic-tb-probe.spec.ts",
+      "project": "chromium",
+      "tests": 2
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
