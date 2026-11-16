@@ -1839,8 +1839,10 @@
   row-gap: var(--space-xs);
 }
 
+/* The figures are text, so they take the text's own role: a sheet's ink is a fill, never held to
+   text contrast over the canvas. */
 [data-variant='flux'] .fx-glance__line strong {
-  color: var(--layout-fx-ink);
+  color: var(--color-text-primary);
 }
 
 [data-variant='flux'] .fx-glance__gloss {
