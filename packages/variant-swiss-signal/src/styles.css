@@ -2490,9 +2490,19 @@
     margin-inline-start: 0;
     font-size: max(
       var(--type-body-font-size),
-      min(var(--type-step-3), calc(100cqi / (var(--layout-ss-aside-word, 8) * 0.5)))
+      min(
+        var(--type-step-3),
+        calc(100cqi / (var(--layout-ss-aside-word, 8) * var(--layout-ss-aside-em, 0.5)))
+      )
     );
     line-height: 1.2;
     overflow-wrap: normal;
+  }
+
+  /* A case's aside is its kind and its years, so its longest word can be a year range with its closing
+     parenthesis, whose figures run 0.58em each on the fallback face Linux sets it in: it is sized at that
+     measure. Home's tagline keeps the italic lowercase's 0.5em, and with it 90% of its step. */
+  [data-variant='swiss-signal'] .ss-case__poster .ss-poster__aside {
+    --layout-ss-aside-em: 0.58;
   }
 }
