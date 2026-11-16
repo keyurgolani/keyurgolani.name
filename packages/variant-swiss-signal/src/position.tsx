@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useEnhancementRuntime } from '@portfolio/kit/runtime';
+import { ENHANCEMENT_PENDING } from '@portfolio/variant-contract/settle';
 import { hold, type Hold } from './arrival';
 import { fragmentId } from './fragment';
 
@@ -23,15 +24,32 @@ const ownId = (prefix: string, name: string) => `${prefix}ss--${name}`;
 // - Print as a résumé, with every disclosure open while it prints.
 // Only the one settle waits for the runtime: the selected index's rows rise
 // 8 px, 40 ms apart, from where they already are (fill backwards), once,
-// while the runtime is active and the visitor allows motion.
+// while the runtime is active and the visitor allows motion. From the mount
+// until it has run, its anchor holds the page as unsettled (the settle
+// signal, @portfolio/variant-contract/settle), so a capture never lands on a
+// row mid-rise; at RISE_CAP_MS, inside the settle's 10 s budget, it lets go,
+// and then the rise never runs: nothing moves once the page reads as settled.
 // No frame loop, and nothing left running at rest: the one scroll listener
 // watches for the reader's moves only while load is pending.
 
 const STAGGER_MS = 40;
+const RISE_CAP_MS = 4_000;
+
+/** The rise's duration, the scene's motion token; or null when nothing rises here. */
+function riseMs(root: HTMLElement): number | null {
+  const allowed =
+    typeof matchMedia === 'function' &&
+    matchMedia('(prefers-reduced-motion: no-preference)').matches &&
+    typeof Element.prototype.animate === 'function';
+  if (!allowed || !root.querySelector('.ss-sel__row')) return null;
+  const scene = getComputedStyle(root).getPropertyValue('--motion-scene');
+  const ms = (parseFloat(scene) || 0) * (/ms\s*$/.test(scene) ? 1 : 1000);
+  return ms > 1 ? ms : null;
+}
 
 export function Position({ prefix }: { readonly prefix: string }) {
   const anchor = useRef<HTMLSpanElement | null>(null);
-  const { attachRoot, state } = useEnhancementRuntime();
+  const { attachRoot, state, reason } = useEnhancementRuntime();
   const [root, setRoot] = useState<HTMLElement | null>(null);
   const settled = useRef(false);
 
@@ -470,20 +488,39 @@ export function Position({ prefix }: { readonly prefix: string }) {
     };
   }, [root, prefix]);
 
-  // The one settle: only while the runtime is active and motion is allowed, once.
+  // The settle's hold, on the anchor, from the mount until the rise has run, when anything is to rise.
   useEffect(() => {
-    if (!root || state !== 'active' || settled.current) return undefined;
+    const holder = anchor.current;
+    if (!root || !holder || settled.current || riseMs(root) === null) return undefined;
+    holder.setAttribute(ENHANCEMENT_PENDING, 'ss-rise');
+    const release = () => holder.removeAttribute(ENHANCEMENT_PENDING);
+    const cap = setTimeout(release, RISE_CAP_MS);
+    return () => {
+      clearTimeout(cap);
+      release();
+    };
+  }, [root]);
+
+  // The one settle: only while the runtime is active and motion is allowed, once, and only
+  // while its hold stands. Reduced motion, a failed runtime or the visitor's pause means no
+  // rise, so the hold lets go at once.
+  useEffect(() => {
+    const holder = anchor.current;
+    if (!root || !holder || settled.current) return undefined;
+    const release = () => holder.removeAttribute(ENHANCEMENT_PENDING);
+    if ((state === 'static' && reason !== 'pending') || reason === 'visitor') {
+      settled.current = true;
+      release();
+      return undefined;
+    }
+    if (state !== 'active') return undefined;
     settled.current = true;
-    const allowed =
-      typeof matchMedia === 'function' &&
-      matchMedia('(prefers-reduced-motion: no-preference)').matches &&
-      typeof Element.prototype.animate === 'function';
-    if (!allowed) return undefined;
-    const style = getComputedStyle(root);
-    const scene = style.getPropertyValue('--motion-scene');
-    const ms = (parseFloat(scene) || 0) * (/ms\s*$/.test(scene) ? 1 : 1000);
-    if (ms <= 1) return undefined;
-    const easing = style.getPropertyValue('--motion-curve').trim() || 'ease-out';
+    const ms = riseMs(root);
+    if (ms === null || !holder.hasAttribute(ENHANCEMENT_PENDING)) {
+      release();
+      return undefined;
+    }
+    const easing = getComputedStyle(root).getPropertyValue('--motion-curve').trim() || 'ease-out';
     const animations = [...root.querySelectorAll<HTMLElement>('.ss-sel__row')].map((row, index) =>
       row.animate([{ transform: 'translateY(8px)' }, { transform: 'none' }], {
         duration: ms,
@@ -492,10 +529,12 @@ export function Position({ prefix }: { readonly prefix: string }) {
         fill: 'backwards',
       }),
     );
+    // Run or cancelled, the rise is over: either way the page has nothing more to wait for.
+    void Promise.allSettled(animations.map((animation) => animation.finished)).then(release);
     return () => {
       for (const animation of animations) animation.cancel();
     };
-  }, [root, state]);
+  }, [root, state, reason]);
 
   return <span ref={anchor} hidden />;
 }
