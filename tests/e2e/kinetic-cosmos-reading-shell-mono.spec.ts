@@ -7,6 +7,8 @@ import {
   contrastFindings,
   described,
   kineticOptions,
+  lineStates,
+  loadShift,
   openHome,
   planetBodies,
 } from './kinetic-cosmos-reading';
@@ -110,5 +112,24 @@ for (const [width, height] of [
       const bodies = await planetBodies(page);
       expect(bodies.length, 'the planets').toBeGreaterThan(0);
       expect(bodiesOffSize(bodies), 'the bodies off their size').toEqual([]);
+    },
+  );
+
+for (const [width, height, listed, riding] of [
+  [1024, 768, ['kc--ring-writing', 'kc--ring-record'], ['kc--ring-work', 'kc--ring-personal']],
+  [1440, 900, ['kc--ring-record'], ['kc--ring-work', 'kc--ring-writing', 'kc--ring-personal']],
+] as const)
+  test(
+    `at ${width}, each orbit line rides or lists its stops as the page is served, script on or off, and loading shifts nothing`,
+    { annotation },
+    async ({ page }) => {
+      await openHome(page, { width, height, row: 'no-javascript' });
+      const served = await lineStates(page);
+      await openHome(page, { width, height, row: 'default' });
+      const scripted = await lineStates(page);
+      expect(scripted, 'the lines with script, as served').toEqual(served);
+      for (const ring of listed) expect(scripted[ring], `${ring} lists its stops`).toBe('static');
+      for (const ring of riding) expect(scripted[ring], `${ring} rides its stops`).toBe('absolute');
+      expect(await loadShift(page), 'the layout shift since the navigation').toBe(0);
     },
   );
