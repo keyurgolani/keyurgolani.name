@@ -1,0 +1,18 @@
+{
+  "name": "oa-219-read",
+  "summary": "Obsidian Atelier's home at 390 with the root text at 200%, read where its page grid lays out wider than the window",
+  "head": "6cba8faa99b8e312236919b5500e210dec390343",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "look": [
+    {
+      "label": "grid",
+      "spec": "look/look-219.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
