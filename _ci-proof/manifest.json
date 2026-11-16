@@ -1,0 +1,45 @@
+{
+  "name": "swiss-signal-232",
+  "summary": "Swiss Signal's part words on a phone at 200% text size from their opener, one size for every opener on the page, the page's longest part word fitted at 1em a letter, so each breaks only between words; nothing moves at 100% text",
+  "head": "1c7ebfa866165c23c776cb63272ab3087de3fac8",
+  "base": "b31f1d839f485237f696dd7e2e8305c2287f33fc",
+  "gate": true,
+  "unit": {
+    "titles": ["the sample: every part's opener carries one word fit, the page's longest part word"]
+  },
+  "reds": [
+    {
+      "label": "r232",
+      "at": "c46c437c67f6a8170b57c11172a44484f9e2af08",
+      "specs": ["tests/e2e/swiss-signal-part-words.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ss",
+      "specs": ["tests/e2e/swiss-signal*.spec.ts"],
+      "tests": 76,
+      "files": 16
+    }
+  ],
+  "look": [
+    {
+      "label": "swiss-232",
+      "spec": "look/swiss-232-look.spec.ts",
+      "project": "chromium",
+      "tests": 7,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
