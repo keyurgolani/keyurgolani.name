@@ -2095,8 +2095,11 @@
 }
 
 /* The site's own override of the visitor's contrast (apps/web/src/lib/environment.ts) sets
-   data-contrast on the boundary, the element that carries data-variant (boundary.ts). */
-[data-variant='schematic']:is([data-contrast='more']) :is(.sx-field, .sx-stratum__h) {
+   data-contrast on the boundary, the element that carries data-variant (boundary.ts). The
+   high-contrast display mode, which the boundary names in data-display-mode, holds every text to
+   7:1 against its worst pixel too, so the grid goes there as well. */
+[data-variant='schematic']:is([data-contrast='more'], [data-display-mode='high-contrast'])
+  :is(.sx-field, .sx-stratum__h) {
   background-image: none;
 }
 
