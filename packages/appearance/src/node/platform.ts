@@ -96,7 +96,14 @@ const CHEVRON = "[data-marker='chevron'] > [data-ui-slot='disclosure.summary']::
 const FOCUSABLE =
   'a[href], area[href], button, input, select, textarea, summary, iframe, [tabindex], [contenteditable]';
 
-/** Each role in forced colors: actions as buttons, focus and selection as highlights, the rest as canvas and text. */
+/**
+ * Each role in forced colors: actions as buttons, focus and selection as highlights, the rest as
+ * canvas and text. The browser lays a backplate of Canvas under every line of text there, so no
+ * role a composition sets words in maps to the backplate's own color: an ink for a dark ground
+ * (text-inverse, on-accent, on-status, on-emphasis) takes the page's ink, and reads on its
+ * backplate over the ground, which keeps its own mapping. A ring on one of those grounds keeps a
+ * color off it (platformStylesheet()'s forced rings).
+ */
 const FORCED_COLORS: Readonly<Record<ColorRole, string>> = {
   canvas: 'Canvas',
   'surface-subtle': 'Canvas',
@@ -106,7 +113,7 @@ const FORCED_COLORS: Readonly<Record<ColorRole, string>> = {
   'text-primary': 'CanvasText',
   'text-secondary': 'CanvasText',
   'text-muted': 'CanvasText',
-  'text-inverse': 'Canvas',
+  'text-inverse': 'CanvasText',
   'border-subtle': 'CanvasText',
   'border-default': 'CanvasText',
   'border-strong': 'CanvasText',
@@ -114,14 +121,14 @@ const FORCED_COLORS: Readonly<Record<ColorRole, string>> = {
   'accent-hover': 'ButtonText',
   'accent-active': 'ButtonText',
   'accent-text': 'LinkText',
-  'on-accent': 'ButtonFace',
+  'on-accent': 'ButtonText',
   focus: 'Highlight',
   selection: 'Highlight',
   positive: 'CanvasText',
   warning: 'CanvasText',
   danger: 'CanvasText',
   information: 'CanvasText',
-  'on-status': 'Canvas',
+  'on-status': 'CanvasText',
   'data-categorical-1': 'CanvasText',
   'data-categorical-2': 'CanvasText',
   'data-categorical-3': 'CanvasText',
@@ -137,7 +144,7 @@ const FORCED_COLORS: Readonly<Record<ColorRole, string>> = {
   scrim: 'Canvas',
   'on-scrim': 'CanvasText',
   shadow: 'CanvasText',
-  'on-emphasis': 'HighlightText',
+  'on-emphasis': 'CanvasText',
   // The ring on an inverse ground, text-primary's CanvasText: the inverse pair's own ink.
   'focus-inverse': 'Canvas',
   'surface-lit': 'Canvas',
@@ -429,6 +436,18 @@ export function platformStylesheet(): string {
       block([`${BOUNDARY} [data-ui-slot="surface"]`], { 'background-color': 'Canvas' }) +
         block([`${BOUNDARY} [data-ui-slot="surface"][data-emphasis="overlay"]`], {
           border: '1px solid CanvasText',
+        }),
+    ),
+    // Under forced colors the inks for a dark ground take the page's (FORCED_COLORS), so a ring on
+    // that ground keeps a color off it: ButtonFace on the accent's ButtonText, HighlightText
+    // on the emphasis's Highlight, and Canvas on a status fill's CanvasText, as the inverse ground's
+    // focus-inverse already is. Later than the surface hooks and the toast's ring, as specific, so these win there.
+    wrap(
+      '@media (forced-colors: active)',
+      block([`${BOUNDARY} [data-ui-surface='accent']`], { '--color-focus': 'ButtonFace' }) +
+        block([`${BOUNDARY} [data-ui-surface='emphasis']`], { '--color-focus': 'HighlightText' }) +
+        block([`${BOUNDARY} [data-ui-slot='toast'][data-status] [data-ui-slot]:focus-visible`], {
+          'outline-color': 'Canvas',
         }),
     ),
     wrap(
