@@ -1,0 +1,31 @@
+{
+  "name": "terra-field-red-read",
+  "summary": "Terra Field's title links and All work, focused, read on Linux before a fix: the e2e red by the focus check and one All work quality cell",
+  "head": "fad794c170dabc97f05a37e0721a088164e55a74",
+  "base": "d9a9fab0ee48bc066eae8d392fd26aa19f185123",
+  "reds": [
+    {
+      "label": "perimeter",
+      "at": "fad794c170dabc97f05a37e0721a088164e55a74",
+      "specs": [
+        "tests/e2e/terra-field-focus-perimeter-accessible-reading.spec.ts",
+        "tests/e2e/terra-field-focus-perimeter-humanist-light.spec.ts"
+      ],
+      "tests": 14,
+      "files": 1,
+      "failed": 6
+    },
+    {
+      "label": "all-work-cell",
+      "kind": "cells",
+      "at": "fad794c170dabc97f05a37e0721a088164e55a74",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/light\\ 1440x900\\ forced\\-colors\\ ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
