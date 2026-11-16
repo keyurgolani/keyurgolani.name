@@ -1,0 +1,16 @@
+{
+  "name": "singular-stack-e2e",
+  "summary": "Singular's e2e set at the stack's head with the focus perimeter judged by the focus check, as the quality cells judge it",
+  "head": "0e5158081ee98f5a2b6892d735e5623430ba3815",
+  "base": "d9a9fab0ee48bc066eae8d392fd26aa19f185123",
+  "e2e": [
+    {
+      "label": "singular",
+      "specs": ["tests/e2e/singular*.spec.ts", "tests/e2e/focus-perimeter-painted-offset.spec.ts"],
+      "tests": 60,
+      "files": 13
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
