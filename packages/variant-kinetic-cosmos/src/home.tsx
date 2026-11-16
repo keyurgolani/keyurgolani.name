@@ -189,14 +189,76 @@ function noteOf(section: Section, input: HomePageProps['input'], ctx: RenderCont
   return count;
 }
 
-/** The orbit line a ring opens on, with its sections' links riding it, in two tiers when crowded. */
+/** How far the stops spread along the line: from 30% of it, over 58% more. */
+const STOP_START = 0.3;
+const STOP_SPREAD = 0.58;
+/**
+ * The widest a stop's label runs a character, in rem: the widest label face's (Verdana bold at
+ * 0.875rem, with the stop's letter spacing), so the estimate errs wide. A wide character, such as
+ * a CJK ideograph, counts as WIDE of them.
+ */
+export const LABEL_CHAR_REM = 0.58;
+const WIDE = 1.6;
+const WIDE_CHAR =
+  /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/u;
+/** The room two neighbouring labels keep between them, in rem: each one's focus ring and halo. */
+export const LABEL_GAP_REM = 0.75;
+/** The window's width less the line's, in rem: the opener's inset and a scrollbar. */
+const LINE_INSET_REM = 2.5;
+/** The widths, in rem, from which a crowded line can carry its stops; below the first the ring lists them. */
+export const LINE_FROM_REM = [64, 72, 90] as const;
+
+/** A label's length in characters, a wide one counted as WIDE. */
+const labelLength = (text: string): number =>
+  [...text].reduce((sum, char) => sum + (WIDE_CHAR.test(char) ? WIDE : 1), 0);
+
+/**
+ * The narrowest window, in rem, at which an orbit line's stops ride it with no two labels on the same
+ * side of it meeting: neighbours on one tier are a step (two in tiers) of the spread apart, and each
+ * pair needs half of both labels and the gap between them.
+ */
+export function lineNeeds(titles: readonly string[], tiers: boolean): number {
+  if (titles.length < 2) return 0;
+  const apart = tiers ? 2 : 1;
+  const step = (apart * STOP_SPREAD) / (titles.length - 1);
+  let need = 0;
+  for (let i = 0; i + apart < titles.length; i += 1) {
+    const room =
+      ((labelLength(titles[i]!) + labelLength(titles[i + apart]!)) / 2) * LABEL_CHAR_REM +
+      LABEL_GAP_REM;
+    need = Math.max(need, room / step + LINE_INSET_REM);
+  }
+  return need;
+}
+
+/** The first of LINE_FROM_REM a line's stops fit from, as its data-line-from; none past the last. */
+export function lineFrom(titles: readonly string[], tiers: boolean): string | undefined {
+  const need = lineNeeds(titles, tiers);
+  const from = LINE_FROM_REM.find((width) => need <= width);
+  return from === undefined ? 'none' : from === LINE_FROM_REM[0] ? undefined : String(from);
+}
+
+/**
+ * The orbit line a ring opens on, with its sections' links riding it, in two tiers when crowded.
+ * From 64rem the stops ride the line; a line too crowded for its labels at the window's width lists
+ * them as below 64rem, until the width it names (data-line-from), or at every width ('none').
+ */
 function OrbitLine({ ring, titleId }: { ring: Ring; titleId: string }) {
   const linked = ring.sections.filter(
     (section) => section.href !== undefined && present(section.title),
   );
   const tiers = linked.length > 5;
+  const from = lineFrom(
+    linked.map((section) => section.title!),
+    tiers,
+  );
   return (
-    <div className="kc-arc" data-ring={ring.position - 1} data-tiers={tiers ? '' : undefined}>
+    <div
+      className="kc-arc"
+      data-ring={ring.position - 1}
+      data-tiers={tiers ? '' : undefined}
+      data-line-from={from}
+    >
       <svg
         className="kc-arc__line"
         viewBox="0 0 1000 100"
@@ -213,7 +275,10 @@ function OrbitLine({ ring, titleId }: { ring: Ring; titleId: string }) {
           <ol role="list">
             {linked.map((section, index) => {
               // Spread from 30% to 88% of the line; the line's height there follows its curve.
-              const at = linked.length === 1 ? 0.5 : 0.3 + (0.58 * index) / (linked.length - 1);
+              const at =
+                linked.length === 1
+                  ? 0.5
+                  : STOP_START + (STOP_SPREAD * index) / (linked.length - 1);
               const rise = 1 - Math.pow((at - 0.5) / 0.5, 2);
               return (
                 <li

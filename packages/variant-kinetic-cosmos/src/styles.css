@@ -1270,6 +1270,120 @@
   }
 }
 
+/*
+ * A line too crowded for its labels at this width lists its stops, as below 64rem, so no two labels
+ * meet: until the width home.tsx names for it (data-line-from, in rem), or at every width ('none').
+ * Print keeps its own list.
+ */
+@media screen and (min-width: 64rem) and (max-width: 71.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from] {
+    block-size: auto;
+    min-block-size: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from] .kc-arc__line {
+    block-size: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from] :is(.kc-arc__trail, .kc-arc__body) {
+    inset-block-start: calc(var(--space-m) * 0.81);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from] .kc-arc__index ol {
+    display: flex;
+    padding-inline: var(--layout-grid-margin);
+    padding-block-start: var(--space-xl);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from] .kc-arc__stop {
+    position: static;
+    display: block;
+    translate: none;
+    white-space: normal;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from] .kc-arc__stop::before {
+    content: none;
+  }
+}
+
+@media screen and (min-width: 72rem) and (max-width: 89.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-arc:is([data-line-from='90'], [data-line-from='none']) {
+    block-size: auto;
+    min-block-size: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-arc:is([data-line-from='90'], [data-line-from='none'])
+    .kc-arc__line {
+    block-size: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-arc:is([data-line-from='90'], [data-line-from='none'])
+    :is(.kc-arc__trail, .kc-arc__body) {
+    inset-block-start: calc(var(--space-m) * 0.81);
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-arc:is([data-line-from='90'], [data-line-from='none'])
+    .kc-arc__index
+    ol {
+    display: flex;
+    padding-inline: var(--layout-grid-margin);
+    padding-block-start: var(--space-xl);
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-arc:is([data-line-from='90'], [data-line-from='none'])
+    .kc-arc__stop {
+    position: static;
+    display: block;
+    translate: none;
+    white-space: normal;
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-arc:is([data-line-from='90'], [data-line-from='none'])
+    .kc-arc__stop::before {
+    content: none;
+  }
+}
+
+@media screen and (min-width: 90rem) {
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from='none'] {
+    block-size: auto;
+    min-block-size: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from='none'] .kc-arc__line {
+    block-size: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-arc[data-line-from='none']
+    :is(.kc-arc__trail, .kc-arc__body) {
+    inset-block-start: calc(var(--space-m) * 0.81);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from='none'] .kc-arc__index ol {
+    display: flex;
+    padding-inline: var(--layout-grid-margin);
+    padding-block-start: var(--space-xl);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from='none'] .kc-arc__stop {
+    position: static;
+    display: block;
+    translate: none;
+    white-space: normal;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc[data-line-from='none'] .kc-arc__stop::before {
+    content: none;
+  }
+}
+
 [data-variant='kinetic-cosmos'] .kc-ring__head {
   display: grid;
   gap: var(--space-s) var(--layout-grid-gutter);
