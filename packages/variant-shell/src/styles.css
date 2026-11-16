@@ -423,6 +423,16 @@
   min-block-size: var(--layout-target);
 }
 
+/* A link on a key and value line is a target on its own, never one that rests on the spacing to
+   the line above: the proof list's first link sat flush under the mail line's. Under a type whose
+   line is under 24px its box stands a target tall, the words on the line's baseline in the middle
+   of it; where the line is a target tall the padding is 0 and nothing moves. */
+[data-variant='shell'] .sh-kv a {
+  display: inline-block;
+  min-inline-size: 24px;
+  padding-block: max(0px, calc((var(--layout-target) - 1lh) / 2));
+}
+
 [data-variant='shell'] .sh-complete {
   color: var(--color-text-secondary);
 }
