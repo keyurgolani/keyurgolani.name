@@ -120,6 +120,15 @@
   text-decoration-color: currentColor;
 }
 
+/*
+ * A link at the title's size, as the mail lines and a writing's title are, takes its underline
+ * closer, 0.1em under the baseline. At 0.2em, in a face with a short descent (the Linux fallback
+ * for accessible-reading's Verdana), the underline ran below the link's box, into its focus ring.
+ */
+[data-variant='spatial-bento'] :is(.sb-reach__mail, .sb-contact__mail, .sb-entries__title) a {
+  text-underline-offset: 0.1em;
+}
+
 /* A link that leaves the site says so, and only that kind does. */
 [data-variant='spatial-bento'] a[data-outbound]::after {
   content: '\2009\2197';
