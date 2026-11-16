@@ -1,0 +1,27 @@
+{
+  "name": "oa-213-read",
+  "summary": "Obsidian Atelier's Custom section link, read where its focus ring falls short on Linux at 1024 in dark",
+  "head": "6cba8faa99b8e312236919b5500e210dec390343",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "cells": [
+    {
+      "label": "custom-1024",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/glassmorphism/lavender-dusk/accessible-reading/dark 1024x768 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "recording-title",
+      "spec": "look/look-213.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 2
+    }
+  ]
+}
