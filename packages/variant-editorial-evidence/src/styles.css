@@ -2509,7 +2509,8 @@
   /*
    * A scroller clips what it holds, so the bar keeps the ring's reach clear
    * inside its edge, and gives it back outside, so its links stay where they sit;
-   * under them it keeps it, so the ring ends where the bar's hairline starts.
+   * under them it keeps it, so the ring ends where the bar's hairline starts. Its
+   * end keeps a pixel more, since how far it scrolls rounds to whole pixels.
    */
   [data-variant='editorial-evidence'] .ee-rail__list {
     display: flex;
@@ -2517,6 +2518,7 @@
     margin: calc(-1 * var(--layout-ee-ring));
     margin-block-end: 0;
     padding: var(--layout-ee-ring);
+    padding-inline-end: calc(var(--layout-ee-ring) + 1px);
     overflow-x: auto;
   }
 
