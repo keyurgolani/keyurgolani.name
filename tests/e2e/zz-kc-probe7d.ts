@@ -288,6 +288,51 @@ export async function check(
       if (details) details.open = false;
     });
   }
+  // The judge's hidden shot wraps a word's text in an invisible element: that must not move the
+  // element or its words, or the shot's change would hold the shift. Each marked text, measured
+  // before and after the same wrapping, its largest move in px.
+  const moves = await page.evaluate(() => {
+    const rects = (el: Element) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return [el.getBoundingClientRect(), ...range.getClientRects()].map((r) => [
+        r.x,
+        r.y,
+        r.width,
+        r.height,
+      ]);
+    };
+    const out: { mark: string; moved: number }[] = [];
+    for (const el of document.querySelectorAll('[data-forced-text]')) {
+      if (!el.getClientRects().length) continue;
+      const before = rects(el);
+      const wraps: Element[] = [];
+      for (const node of [...el.childNodes]) {
+        if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.trim()) continue;
+        const wrap = document.createElement('x-forced-glyphs');
+        wrap.setAttribute('style', 'visibility: hidden');
+        node.replaceWith(wrap);
+        wrap.append(node);
+        wraps.push(wrap);
+      }
+      const after = rects(el);
+      for (const wrap of wraps) wrap.replaceWith(...wrap.childNodes);
+      let moved = before.length === after.length ? 0 : Infinity;
+      for (let i = 0; i < Math.min(before.length, after.length); i += 1) {
+        for (let k = 0; k < 4; k += 1)
+          moved = Math.max(moved, Math.abs(before[i]![k]! - after[i]![k]!));
+      }
+      out.push({ mark: el.getAttribute('data-forced-text')!, moved });
+    }
+    return out;
+  });
+  const layoutMoved = moves
+    .filter((m) => m.moved > 0.5)
+    .map((m) => `${m.mark}: ${m.moved === Infinity ? 'rects differ' : `${m.moved.toFixed(2)} px`}`);
+  const layoutMax = moves.reduce(
+    (max, m) => Math.max(max, m.moved === Infinity ? 999 : m.moved),
+    0,
+  );
   const rings: unknown[] = [];
   for (const why of await page.$$eval('[data-p7-ring]', (els) =>
     els.map((el) => el.getAttribute('data-p7-ring')!),
@@ -333,6 +378,9 @@ export async function check(
     bodyJudged,
     bodyReadable,
     bodySmallest,
+    layoutChecked: moves.length,
+    layoutMax,
+    layoutMoved,
     rings,
   });
 }
