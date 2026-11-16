@@ -219,8 +219,6 @@
     margin: calc(var(--ui-focus-width, 2px) + max(var(--ui-focus-offset, 2px), 0px));
     padding-block: var(--ui-space-control-block);
     padding-inline: var(--ui-space-control-inline);
-    color: var(--color-on-accent);
-    background-color: var(--color-accent);
     border-radius: var(--ui-radius-control);
   }
 
@@ -980,6 +978,17 @@
   [data-appearance-boundary] :focus-visible {
     outline: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);
     outline-offset: var(--ui-focus-offset);
+  }
+
+  /*
+   * The focused skip link's text and fill are one pair: the accent's fill and the ink derived for
+   * it. Here, above every composition's layer, a composition's own link colour (`a { color:
+   * inherit }`) can't take the text back to the page's ink on the accent, as it did in seven of the
+   * fifteen (1.77:1 in dark). Where the link sits and how it stacks stay the composition's.
+   */
+  [data-ui-slot='skip-link']:focus {
+    color: var(--color-on-accent);
+    background-color: var(--color-accent);
   }
 
   /*
