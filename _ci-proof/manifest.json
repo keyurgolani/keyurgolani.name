@@ -1,0 +1,35 @@
+{
+  "name": "flux-rows-165-168",
+  "summary": "Flux's line of figures sets its figures in the text's role, the Index's section links and a row's links hold a 24px target, and the plate's summary and the stats fold read clear, its cells on CI Linux at the landing and at the head",
+  "head": "458f2c903c0fc8ad90591b6a7efcf141f3c63719",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "unit": {
+    "titles": [
+      "the line of figures sets each figure in the text's own role, never an ink: the inks are fills, not text colours",
+      "a line of small links holds a 24px target in each link's own box: the Index's section links and a row's links"
+    ]
+  },
+  "cells": [
+    {
+      "label": "rows",
+      "at": "base",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:flux complete / flux/(bauhaus-geometric/aurora-meadow/drafting-grotesk/dark 1024x768 print|glassmorphism/iridescent-pearl/geometric-display/high-contrast 390x844 no-javascript|retro-web/night-terminal/console-mono/dark 390x844 default) ",
+      "shards": ["find"],
+      "tests": 3,
+      "passed": 0,
+      "failed": 3
+    },
+    {
+      "label": "rows",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:flux complete / flux/(bauhaus-geometric/aurora-meadow/drafting-grotesk/dark 1024x768 print|glassmorphism/iridescent-pearl/geometric-display/high-contrast 390x844 no-javascript|retro-web/night-terminal/console-mono/dark 390x844 default) ",
+      "shards": ["find"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    }
+  ],
+  "kit": "b67ee7dabde7",
+  "kitScripts": "75dcf5c8906b"
+}
