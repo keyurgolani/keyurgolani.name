@@ -3199,7 +3199,8 @@
   align-items: center;
   gap: var(--space-2xs);
   margin-block-start: var(--space-xl);
-  padding-block: var(--space-3xs);
+  /* A stop's whole focus ring and a ring's width of ground inside the bar, clear of its edge line. */
+  padding-block: max(var(--space-3xs), var(--layout-focus-halo));
   padding-inline: max(var(--layout-grid-margin), (100% - var(--layout-width-page)) / 2);
   color: var(--layout-ink);
   background-color: var(--color-canvas);
