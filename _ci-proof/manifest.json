@@ -1,0 +1,66 @@
+{
+  "name": "terra-field-titles",
+  "summary": "Terra Field's plate and essay title links, focused, draw their ring past their resting underline",
+  "head": "5eeeeb31d619b6fbcc3b48b75a9e7240b2535870",
+  "base": "d9a9fab0ee48bc066eae8d392fd26aa19f185123",
+  "gate": {
+    "package": "terra-field"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding"
+    ]
+  },
+  "reds": [
+    {
+      "label": "perimeter",
+      "at": "fad794c170dabc97f05a37e0721a088164e55a74",
+      "specs": [
+        "tests/e2e/terra-field-focus-perimeter-accessible-reading.spec.ts",
+        "tests/e2e/terra-field-focus-perimeter-humanist-light.spec.ts"
+      ],
+      "tests": 14,
+      "files": 1,
+      "failed": 6
+    }
+  ],
+  "e2e": [
+    {
+      "label": "terra-field",
+      "specs": [
+        "tests/e2e/terra-field*.spec.ts",
+        "tests/e2e/focus-perimeter-painted-offset.spec.ts"
+      ],
+      "tests": 48,
+      "files": 5
+    }
+  ],
+  "cells": [
+    {
+      "label": "title-links",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/accessible\\-reading/system\\ 1440x900\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/accessible\\-reading/system\\ 390x844\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/editorial\\-serif/system\\ 1440x900\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/geometric\\-display/system\\ 1440x900\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/neutral\\-ui/system\\ 1440x900\\ forced\\-colors\\ )",
+      "shards": ["find"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "label": "all-work",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/dark\\ 1024x768\\ default\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/dark\\ 1024x768\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/dark\\ 1440x900\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/dark\\ 390x844\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/high\\-contrast\\ 1024x768\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/high\\-contrast\\ 1440x900\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/high\\-contrast\\ 390x844\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/light\\ 1024x768\\ default\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/light\\ 1024x768\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/light\\ 1440x900\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/light\\ 390x844\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1024x768\\ default\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1024x768\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ forced\\-colors\\ |composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ forced\\-colors\\ )",
+      "shards": ["find"],
+      "tests": 15,
+      "passed": 15,
+      "failed": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
