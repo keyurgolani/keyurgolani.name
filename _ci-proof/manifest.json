@@ -1,0 +1,28 @@
+{
+  "name": "cell-traces",
+  "summary": "A failing quality cell's trace reaches the proof's logs artifact only after the scrub passes on it",
+  "head": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "cells": [
+    {
+      "label": "kc-stat-390",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:kinetic-cosmos complete / kinetic-cosmos/material-expressive-inspired/jewel-twilight/book-serif/dark 390x844 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1
+    },
+    {
+      "label": "ag-field-serif",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:aurora-glass complete / aurora-glass/platform-neutral/warm-parchment/field-serif/system 1440x900 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
