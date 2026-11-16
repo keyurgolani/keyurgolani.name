@@ -1,0 +1,386 @@
+{
+  "name": "ee-stack",
+  "summary": "Editorial Evidence's plate links are 24 px targets, its chapter bar, next title and masthead name links ring whole, the docked chapter bar's rings start at the masthead's foot, Tab along the bar keeps each ring inside its scroller, and back at the top the running head and the chapter index read as on arrival",
+  "head": "332aa4ffa98d2d03710d63879969cb0a71357bc4",
+  "base": "b31f1d839f485237f696dd7e2e8305c2287f33fc",
+  "reds": [
+    {
+      "label": "plate",
+      "at": "5085c1d79c76aae703104f985328b09d34e0c412",
+      "specs": ["tests/e2e/editorial-evidence-plate-targets.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "plate-cell",
+      "kind": "cells",
+      "at": "5085c1d79c76aae703104f985328b09d34e0c412",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:editorial-evidence complete / editorial-evidence/platform-neutral/warm-parchment/technical-sans-mono/system 390x844 contrast-more ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    },
+    {
+      "label": "perimeter",
+      "at": "9a12cb69339e2ae46edb97ad29fb2652c03d10aa",
+      "specs": ["tests/e2e/editorial-evidence-focus-perimeter-*.spec.ts"],
+      "tests": 14,
+      "files": 1,
+      "failed": 8
+    },
+    {
+      "label": "walk",
+      "at": "ef6f5b4fdd3a93f891e287160b9907cdf0fea89a",
+      "specs": ["tests/e2e/editorial-evidence-keyboard-walk.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "running-head",
+      "at": "ef6f5b4fdd3a93f891e287160b9907cdf0fea89a",
+      "specs": ["tests/e2e/editorial-evidence-running-head-top.spec.ts"],
+      "tests": 6,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "docked-bar",
+      "at": "784c3b66878efe6e780e174d71c46e36ed38047e",
+      "specs": ["tests/e2e/editorial-evidence-docked-bar-*.spec.ts"],
+      "tests": 7,
+      "files": 1,
+      "failed": 4
+    },
+    {
+      "label": "bar-tab",
+      "at": "c4073691f92032da3990276ba9a398e1beca34ba",
+      "specs": ["tests/e2e/editorial-evidence-bar-tab.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "walk-cell",
+      "kind": "cells",
+      "at": "ef6f5b4fdd3a93f891e287160b9907cdf0fea89a",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:editorial-evidence complete / editorial-evidence/art-deco/blue-orange-color-safe/drafting-grotesk/high-contrast 1440x900 contrast-more ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "plate",
+      "specs": ["tests/e2e/editorial-evidence-plate-targets.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "perimeter",
+      "specs": ["tests/e2e/editorial-evidence-focus-perimeter-*.spec.ts"],
+      "tests": 14,
+      "files": 1
+    },
+    {
+      "label": "walk",
+      "specs": ["tests/e2e/editorial-evidence-keyboard-walk.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "running-head",
+      "specs": ["tests/e2e/editorial-evidence-running-head-top.spec.ts"],
+      "tests": 6,
+      "files": 1
+    },
+    {
+      "label": "docked-bar",
+      "specs": ["tests/e2e/editorial-evidence-docked-bar-*.spec.ts"],
+      "tests": 7,
+      "files": 1
+    },
+    {
+      "label": "bar-tab",
+      "specs": ["tests/e2e/editorial-evidence-bar-tab.spec.ts"],
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "ee",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 138,
+      "files": 16
+    }
+  ],
+  "cells": [
+    {
+      "label": "ee-sample",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:editorial-evidence complete / editorial-evidence/(art-deco/blue-orange-color-safe/drafting-grotesk/high-contrast 1440x900 contrast-more|platform-neutral/warm-parchment/technical-sans-mono/system 390x844 contrast-more|platform-neutral/warm-parchment/humanist-ui/dark 1440x900 contrast-more|primer-inspired/signal-paper/shell-mono/dark 390x844 contrast-more) ",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "title-accessible-reading",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "accessible-reading"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-book-serif",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "book-serif"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-console-mono",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "console-mono"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-drafting-grotesk",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "drafting-grotesk"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-editorial-serif",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "editorial-serif"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-field-serif",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "field-serif"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-geometric-display",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "geometric-display"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-humanist-ui",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "humanist-ui"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-multilingual-system",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "multilingual-system"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-neutral-ui",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "neutral-ui"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-paste-up",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "paste-up"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-screen-grotesque",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "screen-grotesque"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-shell-mono",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "shell-mono"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-swiss-grotesque",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "swiss-grotesque"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "title-technical-sans-mono",
+      "spec": "look/ee-title-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "technical-sans-mono"
+      },
+      "tests": 3,
+      "files": 1,
+      "shots": 6
+    },
+    {
+      "label": "rows-bar-retro-web",
+      "spec": "look/ee-rows-bar-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TUPLE": "retro-web/sunset-ember/technical-sans-mono/dark"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    },
+    {
+      "label": "rows-bar-primer-inspired",
+      "spec": "look/ee-rows-bar-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TUPLE": "primer-inspired/signal-paper/shell-mono/dark"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    },
+    {
+      "label": "top",
+      "spec": "look/ee-top-look.spec.ts",
+      "project": "chromium",
+      "env": {},
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    },
+    {
+      "label": "masthead-accessible-reading",
+      "spec": "look/ee-masthead-name-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "accessible-reading"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 8
+    },
+    {
+      "label": "dock-1440",
+      "spec": "look/ee-dock-1440-look.spec.ts",
+      "project": "chromium",
+      "env": {},
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    },
+    {
+      "label": "band-accessible-reading",
+      "spec": "look/ee-band-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TUPLE": "platform-neutral/warm-parchment/accessible-reading/system"
+      },
+      "tests": 4,
+      "files": 1,
+      "shots": 4
+    },
+    {
+      "label": "band-shell-mono",
+      "spec": "look/ee-band-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TUPLE": "primer-inspired/signal-paper/shell-mono/dark"
+      },
+      "tests": 4,
+      "files": 1,
+      "shots": 4
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": [
+      "editorial-evidence-[a-z0-9-]+-(desktop|mobile)\\.png",
+      "editorial-evidence-(desktop|mobile)\\.png"
+    ]
+  },
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
