@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useBoundary } from '@portfolio/appearance/react';
+import { ENHANCEMENT_PENDING, enhancementSettled } from '@portfolio/variant-contract/settle';
 import { clearOf, land, placeOf } from './reveal';
 
 // The running head (redesign, stream C): where the visitor is, "Room II of
@@ -24,6 +25,16 @@ import { clearOf, land, placeOf } from './reveal';
 
 /** How many windows down the running head stays in the window, so a long page always says where it is. */
 const DEEP = 5;
+
+/**
+ * The observer's first delivery marks where the visitor is, in the head, the plan and the room
+ * switch, so until it comes the head's own markup holds the page as unsettled (the settle signal,
+ * @portfolio/variant-contract/settle), which a shot or a quality read waits on. The script sets the
+ * hold as it starts to observe, never the server, so with no script nothing waits; and it lets go
+ * after HOLD_MS whatever comes, inside the settle's 10 s budget.
+ */
+const HOLD = 'oa-here';
+const HOLD_MS = 4_000;
 
 export function Here({
   initial,
@@ -85,6 +96,11 @@ export function Here({
     if (typeof IntersectionObserver === 'undefined') return stop;
     const places = [...root.querySelectorAll<HTMLElement>('[data-oa-place]')];
     if (places.length === 0) return stop;
+    const holder = head.current;
+    const held = holder?.getAttribute(ENHANCEMENT_PENDING);
+    holder?.setAttribute(ENHANCEMENT_PENDING, held ? `${held} ${HOLD}` : HOLD);
+    const release = () => enhancementSettled(holder, HOLD);
+    const cap = window.setTimeout(release, HOLD_MS);
     const showing = new Set<HTMLElement>();
     const links = () =>
       [
@@ -130,18 +146,26 @@ export function Here({
         chrome?.toggleAttribute('data-oa-deep', window.scrollY > window.innerHeight * DEEP);
         // The innermost place crossing the band is where the visitor is: a bay over its wall.
         const crossing = places.filter((each) => showing.has(each));
-        const current = crossing.find(
-          (each) => !crossing.some((other) => other !== each && each.contains(other)),
-        );
-        if (!current) return;
-        setPlace(current.dataset.oaPlace ?? initial);
-        mark(current);
+        // At the page's top, where on a phone the band can fall between places, the visitor is at
+        // the first place, as the head says before anything scrolls: the entrance on the home page.
+        const current =
+          crossing.find(
+            (each) => !crossing.some((other) => other !== each && each.contains(other)),
+          ) ?? (window.scrollY < 1 ? places[0] : undefined);
+        if (current) {
+          setPlace(current.dataset.oaPlace ?? initial);
+          mark(current);
+        }
+        // The first delivery is in, its marks set: the page may settle (after the head's commit).
+        requestAnimationFrame(release);
       },
       { rootMargin: '-30% 0px -60% 0px' },
     );
     for (const each of places) observer.observe(each);
     return () => {
       observer.disconnect();
+      window.clearTimeout(cap);
+      release();
       stop();
     };
   }, [plate, initial]);
