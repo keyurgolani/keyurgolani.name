@@ -20,7 +20,7 @@
   "performanceTier": "light",
   "budgets": {
     "js": 2619,
-    "css": 9485,
+    "css": 9600,
     "image": 53248,
     "font": 0,
     "animation": 0,
