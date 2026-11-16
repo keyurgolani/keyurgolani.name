@@ -1,0 +1,26 @@
+{
+  "name": "capture-candidates",
+  "summary": "Which full-page capture fires no resize at a settled page, so a resize handler's change stays out of the shot",
+  "head": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "look": [
+    {
+      "label": "cand",
+      "spec": "look/capture-candidates.spec.ts",
+      "project": "chromium",
+      "tests": 8,
+      "files": 1,
+      "shots": 8
+    },
+    {
+      "label": "swiss",
+      "spec": "look/capture-swiss.spec.ts",
+      "project": "chromium",
+      "tests": 60,
+      "files": 1,
+      "shots": 60
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
