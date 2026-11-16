@@ -217,8 +217,12 @@ test('on a phone a closed fold’s summary rounds its bottom corners to its scen
   const phone = blocks(PHONE).join('\n');
   assert.match(declared(at('.hc-shell .hc-bar--bottom'), phone), /display: none;/);
   const closed = declared(at('.hc-shell .hc-fold:not([open]) > .hc-fold__summary'), phone);
-  assert.match(closed, /border-end-start-radius: var\(--ui-radius-media\);/);
-  assert.match(closed, /border-end-end-radius: var\(--ui-radius-media\);/);
+  // The scene's own radius: the card's, since a scene is a frame for words and controls.
+  const scene = /border-radius: (var\(--ui-radius-[a-z]+\));/.exec(declared(at('.hc-scene'), CSS));
+  assert.ok(scene, 'the scene sets its radius');
+  assert.equal(scene[1], 'var(--ui-radius-card)');
+  assert.ok(closed.includes(`border-end-start-radius: ${scene[1]};`), closed);
+  assert.ok(closed.includes(`border-end-end-radius: ${scene[1]};`), closed);
 });
 
 test('on the title card a focus ring is the canvas’s ink, text-primary: the card’s panel is the canvas, not the matte', () => {
