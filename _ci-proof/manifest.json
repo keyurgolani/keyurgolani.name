@@ -1,0 +1,28 @@
+{
+  "name": "ee-perimeter-red-read",
+  "summary": "Editorial Evidence's Contact, name, writing title and repository links, focused, read on Linux before their fixes: the perimeter red by the focus check, and one work page cell",
+  "head": "ba4b5da8452deaaa9f07048a57cf0445c1024b89",
+  "base": "608dc0e3d98fce2cf8001e34b23fb27331bc4374",
+  "reds": [
+    {
+      "label": "perimeter",
+      "at": "ba4b5da8452deaaa9f07048a57cf0445c1024b89",
+      "specs": ["tests/e2e/editorial-evidence-focus-perimeter-*.spec.ts"],
+      "tests": 14,
+      "files": 1,
+      "failed": 8
+    },
+    {
+      "label": "dark-cell",
+      "kind": "cells",
+      "at": "ba4b5da8452deaaa9f07048a57cf0445c1024b89",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:editorial\\-evidence\\ complete\\ /\\ editorial\\-evidence/platform\\-neutral/warm\\-parchment/humanist\\-ui/dark\\ 1440x900\\ contrast\\-more\\ ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
