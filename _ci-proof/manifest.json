@@ -1,0 +1,17 @@
+{
+  "name": "swiss-signal-224-probe",
+  "summary": "Swiss Signal at 320 and 390 with 200% root text on CI Linux: what runs past the page, the poster's platform fonts and word widths, under candidate fits",
+  "head": "d0eccdfaf4106844edd85e0c058715bd3cdee515",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "gate": false,
+  "look": [
+    {
+      "label": "probe224",
+      "spec": "look/swiss-224-probe.spec.ts",
+      "project": "chromium",
+      "tests": 4
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
