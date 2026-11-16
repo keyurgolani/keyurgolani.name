@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { transitionNames } from '@portfolio/variant-contract';
 import {
   compileVariantStylesheet,
   exportTarget,
   findInstalled,
+  registryMeta,
   type PackageJson,
 } from '@portfolio/variant-contract/node';
-import { HOST, stylesheetHooks } from './registry-options';
+import { generateRegistry, HOST, renderOptions, stylesheetHooks } from './registry-options';
 
 // Every variant the host depends on, its stylesheet compiled as registry
 // generation compiles it, the kit's shared layout first (stylesheetHooks()),
@@ -97,6 +99,40 @@ test("every variant's compiled stylesheet, the kit's layout included, is inside 
   const over = sizes.filter(({ gzip, budget }) => gzip > budget);
   assert.deepEqual(
     over.map(({ id, gzip, budget }) => `${id}: ${gzip} B gzip, over its ${budget} B budget`),
+    [],
+  );
+});
+
+// The figure the budget check reads is the gzipBytes registry generation writes into ASSET_MANIFEST,
+// from each stylesheet as the host serves it: for a variant whose manifest opts in to cross-document
+// view transitions, with the host's view-transition rules after its layer. What this file measures
+// is that figure for every variant the production build registers (the fixture variants register
+// under their flags alone), so none can pass here and fail the budget check.
+test("each variant's measured size is the gzipBytes registry generation writes into ASSET_MANIFEST, view transitions included", async () => {
+  const { result } = await generateRegistry({}, { write: false });
+  assert.ok(result.ok, JSON.stringify(result.diagnostics, null, 2));
+  const written = new Map(
+    registryMeta(result, renderOptions({})).ASSET_MANIFEST.flatMap((unit) =>
+      unit.kind === 'variant' && unit.stylesheet
+        ? [[unit.id, unit.stylesheet.gzipBytes] as const]
+        : [],
+    ),
+  );
+  const sizes = measured().filter(({ id }) => written.has(id));
+  const optedIn = result.variants
+    .filter(({ manifest }) => transitionNames(manifest) !== null)
+    .map(({ manifest }) => manifest.id);
+  assert.ok(optedIn.length > 0, 'no registered variant opts in to view transitions');
+  for (const id of [...written.keys(), ...optedIn]) {
+    assert.ok(
+      sizes.some((size) => size.id === id),
+      `${id} isn't measured`,
+    );
+  }
+  assert.deepEqual(
+    sizes
+      .filter(({ id, gzip }) => written.get(id) !== gzip)
+      .map(({ id, gzip }) => `${id}: ${gzip} B measured, ${written.get(id)} B in ASSET_MANIFEST`),
     [],
   );
 });
