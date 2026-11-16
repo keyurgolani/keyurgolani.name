@@ -8,9 +8,10 @@ import { home, SUMMARY } from './obsidian-atelier-appearance';
 // Obsidian Atelier's chrome lay over a band of fixed height at the entrance's top: with the root
 // text at 200% on a phone, a name that wraps to more lines than the band holds ran past it and over
 // the entrance's plaque. At 390 on phone emulation with the root text at 200%, on the long-text
-// contract fixture's home, whose name is a run of hyphenated surnames, every line of the chrome's
-// name and the Appearance summary stand above the entrance's first part, and the name clears the
-// summary.
+// contract fixture's home, whose words run long (a name of hyphenated surnames, an address, a
+// compound term), the page lays out inside the window and every line of its text stands inside
+// it, every line of the chrome's name and the Appearance summary stand above the entrance's first
+// part, and every line box of the name clears Index's plate and the Appearance summary.
 // In Warm Parchment, light.
 
 const FIXTURE = contractFixture('long-text');
@@ -37,7 +38,7 @@ test.use({
 });
 
 test(
-  'at 390 with the root text at 200%, every line of a long name and the Appearance summary stand above the entrance',
+  'at 390 with the root text at 200%, the long-name home lays out inside the window, every line of the name above the entrance and clear of Index and the summary',
   { annotation },
   async ({ page, app }) => {
     await home(page, app.origin, { mode: 'light', rootText: '200%' });
@@ -51,9 +52,44 @@ test(
       };
       return {
         pageWide: document.scrollingElement!.scrollWidth,
+        // Each line box of text that runs past the window's edges, as its element and its extent.
+        cut: [...document.body.querySelectorAll('*')]
+          .filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim()))
+          .flatMap((el) => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            return [...range.getClientRects()]
+              .filter((b) => b.width > 0 && (b.left < -0.5 || b.right > 390.5))
+              .map(
+                (b) =>
+                  `${el.localName}.${typeof el.className === 'string' ? el.className.split(/\s+/)[0] : ''} ${r(b.left)}..${r(b.right)}`,
+              );
+          })
+          .slice(0, 8),
+        // What runs past the window, widest first.
+        past: [...document.body.querySelectorAll('*')]
+          .map((el) => ({ el, b: el.getBoundingClientRect() }))
+          .filter(({ b }) => b.width > 0 && b.right > 390.5)
+          .sort((a, b) => b.b.right - a.b.right)
+          .slice(0, 6)
+          .map(
+            ({ el, b }) =>
+              `${el.localName}.${typeof el.className === 'string' ? el.className.split(/\s+/)[0] : ''} to ${r(b.right)}`,
+          ),
         chrome: box('.oa-chrome'),
         mark: box('.oa-chrome__mark'),
         summary: box(summary),
+        index: box('.oa-chrome__pin'),
+        // Each line box of the name's text.
+        lines: (() => {
+          const mark = document.querySelector('.oa-chrome__mark');
+          if (!mark) return [];
+          const range = document.createRange();
+          range.selectNodeContents(mark);
+          return [...range.getClientRects()]
+            .filter((b) => b.width > 0 && b.height > 0)
+            .map((b) => [r(b.left), r(b.top), r(b.right), r(b.bottom)]);
+        })(),
         // The entrance's first part: the top of the highest of its children.
         entrance: (() => {
           const tops = [...document.querySelectorAll('.oa-entrance > *')]
@@ -64,29 +100,31 @@ test(
         })(),
       };
     }, SUMMARY);
-    const { mark, summary, entrance } = read;
+    const { mark, summary, index, lines, entrance } = read;
+    const meets = (a: number[], b: number[] | null) =>
+      b !== null && a[0]! < b[2]! && b[0]! < a[2]! && a[1]! < b[3]! && b[1]! < a[3]!;
     expect(
       {
         found: mark !== null && summary !== null && entrance !== null,
+        insideTheWindow: read.pageWide <= 390,
+        everyLineInsideTheWindow: read.cut.length === 0,
         nameAboveTheEntrance: mark !== null && entrance !== null && mark[3]! <= entrance + 0.5,
         summaryAboveTheEntrance:
           summary !== null && entrance !== null && summary[3]! <= entrance + 0.5,
-        nameClearsTheSummary:
-          mark !== null &&
+        everyLineClearsIndexAndTheSummary:
+          lines.length > 0 &&
+          index !== null &&
           summary !== null &&
-          !(
-            mark[0]! < summary[2]! &&
-            summary[0]! < mark[2]! &&
-            mark[1]! < summary[3]! &&
-            summary[1]! < mark[3]!
-          ),
+          lines.every((line) => !meets(line, index) && !meets(line, summary)),
       },
       JSON.stringify(read),
     ).toEqual({
       found: true,
+      insideTheWindow: true,
+      everyLineInsideTheWindow: true,
       nameAboveTheEntrance: true,
       summaryAboveTheEntrance: true,
-      nameClearsTheSummary: true,
+      everyLineClearsIndexAndTheSummary: true,
     });
   },
 );
