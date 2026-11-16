@@ -1,0 +1,98 @@
+{
+  "name": "appearance-ring",
+  "summary": "Aurora Glass's focused Appearance summary takes its slot's radius, and the slot reaches a pixel further out, so its ring sits on the slot's surface",
+  "head": "da25bb5cf4b32d30011f2fdaa4bca64bdaec35b2",
+  "base": "94c7bb36affd79f27be8b7d4203886621d838f02",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding"
+    ]
+  },
+  "reds": [
+    {
+      "label": "ring",
+      "at": "57e5728eb246e2c099165027e51322aeb17cdcab",
+      "specs": ["tests/e2e/aurora-glass-appearance-ring.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ring",
+      "specs": ["tests/e2e/aurora-glass-appearance-ring.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "hc",
+      "specs": [
+        "tests/e2e/horizontal-cinema-chapter-ring.spec.ts",
+        "tests/e2e/horizontal-cinema-credits-ring.spec.ts",
+        "tests/e2e/horizontal-cinema-fold-ring.spec.ts"
+      ],
+      "tests": 19,
+      "files": 3
+    },
+    {
+      "label": "ag",
+      "specs": ["tests/e2e/aurora-glass-*.spec.ts"],
+      "tests": 94,
+      "files": 12
+    }
+  ],
+  "look": [
+    {
+      "label": "pill-utility-dense",
+      "spec": "look/appearance-ring-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TUPLE": "utility-dense/warm-parchment/humanist-ui/system"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 12
+    },
+    {
+      "label": "pill-platform-neutral",
+      "spec": "look/appearance-ring-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TUPLE": "platform-neutral/warm-parchment/humanist-ui/light"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 12
+    },
+    {
+      "label": "badge-letterpress",
+      "spec": "look/appearance-ring-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TUPLE": "letterpress/warm-parchment/humanist-ui/system"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 12
+    },
+    {
+      "label": "badge-material-expressive",
+      "spec": "look/appearance-ring-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TUPLE": "material-expressive-inspired/jewel-twilight/swiss-grotesque/light"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 12
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true
+}
