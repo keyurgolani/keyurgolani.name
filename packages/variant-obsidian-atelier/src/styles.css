@@ -16,8 +16,14 @@
 
 [data-variant='obsidian-atelier'] {
   position: relative;
-  --layout-grid-gutter: var(--space-s);
-  --layout-grid-margin: var(--space-m);
+  /*
+   * The grid's gutter and margin, the platform's spaces, never past a share of the window: twelve
+   * columns and two margins hold thirteen gutters, which at 200% root text on a phone ran 468 px
+   * in a 390 px window, every track at 0. The share is the spaces' own at 390 by default.
+   */
+  --layout-grid-share: 4.7vw;
+  --layout-grid-gutter: min(var(--space-s), var(--layout-grid-share));
+  --layout-grid-margin: min(var(--space-m), 1.5 * var(--layout-grid-share));
   /* One house curve: expo in-out, slow and deliberate, with no overshoot. */
   --layout-motion-curve: cubic-bezier(0.87, 0, 0.13, 1);
   --layout-motion-feedback: 300ms;
@@ -36,6 +42,15 @@
   /* The floor at a wall's foot, and the chrome's band above everything, which walls keep clear. */
   --layout-floor: var(--space-2xl);
   --layout-chrome: calc(var(--space-s) + var(--space-l));
+  /*
+   * A window narrower than the fold, in the root's text, folds a phone's top row: the corner stands
+   * Index over Appearance, the name keeps the room beside them, and the row takes its own height in
+   * the flow. Folded is 0 above the fold and past it a length longer than any it is set against;
+   * unfolded is the other way round.
+   */
+  --layout-fold: 22rem;
+  --layout-folded: max(0px, (var(--layout-fold) - 100vw) * 999);
+  --layout-unfolded: max(0px, (100vw - var(--layout-fold)) * 999);
   /* The composition's own lengths, each named. */
   --layout-underline: 0.3em;
   --layout-hairline: 1px;
@@ -490,6 +505,34 @@
   [data-variant='obsidian-atelier'] .oa-chrome[data-oa-deep] .oa-chrome__here {
     inset-inline: var(--layout-grid-margin) auto;
   }
+
+  /*
+   * A phone's top row is in the flow, before the entrance. Above the fold it takes no room, its box
+   * its padding alone and that taken back, so it lies over the band as before; folded, it stands at
+   * its own height, whatever its lines, on the wall's ground.
+   */
+  [data-variant='obsidian-atelier'] .oa-chrome {
+    position: relative;
+    max-block-size: var(--layout-folded);
+    margin-block-end: calc(-1 * min(var(--space-xs), var(--layout-unfolded)));
+    background: linear-gradient(var(--color-surface-prominent) 0 0) 0 / 100% var(--layout-folded);
+  }
+
+  /* Folded, Index's slot keeps the first line, under its plate, and Appearance wraps below it. */
+  [data-variant='obsidian-atelier'] .oa-chrome__corner {
+    flex-wrap: wrap-reverse;
+    justify-content: flex-end;
+    row-gap: var(--space-xs);
+    max-inline-size: max(var(--layout-index), var(--layout-unfolded));
+  }
+
+  [data-variant='obsidian-atelier'] .oa-chrome__mark {
+    align-self: start;
+    max-inline-size: max(
+      100vw - 2 * var(--layout-grid-margin) - var(--layout-index) - var(--layout-grid-gutter),
+      var(--layout-unfolded)
+    );
+  }
 }
 
 /* With no control in the slot, its place closes up. */
@@ -699,7 +742,7 @@
  */
 [data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) {
   grid-template-rows: [plaque] auto [plate] auto [floor-start] auto [facts] auto [floor-end];
-  padding-block-start: var(--layout-chrome);
+  padding-block-start: max(var(--layout-chrome) - var(--layout-folded), var(--space-xs));
   scroll-margin-block-start: 0;
 }
 
@@ -3011,6 +3054,8 @@
   /* The chrome prints once, at the top: Index is not fixed on every page, and the marker and its strip don't print. */
   [data-variant='obsidian-atelier'] :is(.oa-chrome, .oa-chrome__pin) {
     position: static;
+    max-block-size: none;
+    margin-block-end: 0;
   }
 
   [data-variant='obsidian-atelier']
