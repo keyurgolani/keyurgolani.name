@@ -992,9 +992,11 @@
   background-position: 100% 100%;
 }
 
+/* The end column, a date, a count or a link, sets flush right on its column line. Its words wrap
+   when they outgrow the column, as under 200% text at 1024, where a link with its arrow ran past
+   the table and the page; at every width at 100% they fit on one line, as before. */
 [data-variant='swiss-signal'] .ss-table .ss-end {
   text-align: end;
-  white-space: nowrap;
 }
 
 [data-variant='swiss-signal'] .ss-table tfoot :is(th, td) {
