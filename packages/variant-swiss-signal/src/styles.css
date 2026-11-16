@@ -948,6 +948,12 @@
   table-layout: fixed;
 }
 
+/* A table's frame measures the width the table has, so it takes its phone rows wherever that is
+   narrow for the reader's text (the rule after the phone block), not on a phone alone. */
+[data-variant='swiss-signal'] .ss-table-frame {
+  container-type: inline-size;
+}
+
 [data-variant='swiss-signal'] .ss-c1 {
   inline-size: 8.3333%;
 }
@@ -2303,8 +2309,62 @@
      under the decision; the lone "Decision" head would only repeat the part's
      name, so it stays for assistive technology alone, and the table keeps
      its distance from the name above it. */
-  [data-variant='swiss-signal'] .ss-spec__wide .ss-table {
+  [data-variant='swiss-signal'] .ss-spec__wide .ss-table-frame {
     margin-block-start: var(--space-xs);
+  }
+
+  [data-variant='swiss-signal'] .ss-spec__wide .ss-table thead th {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  [data-variant='swiss-signal'] .ss-decision {
+    display: grid;
+    gap: var(--space-2xs);
+    margin-block-start: var(--space-2xs);
+    font-weight: normal;
+  }
+
+  [data-variant='swiss-signal'] .ss-decision dt {
+    color: var(--color-text-secondary);
+  }
+}
+
+/* Past a phone, where a table's frame holds under 36rem, as the reader's text at 200% makes it at
+   1024 (about 29rem), the table takes its phone rows: the wide columns leave, their words move onto
+   the sub-line, and nothing narrow is left to break a word letter by letter. Every frame at 100%
+   text past a phone holds 39rem or more, and keeps its columns. */
+@container (max-width: 36rem) {
+  [data-variant='swiss-signal'] .ss-table {
+    inline-size: 100%;
+    margin-inline-end: 0;
+    table-layout: auto;
+  }
+
+  [data-variant='swiss-signal'] .ss-table :is(th, td):last-child {
+    padding-inline-end: 0;
+    background-size: 100% var(--layout-rule-row-size);
+  }
+
+  [data-variant='swiss-signal'] .ss-table thead th:last-child {
+    background-size: 100% var(--layout-rule-section-size);
+  }
+
+  [data-variant='swiss-signal'] .ss-table col {
+    inline-size: auto;
+  }
+
+  [data-variant='swiss-signal'] .ss-table .ss-wide {
+    display: none;
+  }
+
+  [data-variant='swiss-signal'] .ss-table .ss-narrow {
+    display: block;
+    margin-block-start: var(--space-3xs);
   }
 
   [data-variant='swiss-signal'] .ss-spec__wide .ss-table thead th {
