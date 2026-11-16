@@ -1997,7 +1997,14 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * The address is one box, so its ring is drawn round the box the focus check lays out: as an inline
+ * of inline-block parts, the ring stopped short of the line's box at its foot where the address fit
+ * one line. Its parts still wrap after the @ inside it.
+ */
 [data-variant='aurora-glass'] .ag-call__mail a {
+  display: inline-block;
+  max-inline-size: 100%;
   color: var(--color-text-primary);
   text-decoration-thickness: 2px;
   text-underline-offset: 0.12em;
