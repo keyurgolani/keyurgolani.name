@@ -229,7 +229,7 @@ export async function openForced(
 }
 
 /**
- * Each shown text `selectors` match whose words vanish into their backplate (under the text
+ * Each shown text `selectors` match (each element inside a match that holds words) whose words vanish into their backplate (under the text
  * ratio, or painting nothing where they lie while shown), as `<words>: <why>`; and how many it
  * judged, so a list that found nothing can't pass.
  */
@@ -239,10 +239,19 @@ export async function vanishedAmong(
 ): Promise<{ judged: number; vanished: string[] }> {
   await page.evaluate((list) => {
     let at = 0;
+    // The elements that hold each match's words: the match itself, or the parts inside it.
+    const holds = (el: Element) =>
+      [...el.childNodes].some(
+        (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+      );
     for (const el of document.querySelectorAll(list.join(', '))) {
-      if (!el.textContent?.trim() || !el.getClientRects().length) continue;
-      el.setAttribute('data-forced-text', String(at));
-      at += 1;
+      if (!el.getClientRects().length) continue;
+      for (const holder of [el, ...el.querySelectorAll('*')]) {
+        if (!holds(holder) || !holder.getClientRects().length) continue;
+        if (holder.hasAttribute('data-forced-text')) continue;
+        holder.setAttribute('data-forced-text', String(at));
+        at += 1;
+      }
     }
   }, selectors);
   const judged = await judgeTexts(page);
