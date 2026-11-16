@@ -25,6 +25,7 @@ import { FACT_PARTS, STOP_WORDS } from './flight-rail';
 import { hashId, namesFold } from './fold';
 import { orbitGeometry, starField } from './geometry';
 import { cosmosModel, countLabel, ringIntro, ringLegend } from './model';
+import { lineFrom, lineNeeds } from './home';
 import { FAR_STARS, NEAR_STARS } from './orrery';
 import { atPlayhead } from './renderers/chronology';
 import { splitThesis } from './renderers/practice';
@@ -882,4 +883,38 @@ test("a planet's figure and its unit sit on plates of the body's fill, and the b
     ) ?? '',
     /--layout-body: calc\(var\(--space-2xl\) \* var\(--layout-size\)\);/,
   );
+});
+
+test('an orbit line too crowded for its labels lists its stops until the width they fit from', () => {
+  const lines = (markup: string) =>
+    Object.fromEntries(
+      [
+        ...markup.matchAll(
+          /<section class="kc-ring" id="([^"]+)"[\s\S]*?<div class="kc-arc"([^>]*)>/g,
+        ),
+      ].map(([, id, attrs]) => [id, /data-line-from="([^"]+)"/.exec(attrs!)?.[1] ?? 'fits']),
+    );
+  // The complete fixture's titles are long: Record's twelve stops never fit, Writing's five from 72rem.
+  assert.deepEqual(lines(html(fixtureInput('complete'))), {
+    'kc--ring-work': 'fits',
+    'kc--ring-writing': '72',
+    'kc--ring-record': 'none',
+    'kc--ring-personal': 'fits',
+  });
+  // Twelve short labels fit the line from 64rem; a pair of neighbours the line can't hold at any listed width doesn't.
+  assert.equal(lineFrom(Array(12).fill('Awards'), true), undefined);
+  assert.equal(lineFrom(Array(5).fill('Episodes titled'), false), '72');
+  assert.equal(lineFrom(Array(5).fill('Publications title'), false), '90');
+  assert.equal(lineFrom(Array(12).fill('Selected publications and talks'), true), 'none');
+  // A wide character counts wider than a narrow one.
+  assert.ok(
+    lineNeeds(['経歴と受賞歴の記録', '講演'], false) > lineNeeds(['abcdefghi', 'ab'], false),
+  );
+  // The listed state is the screen's alone: print keeps its own list.
+  for (const head of [
+    '@media screen and (min-width: 64rem) and (max-width: 71.99rem)',
+    '@media screen and (min-width: 72rem) and (max-width: 89.99rem)',
+    '@media screen and (min-width: 90rem)',
+  ])
+    assert.ok(CSS.includes(head), head);
 });
