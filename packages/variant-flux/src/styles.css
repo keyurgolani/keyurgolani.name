@@ -1695,6 +1695,16 @@
   gap: var(--space-3xs) var(--space-l);
 }
 
+/* A line of small links holds a 24px target in each link's own box (WCAG 2.5.8): label-sized links
+   on wrapped lines a few pixels apart met each other's targets. An inline block a target tall, its
+   line in the middle, so the ring still draws round the link itself. */
+[data-variant='flux'] :is(.fx-index__sections a, .fx-row__links > a) {
+  display: inline-block;
+  min-block-size: 24px;
+  min-inline-size: 24px;
+  padding-block: max(0px, calc((24px - 1lh) / 2));
+}
+
 /* Drops: a run of short points, each on the sheet's ink. */
 [data-variant='flux'] .fx-drops {
   display: grid;
