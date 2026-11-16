@@ -1,0 +1,111 @@
+{
+  "name": "swiss-signal-stack",
+  "summary": "Swiss Signal's signal parentheticals take the accent's text role, its no-script Index links are 24 px targets, a table's end column wraps at 200% text and a narrow table takes its phone rows, a work row's forced-colours ring clears the next line, and on a phone at 200% text a case's aside and a part's contents stay inside the page",
+  "head": "44a4d1cbd5874fcbc7aefe105cc48cef38de256a",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "no text takes the bare accent: the signal and every parenthetical take the accent's text role"
+    ]
+  },
+  "reds": [
+    {
+      "label": "r196",
+      "at": "f2acc6b5fd5792e8c8c91e9de68e84c8da538e13",
+      "specs": ["tests/e2e/swiss-signal-signal-ink.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "r197",
+      "at": "f2acc6b5fd5792e8c8c91e9de68e84c8da538e13",
+      "specs": ["tests/e2e/swiss-signal-index-targets.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "r199",
+      "at": "f2acc6b5fd5792e8c8c91e9de68e84c8da538e13",
+      "specs": ["tests/e2e/swiss-signal-root-text-1024.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "r198",
+      "at": "f2acc6b5fd5792e8c8c91e9de68e84c8da538e13",
+      "specs": ["tests/e2e/swiss-signal-forced-colors-ring.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "r224",
+      "at": "f2acc6b5fd5792e8c8c91e9de68e84c8da538e13",
+      "specs": [
+        "tests/e2e/swiss-signal-poster-aside.spec.ts",
+        "tests/e2e/swiss-signal-root-text-phone.spec.ts"
+      ],
+      "tests": 10,
+      "files": 2,
+      "failed": 3
+    },
+    {
+      "label": "r199t",
+      "at": "a47dee29017dc311884747f356efdaba01778c20",
+      "specs": ["tests/e2e/swiss-signal-table-words.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "cells",
+      "kind": "cells",
+      "at": "f2acc6b5fd5792e8c8c91e9de68e84c8da538e13",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:swiss-signal complete / swiss-signal/(platform-neutral/pastel-sorbet/humanist-ui/dark 1024x768 print|international-grid/coral-lagoon/console-mono/dark 390x844 no-javascript|memphis/neon-city/accessible-reading/dark 1440x900 default|carbon-inspired/drafting-blue/drafting-grotesk/dark 1440x900 forced-colors) ",
+      "shards": ["find"],
+      "tests": 4,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ss",
+      "specs": ["tests/e2e/swiss-signal*.spec.ts"],
+      "tests": 70,
+      "files": 14
+    }
+  ],
+  "cells": [
+    {
+      "label": "ss",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:swiss-signal complete / swiss-signal/(platform-neutral/pastel-sorbet/humanist-ui/dark 1024x768 print|international-grid/coral-lagoon/console-mono/dark 390x844 no-javascript|memphis/neon-city/accessible-reading/dark 1440x900 default|carbon-inspired/drafting-blue/drafting-grotesk/dark 1440x900 forced-colors) ",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "swiss-signal",
+      "spec": "look/swiss-signal-look.spec.ts",
+      "project": "chromium",
+      "tests": 15,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": ["^swiss-signal/", "^distinct > distinct\\.spec\\.ts > swiss-signal:"]
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
