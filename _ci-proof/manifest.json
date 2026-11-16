@@ -1,0 +1,23 @@
+{
+  "name": "landing-batch-budgets",
+  "summary": "Next.js 16.4.5, the variant shots' settle and resize fixes, Obsidian Atelier's phone layout at large text, Singular's rail labels under forced colours and Swiss Signal's table columns together on the landing tip keep every composition's shipped CSS and JS within its budget and every variant shot as proven",
+  "head": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "base": "2a65ded5c3cb3eced3b4948dbb8d27a48bdc09f1",
+  "unit": {
+    "titles": [
+      "only author, homepage, bestFor, budgets, enhancements, keyBindings, kitLayout, recommendedAppearance, scrollReserve, studio, and transitions are optional"
+    ]
+  },
+  "budgets": true,
+  "variants": {
+    "shards": 4,
+    "tests": 3026,
+    "changed": [
+      "^swiss-signal/sample > sample\\.spec\\.ts > mobile > ",
+      "^swiss-signal/music > fixtures\\.spec\\.ts > desktop > ",
+      "^swiss-signal/(complete|mixed|writing) > fixtures\\.spec\\.ts > mobile > "
+    ]
+  },
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
