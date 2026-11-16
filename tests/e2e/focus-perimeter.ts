@@ -43,6 +43,8 @@ export interface PerimeterCase {
   readonly name: string;
   /** The control, by its own classes. */
   readonly selector: string;
+  /** The page it's on: the home page unless given. */
+  readonly route?: string;
   readonly widths: readonly (keyof typeof VIEWPORTS)[];
   readonly rows?: readonly (keyof typeof ROWS)[];
 }
@@ -217,15 +219,15 @@ export function focusPerimeter(variant: string, tuple: string, cases: readonly P
     for (const width of each.widths)
       for (const row of each.rows ?? (['default'] as const))
         test(
-          `on ${variant} ${tuple} the ${each.name} rings whole when focused, every point of its ring at 3:1, at ${width}${row === 'default' ? '' : `, ${row}`}`,
+          `on ${variant} ${tuple} the ${each.name}${(each.route ?? '/') === '/' ? '' : ` on ${each.route}`} rings whole when focused, every point of its ring at 3:1, at ${width}${row === 'default' ? '' : `, ${row}`}`,
           {
-            annotation: [{ type: 'route', description: '/' }, READ_ONLY],
+            annotation: [{ type: 'route', description: each.route ?? '/' }, READ_ONLY],
             tag: '@interaction',
           },
           async ({ page }) => {
             await page.setViewportSize(VIEWPORTS[width]);
             await page.emulateMedia({ colorScheme: 'light', ...ROWS[row] });
-            await page.goto('/', { waitUntil: 'networkidle' });
+            await page.goto(each.route ?? '/', { waitUntil: 'networkidle' });
             const boundary = page.locator('[data-variant]').first();
             await expect(boundary).toHaveAttribute('data-variant', variant);
             await expect(boundary).toHaveAttribute('data-design-language', designLanguage!);
