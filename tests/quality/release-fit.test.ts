@@ -38,7 +38,7 @@ const INVENTORY_RUN = fileURLToPath(
 function times(overheadSeconds: number, pace?: number): ReleaseTimes {
   const tests: TimedTest[] = [];
   for (let server = 1; server <= 12; server += 1) {
-    for (let cell = 0; cell < 80; cell += 1) {
+    for (let cell = 0; cell < 100; cell += 1) {
       for (const [at, viewport] of ['390x844', '1024x768', '1440x900'].entries()) {
         const seconds = 20 + ((server * 31 + cell * 7 + at * 13) % 45);
         tests.push({
@@ -56,10 +56,10 @@ function times(overheadSeconds: number, pace?: number): ReleaseTimes {
   return { source: 'a made-up run', overheadSeconds, tests };
 }
 
-test('the release cap stays 120 minutes, 16 at a time across its three jobs, and the per-shard target is the one the inventory run measured fits to it: 5,041 s', () => {
+test('the release cap stays 120 minutes, 18 at a time across its three jobs, and the per-shard target is the one the inventory run measured fits to it: 5,041 s', () => {
   assert.equal(RELEASE_TIMEOUT_MINUTES, 120);
   assert.equal(releaseTimeoutMinutes(), RELEASE_TIMEOUT_MINUTES);
-  assert.equal(RELEASE_PARALLEL, 16);
+  assert.equal(RELEASE_PARALLEL, 18);
   assert.ok(RELEASE_PACE.source.trim().length > 0, 'RELEASE_PACE names its source');
   assert.equal(RELEASE_CEILING, fitReleaseCeiling(RELEASE_PACE));
   assert.equal(RELEASE_CEILING, 5041);
@@ -207,7 +207,7 @@ test('a pace fits the target to the cap over the margin: a slower pace or a long
   assert.throws(() => fitReleaseCeiling({ overheadSeconds: 600, pace: 0 }), /can't fit a shard/);
 });
 
-test("given each test's measured time and a shard job's fixed part, the release plan's every shard stays within the 120-minute cap over the 1.5x margin, in the fewest shards that do, every test once, and its wall-clock at max-parallel 16 is its shards in matrix order", () => {
+test("given each test's measured time and a shard job's fixed part, the release plan's every shard stays within the 120-minute cap over the 1.5x margin, in the fewest shards that do, every test once, and its wall-clock at max-parallel 18 is its shards in matrix order", () => {
   const run = times(600);
   const release = measuredRelease(run);
   assert.equal(release.usable, 4800);
@@ -236,7 +236,7 @@ test("given each test's measured time and a shard job's fixed part, the release 
       .length,
     1,
   );
-  // The run: 16 at a time, each shard taking the next free slot in matrix order.
+  // The run: 18 at a time, each shard taking the next free slot in matrix order.
   assert.deepEqual(
     { wall: release.wall, runner: release.runner },
     releaseWallClock(release.seconds, RELEASE_PARALLEL),
@@ -282,7 +282,7 @@ test("with the plan's estimates in the times file, the measured pace fits the ta
   );
   assert.match(
     lines[2]!,
-    /^\[release-fit\] at 16 at a time: about \d+\.\d h of wall-clock, \d+ runner-minutes$/,
+    /^\[release-fit\] at 18 at a time: about \d+\.\d h of wall-clock, \d+ runner-minutes$/,
   );
   assert.match(
     lines[3]!,

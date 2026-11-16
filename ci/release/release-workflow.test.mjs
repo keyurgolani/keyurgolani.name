@@ -163,9 +163,9 @@ test("rc-quality's three matrix jobs are one job but for their id, shard list an
     if: `\${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' && needs.rc-quality-plan.outputs.shards${at} != '[]' }}`,
     shard: `\${{ fromJSON(needs.rc-quality-plan.outputs.shards${at}) }}`,
   });
-  // 6, 5 and 5 at once: 16 together, under the account's 20 job slots.
+  // 6 each at once: 18 together, so 2 of the account's 20 job slots stay free during a release.
   const parallel = QUALITY_JOBS.map((id) => JOBS[id].strategy['max-parallel']);
-  assert.deepEqual(parallel, [6, 5, 5]);
+  assert.deepEqual(parallel, [6, 6, 6]);
   const [first, ...others] = QUALITY_JOBS.map((id, at) => {
     const job = structuredClone(JOBS[id]);
     assert.deepEqual(
