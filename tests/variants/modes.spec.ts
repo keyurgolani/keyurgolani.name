@@ -3,6 +3,7 @@ import { expect, test, type Page, type Route, type TestInfo } from '@playwright/
 import { ENHANCEMENT_PENDING } from '../../packages/variant-contract/src/settle';
 import { BUSY_LIMIT_MS, STILL_ENHANCING, watchEnhancements } from '../quality/lib/a11y/conditions';
 import {
+  capturePage,
   checkMode,
   enhancementFloor,
   expectEnhancementsSettled,
@@ -505,6 +506,86 @@ test.describe('the settle before the shot', () => {
     expect(await failure(settle(page, true))).toContain('"rise on h1.name"');
     expect(Date.now() - started).toBeGreaterThanOrEqual(2_900);
     expect(Date.now() - started).toBeLessThan(6_000);
+  });
+
+  /**
+   * A row an enhancement sets moving once the page has settled, as Swiss
+   * Signal's rows rise when its runtime turns active and Shell's caret blinks
+   * four times once its footer is in view: `rise(ms, iterations, after)`
+   * starts one, finite, with a backwards fill, `after` ms from now.
+   */
+  const RISER = `<main><h1>Stand-in</h1><p class="row">A row</p></main>
+<script>
+  window.rise = (ms, iterations, after) =>
+    setTimeout(() => document.querySelector('.row').animate([{ transform: 'translateY(8px)' }, { transform: 'none' }], { duration: ms, iterations, fill: 'backwards' }), after);
+</script>`;
+  const rise = (page: Page, ms: number, iterations = 1, after = 0) =>
+    page.evaluate(
+      ([duration, times, delay]) => {
+        (
+          window as unknown as { rise: (ms: number, iterations: number, after: number) => void }
+        ).rise(duration, times, delay);
+      },
+      [ms, iterations, after] as [number, number, number],
+    );
+  /** The finite animations running when the capture is taken, from capturePage()'s beforeShot. */
+  const atCapture = async (page: Page) => {
+    const watch = watchEnhancements(page);
+    try {
+      let running = -1;
+      await capturePage(page, watch, {
+        beforeShot: async () => {
+          running = await runningFinite(page);
+        },
+      });
+      return running;
+    } finally {
+      watch.stop();
+    }
+  };
+
+  test('the shot waits for a finite animation that starts once the page has settled', async ({
+    page,
+  }) => {
+    await open(page, RISER);
+    await settle(page, true);
+    await rise(page, 1_000);
+    expect(await atCapture(page), 'finite animations running at the capture').toBe(0);
+  });
+
+  test("the shot waits out a finite animation longer than settle()'s bound, four 1.05 s blinks", async ({
+    page,
+  }) => {
+    await open(page, RISER);
+    await settle(page, true);
+    await rise(page, 1_050, 4);
+    expect(await atCapture(page), 'finite animations running at the capture').toBe(0);
+  });
+
+  test('the shot waits for one that starts while it waits for another', async ({ page }) => {
+    await open(page, RISER);
+    await settle(page, true);
+    await rise(page, 1_000);
+    await rise(page, 1_000, 1, 800);
+    expect(await atCapture(page), 'finite animations running at the capture').toBe(0);
+  });
+
+  test('the shot fails closed at once, naming it and its time left, on one with more left than the shot waits in all', async ({
+    page,
+  }) => {
+    const watch = watchEnhancements(page);
+    try {
+      await open(page, RISER);
+      await settle(page, true);
+      await rise(page, 20_000);
+      const started = Date.now();
+      const message = await failure(capturePage(page, watch).then(() => undefined));
+      expect(message).toContain('script animation on p.row');
+      expect(message).toMatch(/script animation on p\.row: [0-9]+ ms left/);
+      expect(Date.now() - started).toBeLessThan(3_000);
+    } finally {
+      watch.stop();
+    }
   });
 });
 
