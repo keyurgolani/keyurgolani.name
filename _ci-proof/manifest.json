@@ -1,0 +1,29 @@
+{
+  "name": "oa-plaque-label-cells",
+  "summary": "Obsidian Atelier's hero label by the plaque, read as the quality cell reads it on CI Linux in high contrast under reduced transparency",
+  "head": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "cells": [
+    {
+      "label": "label",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/art-deco/iridescent-pearl/neutral-ui/high-contrast 1024x768 reduced-transparency ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "label",
+      "spec": "look/look-179-ci.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 1
+    }
+  ],
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
