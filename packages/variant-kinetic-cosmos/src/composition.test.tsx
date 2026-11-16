@@ -434,31 +434,50 @@ const CSS = readFileSync(new URL('./styles.css', import.meta.url), 'utf8').repla
   '',
 );
 
-test('the motion runs only inside no-preference, on the runtime, three infinite transforms on the ambient cycle', () => {
+test('the motion runs only inside no-preference, on the runtime: three transforms on the ambient cycle that come to rest in about 3 s and hold their last frame', () => {
   const start = CSS.indexOf('@media (prefers-reduced-motion: no-preference)');
   assert.ok(start > 0);
-  // Every rule that animates, by the shorthand or the longhands, and the ones that never stop (code review L2).
+  // The cycle each run is a fraction of: the composition's ambient slot.
+  const cycle = Number(/--layout-motion-ambient:\s*(\d+(?:\.\d+)?)s;/.exec(CSS)?.[1]);
+  assert.ok(cycle > 0, 'the ambient slot');
+  // Every rule that animates by the shorthand on the ambient cycle (code review L2).
   const animated = [...CSS.matchAll(/([^{}]+)\{([^{}]*\banimation(?:-[a-z-]+)?\s*:[^{}]*)\}/g)];
-  const infinite = animated.filter(([, , body]) =>
-    /\banimation(?:-iteration-count)?\s*:[^;]*\binfinite\b/.test(body!),
+  const runs = animated.filter(([, , body]) =>
+    /\banimation\s*:[^;]*var\(--motion-ambient\)/.test(body!),
   );
-  assert.equal(infinite.length, 3);
-  for (const match of infinite) {
+  assert.equal(runs.length, 3);
+  for (const match of runs) {
     assert.ok(match.index! > start, 'inside the no-preference query');
     // Under the kit runtime's own gate, which only the kit sets (motion-gate, K-4).
     assert.match(match[1]!, /\.kc-opening\[data-kit-runtime\]\s/);
     assert.match(match[1]!, /:not\(\[data-motion='reduced'\], \[data-motion='static'\]\)/);
-    // Each loop's cycle is the ambient slot, never a multiplied token, and it reads the ambient state (K-4 b, R4-L2).
-    assert.match(match[2]!, /var\(--motion-ambient\)/);
+    // Each run's cycle is the ambient slot, never a multiplied token, and it reads the ambient state (K-4 b, R4-L2).
     assert.doesNotMatch(match[2]!, /\*/);
     assert.match(match[2]!, /animation-play-state:\s*var\(--motion-ambient-state\)/);
+    // It comes to rest: while any CSS animation runs, the browser's own observation of the
+    // page's links gives it a main-thread frame every vsync, idle work for as long as the page
+    // shows. So each is a fraction of the cycle, about 3 s, and holds its last frame.
+    const shorthand = /\banimation\s*:([^;]*);/.exec(match[2]!)![1]!;
+    assert.doesNotMatch(shorthand, /\binfinite\b/, match[1]!.trim());
+    const counts = shorthand
+      .replace(/var\([^)]*\)/g, '')
+      .split(/\s+/)
+      .filter((word) => /^\d*\.?\d+$/.test(word))
+      .map(Number);
+    assert.equal(counts.length, 1, `one iteration count: ${shorthand}`);
+    const seconds = counts[0]! * cycle;
+    assert.ok(seconds > 0 && seconds <= 3.5, `runs ${seconds} s: ${shorthand}`);
+    assert.match(shorthand, /\b(?:forwards|both)\b/, `holds its last frame: ${shorthand}`);
   }
   const keyframes = [...CSS.matchAll(/@keyframes ([\w-]+)\s*\{([\s\S]*?\})\s*\}/g)];
   for (const [, name, frames] of keyframes) {
     assert.match(name!, /^kinetic-cosmos-/);
     const properties = [...frames!.matchAll(/([a-z-]+)\s*:/g)].map(([, property]) => property);
-    // transform alone, on a plain box, so the compositor runs it (code review M1).
-    for (const property of properties) assert.match(property!, /^transform$/, name);
+    // transform alone, on a plain box, so the compositor runs it (code review M1), and the easing
+    // a keyframe sets for the stretch after it.
+    for (const property of properties) {
+      assert.match(property!, /^(?:transform|animation-timing-function)$/, name);
+    }
   }
 });
 
