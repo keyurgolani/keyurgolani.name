@@ -1,0 +1,117 @@
+{
+  "name": "schematic-stack",
+  "summary": "Schematic's figures take the accent text, high contrast drops the grid, index links are 24 px targets, the folds, the revision line and the phone bar reflow, and forced-colours rings clear their neighbours",
+  "head": "e6a3fd4a7b9d7e3e1ca3108fc90f64496d8876c2",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "no text takes a data colour",
+      "the cover's metric, a chain dimension's value and a certificate's year take the accent text"
+    ]
+  },
+  "reds": [
+    {
+      "label": "r187",
+      "at": "58ca0c74e262e71ec260db186a6e862103e0d659",
+      "specs": ["tests/e2e/schematic-figure-ink.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "r181",
+      "at": "58ca0c74e262e71ec260db186a6e862103e0d659",
+      "specs": ["tests/e2e/schematic-high-contrast-ink.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "r182",
+      "at": "58ca0c74e262e71ec260db186a6e862103e0d659",
+      "specs": ["tests/e2e/schematic-index-targets.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "r183",
+      "at": "58ca0c74e262e71ec260db186a6e862103e0d659",
+      "specs": ["tests/e2e/schematic-reflow-root-text.spec.ts"],
+      "tests": 6,
+      "files": 1,
+      "failed": 6
+    },
+    {
+      "label": "r184",
+      "at": "58ca0c74e262e71ec260db186a6e862103e0d659",
+      "specs": ["tests/e2e/schematic-reflow-narrow.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    },
+    {
+      "label": "r185",
+      "at": "58ca0c74e262e71ec260db186a6e862103e0d659",
+      "specs": ["tests/e2e/schematic-reflow-zoom.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "r186",
+      "at": "58ca0c74e262e71ec260db186a6e862103e0d659",
+      "specs": ["tests/e2e/schematic-forced-colors-ring.spec.ts"],
+      "tests": 6,
+      "files": 1,
+      "failed": 4
+    },
+    {
+      "label": "cells",
+      "kind": "cells",
+      "at": "58ca0c74e262e71ec260db186a6e862103e0d659",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:schematic complete / schematic/(platform-neutral/poster-primaries/humanist-ui/light 1024x768 default|neobrutalist/poster-primaries/geometric-display/high-contrast 1024x768 default|glassmorphism/forest-moss/paste-up/system 1024x768 contrast-more|material-3-inspired/control-room/accessible-reading/dark 1440x900 default|fluent-2-inspired/neon-city/drafting-grotesk/dark 390x844 forced-colors) ",
+      "shards": ["find"],
+      "tests": 5,
+      "failed": 5
+    }
+  ],
+  "e2e": [
+    {
+      "label": "sx",
+      "specs": ["tests/e2e/schematic*.spec.ts"],
+      "tests": 139,
+      "files": 17
+    }
+  ],
+  "cells": [
+    {
+      "label": "sx",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:schematic complete / schematic/(platform-neutral/poster-primaries/humanist-ui/light 1024x768 default|neobrutalist/poster-primaries/geometric-display/high-contrast 1024x768 default|glassmorphism/forest-moss/paste-up/system 1024x768 contrast-more|material-3-inspired/control-room/accessible-reading/dark 1440x900 default|fluent-2-inspired/neon-city/drafting-grotesk/dark 390x844 forced-colors) ",
+      "shards": ["find"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "schematic",
+      "spec": "look/schematic-look.spec.ts",
+      "project": "chromium",
+      "tests": 15,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": ["^schematic/"]
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
