@@ -2150,6 +2150,18 @@
   [data-variant='schematic'] .sx-field {
     background-image: none;
   }
+  /* A focused link's ring keeps its reach clear of the lines beside it (the quality cells' forced
+     colours focus check). Forced colours set each line's text on a backplate, which covered the
+     bottom of a sign-off author's ring in the line under it; and the cover figure's title sat flush
+     under the figure number's rule, which its ring's top lay along. */
+  [data-variant='schematic'] .sx-signoff figcaption {
+    row-gap: calc(var(--ui-focus-width) + max(0px, var(--ui-focus-offset)));
+  }
+  [data-variant='schematic'] .sx-fig[data-cover] .sx-fig__title {
+    padding-block-start: calc(
+      var(--space-3xs) + var(--ui-focus-width) + max(0px, var(--ui-focus-offset))
+    );
+  }
   [data-variant='schematic'] .sx-cloud {
     border: var(--layout-line-cloud);
   }
