@@ -361,6 +361,16 @@
   gap: var(--space-2xs) var(--space-m);
 }
 
+/* Each section's link is a target 24 px tall on its own (WCAG 2.5.8): on a phone a part's title
+   sits flush over its list, and under Console Mono's lettering the first link, 20 px, came closer
+   to the title than 24 px. An inline block, so the link's own box holds the target and its ring;
+   the padding sets its line in the middle. */
+[data-variant='swiss-signal'] .ss-index__list a {
+  display: inline-block;
+  min-block-size: 24px;
+  padding-block: max(0px, calc((24px - 1lh) / 2));
+}
+
 [data-variant='swiss-signal'] .ss-index__foot {
   grid-column: 1 / -1;
   display: flex;
