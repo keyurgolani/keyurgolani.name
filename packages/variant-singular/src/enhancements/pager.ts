@@ -34,7 +34,13 @@ import type { VariantRenderInput } from '@portfolio/variant-contract';
 //    in-page link's click, Contents' included, never by the browser's own
 //    auto-expand. It never scrolls: the row's heading is outside its fold,
 //    so the browser has already landed on it.
-// IntersectionObserver alone: no frame loop, no timer, no scroll listener.
+// 8. the settle hold: the bar carries data-enhancement-pending="pager" from
+//    the server (bar.tsx) until the two lines' and the dock's first
+//    deliveries have run, so a capture waits for the ground and the name
+//    they set; for SETTLE_CAP_MS at most, so a delivery that never comes, or
+//    comes late on a slow machine, can't hold the page past the readers'
+//    wait. Inside a plate nothing attaches, and the hold comes off at once.
+// IntersectionObserver alone: no frame loop, no scroll listener, and one timer, the hold's cap.
 
 const STEP: Readonly<Record<string, 1 | -1>> = {
   PageDown: 1,
@@ -82,6 +88,53 @@ export function fragmentId(hash: string): string | undefined {
   }
 }
 
+/** The settle signal's attribute (@portfolio/variant-contract/settle's ENHANCEMENT_PENDING). */
+const PENDING = 'data-enhancement-pending';
+
+/**
+ * The longest the bar holds the page as unsettled for the first deliveries (8): a fifth of the
+ * 10 s the quality reads and the variant shots wait for a page to settle (pager.test.ts).
+ */
+export const SETTLE_CAP_MS = 2_000;
+
+/**
+ * Takes the pager's id off the pending list on `.sg-bar` in `root`, and the attribute with the
+ * last id: @portfolio/variant-contract/settle's enhancementSettled() for the pager's own hold,
+ * written here so the chunk imports nothing new (Aurora Glass's settleSky(), for its budget).
+ * pager.test.ts holds the two to the same result.
+ */
+export function settlePager(root: ParentNode): void {
+  const bar = root.querySelector('.sg-bar');
+  const value = bar?.getAttribute(PENDING);
+  if (!bar || value === null || value === undefined) return;
+  const rest = value.split(/\s+/).filter((id) => id !== '' && id !== 'pager');
+  if (rest.length > 0) bar.setAttribute(PENDING, rest.join(' '));
+  else bar.removeAttribute(PENDING);
+}
+
+/**
+ * The hold for `count` first deliveries: `settle` runs once, on the last of them or after `cap`
+ * ms, whichever comes first, and at once with none to wait for. `stop` drops the timer.
+ */
+export function firstPasses(count: number, settle: () => void, cap = SETTLE_CAP_MS) {
+  let left = count;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const finish = () => {
+    if (left < 0) return;
+    left = -1;
+    clearTimeout(timer);
+    settle();
+  };
+  if (left <= 0) finish();
+  else timer = setTimeout(finish, cap);
+  return {
+    delivered: () => {
+      if (left > 0 && --left === 0) finish();
+    },
+    stop: () => clearTimeout(timer),
+  };
+}
+
 const ROOMY = '(min-width: 48rem) and (min-height: 40rem)';
 const REDUCE = '(prefers-reduced-motion: reduce)';
 
@@ -111,11 +164,19 @@ function attach(root: HTMLElement) {
   const doc = root.ownerDocument;
   const stops = [...root.querySelectorAll<HTMLElement>('[data-sg-stop]')];
   const bar = root.querySelector<HTMLElement>('.sg-bar');
+  const h1 = root.querySelector('h1');
   const rail = root.querySelector<HTMLElement>('.sg-rail');
   const strip = root.querySelector<HTMLElement>('.sg-strip');
   const railLinks = [...root.querySelectorAll<HTMLAnchorElement>('a[data-sg-rail]')];
   const segments = [...root.querySelectorAll<HTMLElement>('[data-sg-for]')];
   const anchorOf = (stop: HTMLElement) => stop.dataset.sgAnchor ?? '';
+
+  // 8. The settle hold: the two lines' first deliveries and the dock's.
+  const observing = typeof IntersectionObserver !== 'undefined';
+  const lining = observing && stops.length > 0;
+  const docking = observing && h1 !== null && bar !== null;
+  const passes = firstPasses((lining ? 2 : 0) + (docking ? 1 : 0), () => settlePager(root));
+  undo.push(passes.stop);
 
   // 1 and 2. One line through the window per chrome element: the stop that crosses it lends its ground.
   const current = (stop: HTMLElement) => {
@@ -134,9 +195,15 @@ function attach(root: HTMLElement) {
   let lines: IntersectionObserver[] = [];
   const line = (y: number, apply: (stop: HTMLElement) => void) => {
     const below = Math.max(0, Math.round(window.innerHeight - y - 1));
+    // A re-wire's lines count too: what they deliver is what the page shows.
+    let first = true;
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) if (entry.isIntersecting) apply(entry.target as HTMLElement);
+        if (first) {
+          first = false;
+          passes.delivered();
+        }
       },
       { rootMargin: `-${Math.round(y)}px 0px -${below}px 0px` },
     );
@@ -165,7 +232,7 @@ function attach(root: HTMLElement) {
       }),
     ];
   };
-  if (typeof IntersectionObserver !== 'undefined' && stops.length > 0) {
+  if (lining) {
     wire();
     window.addEventListener('resize', wire, { passive: true });
     undo.push(() => {
@@ -182,11 +249,15 @@ function attach(root: HTMLElement) {
   }
 
   // 3. The name docks into the h1 while the h1 shows.
-  const h1 = root.querySelector('h1');
-  if (h1 && bar && typeof IntersectionObserver !== 'undefined') {
+  if (docking && h1 && bar) {
+    let first = true;
     const observer = new IntersectionObserver(
       ([entry]) => {
         bar.dataset.sgName = entry?.isIntersecting ? 'docked' : 'shown';
+        if (first) {
+          first = false;
+          passes.delivered();
+        }
       },
       { rootMargin: `-${Math.round(bar.offsetHeight)}px 0px 0px 0px` },
     );
@@ -338,8 +409,12 @@ export default function PagerEnhancement({
   }, []);
   const snap = typeof input.controls.snap === 'string' ? input.controls.snap : undefined;
   useEffect(() => {
-    // Inside a plate (an inert boundary) nothing attaches.
-    if (!root || root.closest('[inert]')) return undefined;
+    if (!root) return undefined;
+    // Inside a plate (an inert boundary) nothing attaches, and nothing holds the page.
+    if (root.closest('[inert]')) {
+      settlePager(root);
+      return undefined;
+    }
     return attach(root);
   }, [root, input.ids.prefix]);
   useEffect(() => {
