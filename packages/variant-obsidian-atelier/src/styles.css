@@ -518,6 +518,17 @@
     background: linear-gradient(var(--color-surface-prominent) 0 0) 0 / 100% var(--layout-folded);
   }
 
+  /*
+   * A word wider than its box breaks where it must, so at large text no line of the name, the
+   * plaque, a link, a check or a title page runs under its neighbours or past the window. Their
+   * boxes size to their widest word, which a break-word break doesn't narrow. By default every word
+   * there fits its box, so nothing moves.
+   */
+  [data-variant='obsidian-atelier']
+    :is(.oa-chrome__mark, .oa-plaque__name, .oa-links a, .oa-check, .oa-vitrine) {
+    overflow-wrap: anywhere;
+  }
+
   /* Folded, Index's slot keeps the first line, under its plate, and Appearance wraps below it. */
   [data-variant='obsidian-atelier'] .oa-chrome__corner {
     flex-wrap: wrap-reverse;
