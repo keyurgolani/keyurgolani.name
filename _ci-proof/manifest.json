@@ -1,0 +1,17 @@
+{
+  "name": "swiss-signal-cover-path-probe",
+  "summary": "Swiss Signal's sample cover on the rise look's own capture path, 10 runs plain and 10 with observer deliveries held, at the base and with the trimmed rise hold: painted or not in the clipped shot, an unclipped one and a clipped one a second later, with the page's state at the shot",
+  "head": "97dec244406cb920b8cf2bf12ab08f3445b225bf",
+  "base": "d9a9fab0ee48bc066eae8d392fd26aa19f185123",
+  "gate": false,
+  "look": [
+    {
+      "label": "coverpath",
+      "spec": "look/swiss-cover-path-probe.spec.ts",
+      "project": "chromium",
+      "tests": 20
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
