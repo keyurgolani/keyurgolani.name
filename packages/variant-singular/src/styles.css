@@ -1304,6 +1304,11 @@
     display: none;
   }
 
+  /* The bar's controls draw their ring inside their own box: on a phone the strip is fixed under the bar at the same level and painted after it, so a ring past the bar's lower edge was painted over, and the window's top edge cut its upper side. */
+  [data-variant='singular'] .sg-bar :is(a[href], button):focus-visible {
+    --ui-focus-offset: calc(var(--ui-focus-width) * -1);
+  }
+
   [data-variant='singular'] .sg[data-sg-live] .sg-strip {
     position: fixed;
     z-index: 3;
