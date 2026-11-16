@@ -3,7 +3,7 @@
   "name": "Raw Grid",
   "promise": "The portfolio as an exposed-structure poster wall: every boundary a drawn rule, the proof running across the top, the facts pasted on.",
   "description": "One gutterless twelve-column field where cells share their edges, so every boundary on the page is a single rule. A proof ticker runs across the top with a Pause, over a header row of cells: the name, five destinations with their counts, where you are, and the Index. The opening is a pasted-up poster, the name stacked and fitted with up to three tilted stickers of facts from the records, beside the thesis and the pinned work. Then five destination sheets, each opening on its word at display size and a table of its sections, every section a band of cells with its title as black tape, works as sticker cards that press into their shadows, and an ink block whose biggest link is the email. A work's own page is a poster of its own on the same field: its title fitted, its cited records as stickers, a fact sheet beside it, then every part of the case as a band. Its color, type, and materials come from the appearance packs; the grid's geometry is its own.",
-  "contract": "2.0",
+  "contract": "2.1",
   "schemas": {
     "portfolio": {
       "min": 3,
@@ -94,6 +94,7 @@
     ],
     "migrations": []
   },
+  "scrollReserve": { "blockStart": "calc(3.5rem + 1.25rem)", "media": "(min-height: 32rem)" },
   "visitorControl": {
     "placement": "footer"
   },
