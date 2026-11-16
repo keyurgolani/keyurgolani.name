@@ -1,0 +1,34 @@
+{
+  "name": "variants-shot-plant",
+  "summary": "the variants shot comparison catches a planted change in Demo Studio's Content task shot, with a cell set at the head and at the base",
+  "head": "9aa83fc6f4156ecaa3b3ce73e1c69006115b0a56",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "cells": [
+    {
+      "label": "ag-field-serif",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:aurora-glass complete / aurora-glass/platform-neutral/warm-parchment/field-serif/system 1440x900 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "ag-field-serif",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:aurora-glass complete / aurora-glass/platform-neutral/warm-parchment/field-serif/system 1440x900 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "at": "base"
+    }
+  ],
+  "kit": "b67ee7dabde7",
+  "kitScripts": "75dcf5c8906b"
+}
