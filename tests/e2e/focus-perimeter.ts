@@ -69,7 +69,7 @@ const twoFrames = (page: Page) =>
   );
 
 /** A control focused as from the keyboard, so it is :focus-visible, read as the walk reads it. */
-async function keyboardFocus(page: Page, target: Locator): Promise<Active> {
+export async function keyboardFocus(page: Page, target: Locator): Promise<Active> {
   await expect(target).toHaveCount(1);
   await target.scrollIntoViewIfNeeded();
   await page.keyboard.press('Shift');
@@ -80,11 +80,22 @@ async function keyboardFocus(page: Page, target: Locator): Promise<Active> {
 }
 
 /**
- * Every point of the ring's centre line as the focus check lays it out round the box and its radii,
- * each read alone across the ring's width on a focused and a blurred shot: how many are in the shots,
- * the ones that don't change to 3:1 by side, and samples of the weak ones. Focus goes back after.
+ * The outline offset Chromium paints: it keeps a positive outline-offset in whole device pixels,
+ * truncated. Measured at a device pixel ratio of 1: an offset of 9.75px (the 1024 px space step)
+ * paints as 9, a ring 55 px tall round a 33 px box rather than the 56.5 the computed offset lays
+ * out, and 9.03px paints as 9. A negative offset keeps its computed value: how one paints is
+ * unmeasured.
  */
-async function everyPoint(page: Page, locator: Locator, active: Active) {
+export const paintedOffset = (offset: number, ratio: number): number =>
+  offset > 0 ? Math.trunc(offset * ratio) / ratio : offset;
+
+/**
+ * Every point of the ring's centre line as the focus check lays it out round the box and its radii,
+ * at the offset Chromium paints unless one is given, each read alone across the ring's width on a
+ * focused and a blurred shot: how many are in the shots, the ones that don't change to 3:1 by side,
+ * and samples of the weak ones. Focus goes back after.
+ */
+export async function everyPoint(page: Page, locator: Locator, active: Active, offset?: number) {
   const rounding = active.rounding!;
   const width = rounding.width ?? 0;
   const clip = clipAround(active.box, Math.ceil(active.reach) + 1, page.viewportSize()!)!;
@@ -96,7 +107,9 @@ async function everyPoint(page: Page, locator: Locator, active: Active) {
   await twoFrames(page);
   const blurred = await shot();
   await locator.evaluate((element: HTMLElement) => element.focus());
-  const line = ringCentreLine(active.box, rounding.corners, rounding.offset + width / 2);
+  const dpr = await page.evaluate(() => window.devicePixelRatio);
+  const painted = offset ?? paintedOffset(rounding.offset, dpr);
+  const line = ringCentreLine(active.box, rounding.corners, painted + width / 2);
   const ratio = loadThresholds().contrast.nonText;
   const scale = focused.width / clip.width;
   const at = (image: Image, x: number, y: number): Rgb | null => {
@@ -143,7 +156,7 @@ async function everyPoint(page: Page, locator: Locator, active: Active) {
       );
     }
   }
-  return { points, weak, sides, samples };
+  return { points, weak, sides, samples, painted, dpr };
 }
 
 /** The control's ring and fill, and the nearest painted ground behind it. */
@@ -231,10 +244,17 @@ export function focusPerimeter(variant: string, tuple: string, cases: readonly P
             const ring = rounded ? await ringContrast(page, control) : null;
             const read = rounded
               ? await everyPoint(page, control, active)
-              : { points: 0, weak: [] as string[], sides: {}, samples: [] as string[] };
+              : {
+                  points: 0,
+                  weak: [] as string[],
+                  sides: {},
+                  samples: [] as string[],
+                  painted: null,
+                  dpr: null,
+                };
             const findings = await focusFindings(page, active);
             console.log(
-              `perimeter ${tuple} ${width} ${row} ${each.name}: path ${active.path}, box ${JSON.stringify(active.box)}, line boxes ${JSON.stringify(lines)}, rounding ${JSON.stringify(active.rounding ?? null)}, styles ${JSON.stringify(await styles(control))}, centre line ${read.points} points, weak ${read.weak.length}, by side (weak, of) ${JSON.stringify(read.sides)}; samples ${JSON.stringify(read.samples)}; painted bands ${JSON.stringify(ring)}; findings ${JSON.stringify(findings).slice(0, 600)}`,
+              `perimeter ${tuple} ${width} ${row} ${each.name}: path ${active.path}, box ${JSON.stringify(active.box)}, line boxes ${JSON.stringify(lines)}, rounding ${JSON.stringify(active.rounding ?? null)}, painted offset ${read.painted} at DPR ${read.dpr}, styles ${JSON.stringify(await styles(control))}, centre line ${read.points} points, weak ${read.weak.length}, by side (weak, of) ${JSON.stringify(read.sides)}; samples ${JSON.stringify(read.samples)}; painted bands ${JSON.stringify(ring)}; findings ${JSON.stringify(findings).slice(0, 600)}`,
             );
             expect(
               rounded ? { findings, weak: read.weak, inShots: read.points > 0 } : { findings },
