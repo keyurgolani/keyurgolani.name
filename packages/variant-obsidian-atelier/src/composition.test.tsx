@@ -1091,6 +1091,14 @@ test("a title-size link's box reaches under its hanging rule, so the focus ring'
   );
 });
 
+test("an entry title's link box reaches under its underline, so the focus ring's foot passes under it (the Custom section's Recording title, 1024 focus perimeter in Accessible Reading's Verdana)", () => {
+  const selector = `[data-variant='obsidian-atelier'] .oa-entry__title a {`;
+  const at = CSS.indexOf(selector);
+  assert.ok(at >= 0, selector);
+  const body = CSS.slice(at, CSS.indexOf('}', at));
+  assert.match(body, /padding-block-end: var\(--layout-underline\);/);
+});
+
 test('with no script the entrance is there at once: nothing in it waits at opacity 0 or unveiled, and no scripting query', () => {
   // The no-JavaScript rows audit with script on for axe, which a scripting query would flip.
   assert.doesNotMatch(CSS, /@media[^{]*\bscripting\b/);
