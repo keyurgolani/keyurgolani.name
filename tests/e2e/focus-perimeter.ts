@@ -256,10 +256,17 @@ export function focusPerimeter(variant: string, tuple: string, cases: readonly P
             console.log(
               `perimeter ${tuple} ${width} ${row} ${each.name}: path ${active.path}, box ${JSON.stringify(active.box)}, line boxes ${JSON.stringify(lines)}, rounding ${JSON.stringify(active.rounding ?? null)}, painted offset ${read.painted} at DPR ${read.dpr}, styles ${JSON.stringify(await styles(control))}, centre line ${read.points} points, weak ${read.weak.length}, by side (weak, of) ${JSON.stringify(read.sides)}; samples ${JSON.stringify(read.samples)}; painted bands ${JSON.stringify(ring)}; findings ${JSON.stringify(findings).slice(0, 600)}`,
             );
+            // A dashed or dotted ring has gaps by design, and the every-point read counts each gap as
+            // a weak point: such a ring is judged by the focus check alone, as the quality cells
+            // judge it. The every-point read stays in the log; a solid ring must pass both.
+            const broken = await control.evaluate((element) =>
+              ['dashed', 'dotted'].includes(getComputedStyle(element).outlineStyle),
+            );
+            const whole = rounded && !broken;
             expect(
-              rounded ? { findings, weak: read.weak, inShots: read.points > 0 } : { findings },
-              'the focus check, and every centre line point at 3:1',
-            ).toEqual(rounded ? { findings: [], weak: [], inShots: true } : { findings: [] });
+              whole ? { findings, weak: read.weak, inShots: read.points > 0 } : { findings },
+              whole ? 'the focus check, and every centre line point at 3:1' : 'the focus check',
+            ).toEqual(whole ? { findings: [], weak: [], inShots: true } : { findings: [] });
           },
         );
 }
