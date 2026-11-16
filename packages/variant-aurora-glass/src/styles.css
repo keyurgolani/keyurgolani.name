@@ -240,12 +240,15 @@
  * fill, which on-accent already reads against. Outside it the language's card shadow lies where the
  * ring would be drawn, and the focus check compares the ring's pixels with the same pixels at rest;
  * inside the box no shadow falls. Set as the platform's inset ring (the focus width, negated) and a
- * focus colour the platform allows, so under forced colors the ring is still the system's colour.
- * Nothing changes at rest.
+ * focus colour the platform allows. Nothing changes at rest. Forced colours drop the shadow and give
+ * the button an outline of its text's colour at its edge, where an inset ring would lie, so there it
+ * keeps the platform's ring outside it.
  */
-[data-variant='aurora-glass'] .ag-btn:focus-visible {
-  --ui-focus-offset: calc(var(--ui-focus-width) * -1);
-  --color-focus: var(--color-on-accent);
+@media (forced-colors: none) {
+  [data-variant='aurora-glass'] .ag-btn:focus-visible {
+    --ui-focus-offset: calc(var(--ui-focus-width) * -1);
+    --color-focus: var(--color-on-accent);
+  }
 }
 
 /* The lifts move things, so they wait for no-preference and the page's motion. */
