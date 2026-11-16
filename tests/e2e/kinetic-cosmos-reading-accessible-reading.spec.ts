@@ -1,0 +1,43 @@
+import { expect, test } from '../harness/fixtures';
+import {
+  annotation,
+  arcStops,
+  contrastFindings,
+  described,
+  FIGURE,
+  kineticOptions,
+  openHome,
+} from './kinetic-cosmos-reading';
+
+// Kinetic Cosmos on Accessible Reading (paper-tactile, paper-ink, dark), a wide face at a large
+// size, as its quality cells read it (kinetic-cosmos-reading.ts). Under more contrast every border
+// role is the text's own colour, so a label that crowds a neighbour or the orbit line, or a figure
+// that reaches its planet's rim, reads 1:1 there.
+
+test.use({
+  appOptions: kineticOptions({
+    language: 'paper-tactile',
+    scheme: 'paper-ink',
+    typography: 'accessible-reading',
+    mode: 'dark',
+  }),
+});
+
+test(
+  "under more contrast, at 1024, the Record ring's orbit-line labels, and at 390 the stats figure and its unit, reach the high-contrast text ratio",
+  { annotation },
+  async ({ page }) => {
+    await openHome(page, { width: 1024, height: 768, row: 'contrast-more' });
+    const stops = await arcStops(page, 'record');
+    expect(stops.length, "the Record ring's stops").toBeGreaterThan(5);
+    const labels = (await contrastFindings(page, stops)).filter(
+      (f) => f.rule === 'high-contrast-text',
+    );
+    expect(described(labels), 'the labels under the high-contrast text ratio').toEqual([]);
+    await openHome(page, { width: 390, height: 844, row: 'contrast-more' });
+    const figure = (await contrastFindings(page, FIGURE)).filter(
+      (f) => f.rule === 'high-contrast-text',
+    );
+    expect(described(figure), 'the figure and its unit under the ratio').toEqual([]);
+  },
+);

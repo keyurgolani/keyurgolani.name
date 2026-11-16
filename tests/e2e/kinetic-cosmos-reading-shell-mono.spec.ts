@@ -46,3 +46,21 @@ test(
     expect(described(failing), 'the figure and its unit under the text ratio').toEqual([]);
   },
 );
+
+test(
+  "under more contrast, at 1024, the Record ring's orbit-line labels, and at 390 the stats figure and its unit, reach the high-contrast text ratio",
+  { annotation },
+  async ({ page }) => {
+    await openHome(page, { width: 1024, height: 768, row: 'contrast-more' });
+    const stops = await arcStops(page, 'record');
+    const labels = (await contrastFindings(page, stops)).filter(
+      (f) => f.rule === 'high-contrast-text',
+    );
+    expect(described(labels), 'the labels under the high-contrast text ratio').toEqual([]);
+    await openHome(page, { width: 390, height: 844, row: 'contrast-more' });
+    const figure = (await contrastFindings(page, FIGURE)).filter(
+      (f) => f.rule === 'high-contrast-text',
+    );
+    expect(described(figure), 'the figure and its unit under the ratio').toEqual([]);
+  },
+);
