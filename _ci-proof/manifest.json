@@ -1,0 +1,51 @@
+{
+  "name": "swiss-signal-rise",
+  "summary": "Swiss Signal's selected index rise holds the page unsettled until it has run, for four seconds at most, so a capture never lands on a row mid-rise, and a skipped rise leaves every row at rest",
+  "head": "97dec244406cb920b8cf2bf12ab08f3445b225bf",
+  "base": "d9a9fab0ee48bc066eae8d392fd26aa19f185123",
+  "gate": false,
+  "unit": {
+    "titles": [
+      "a part opener's contents keep room between their lines for a link's 2px focus ring and its offset"
+    ]
+  },
+  "reds": [
+    {
+      "label": "r223",
+      "at": "e696e4d03ffeeeb8cc6bc076a7f8f4849ffad6df",
+      "specs": ["tests/e2e/swiss-signal-rise-settle.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ss",
+      "specs": [
+        "tests/e2e/swiss-signal-email-band.spec.ts",
+        "tests/e2e/swiss-signal-hero-fit.spec.ts",
+        "tests/e2e/swiss-signal-hero-floor.spec.ts",
+        "tests/e2e/swiss-signal-index-focus-return-hc390.spec.ts",
+        "tests/e2e/swiss-signal-index-focus-return-system1440.spec.ts",
+        "tests/e2e/swiss-signal-index-nojs.spec.ts",
+        "tests/e2e/swiss-signal-masthead-wrap.spec.ts",
+        "tests/e2e/swiss-signal.spec.ts",
+        "tests/e2e/swiss-signal-rise-settle.spec.ts"
+      ],
+      "tests": 50,
+      "files": 8
+    }
+  ],
+  "look": [
+    {
+      "label": "swiss-rise",
+      "spec": "look/swiss-rise-look.spec.ts",
+      "project": "chromium",
+      "tests": 2
+    }
+  ],
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
