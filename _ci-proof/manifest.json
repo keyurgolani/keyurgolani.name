@@ -1,0 +1,117 @@
+{
+  "name": "shell-figures-targets-ring",
+  "summary": "Shell's figures read at text contrast in every scheme, its key and value links are targets on their own, and its wrapped buttons ring on the page",
+  "head": "7ac307fc5f53f1114f58a85de3c55c7b57cd7f81",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the figure colour is a mix of two colour roles the stylesheet names",
+      "figures read at text contrast on every ground Shell paints, in every shipping scheme",
+      "figures read at text contrast in every generated scheme too, over a spread of seeds and images"
+    ]
+  },
+  "reds": [
+    {
+      "label": "fig-cells",
+      "kind": "cells",
+      "at": "a58bdaaecfdded96cbe2072cc90cc4b1b624940a",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:shell complete / shell/platform-neutral/aurora-meadow/humanist-ui/light 1024x768 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    },
+    {
+      "label": "who-targets",
+      "at": "1bac91005adbf1abfb68e3245b7604bcf26c526f",
+      "specs": ["tests/e2e/shell-who-targets.spec.ts"],
+      "tests": 6,
+      "files": 1,
+      "failed": 6
+    },
+    {
+      "label": "cta-ring",
+      "at": "dd9eff5261ee699a8b684f051a917eaf5109d0ec",
+      "specs": ["tests/e2e/shell-cta-ring.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "cta-cells",
+      "kind": "cells",
+      "at": "dd9eff5261ee699a8b684f051a917eaf5109d0ec",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:shell complete / shell/letterpress/control-room/book-serif/dark 390x844 contrast-more ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "who",
+      "specs": ["tests/e2e/shell-who-targets.spec.ts"],
+      "tests": 6,
+      "files": 1
+    },
+    {
+      "label": "cta",
+      "specs": ["tests/e2e/shell-cta-ring.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "shell",
+      "specs": ["tests/e2e/shell-*.spec.ts"],
+      "tests": 80,
+      "files": 7
+    }
+  ],
+  "cells": [
+    {
+      "label": "shell-sample",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:shell complete / shell/(platform-neutral/aurora-meadow/humanist-ui/light 1024x768 default|atelier-luxury/low-stimulus-warm/geometric-display/dark 1024x768 contrast-more|letterpress/control-room/book-serif/dark 390x844 contrast-more) ",
+      "shards": ["find"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "fig",
+      "spec": "look/shell-fig-look.spec.ts",
+      "project": "chromium",
+      "tests": 9,
+      "files": 1,
+      "shots": 17
+    },
+    {
+      "label": "who",
+      "spec": "look/shell-who-look.spec.ts",
+      "project": "chromium",
+      "tests": 3,
+      "files": 1,
+      "shots": 3
+    },
+    {
+      "label": "cta",
+      "spec": "look/shell-cta-look.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 6
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": ["(^|[^-a-z])shell([^-a-z]|$)"]
+  },
+  "budgets": true,
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
