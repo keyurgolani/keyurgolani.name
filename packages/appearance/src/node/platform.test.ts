@@ -560,10 +560,11 @@ test("the surface hook: inside a region marked data-ui-surface, the focus color 
     ),
     'Canvas',
   );
-  // No other region value is remapped.
+  // No other region value is remapped. The last two are forced colors' rings on the accent's and
+  // the emphasis's grounds, which set the focus color alone.
   assert.deepEqual(
     [...css.matchAll(/\[data-ui-surface='([a-z-]+)'\] \{/g)].map((match) => match[1]),
-    ['accent', 'inverse', 'emphasis'],
+    ['accent', 'inverse', 'emphasis', 'accent', 'emphasis'],
   );
 });
 
