@@ -1,0 +1,197 @@
+{
+  "name": "mission-readouts-fold-rings",
+  "summary": "Mission Control's readout squares hold their figure line under 200% text, its folded bars ring inside their panel, and on a phone the root reserves the docked rail's band, so Tab scrolls a control clear of it",
+  "head": "659b3c585b60a08447459e92062d4b0b9305b653",
+  "base": "458f2c903c0fc8ad90591b6a7efcf141f3c63719",
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "readout-reflow",
+      "at": "719cbb41b8b518c81863fa020e577188ffda18e4",
+      "specs": ["tests/e2e/mission-control-readout-reflow-*.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "fold-ring",
+      "at": "bada2e64fc368fabbec34ebc5d087a7876a19d22",
+      "specs": ["tests/e2e/mission-control-fold-ring.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "fold-cells",
+      "kind": "cells",
+      "at": "bada2e64fc368fabbec34ebc5d087a7876a19d22",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:mission-control complete / mission-control/blueprint/low-stimulus-warm/neutral-ui/dark 1024x768 forced-colors ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    },
+    {
+      "label": "dock-ring",
+      "at": "82ec033031d4c959f3d73b81ab727a25bbe9a543",
+      "specs": ["tests/e2e/mission-control-dock-ring.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "org-cells",
+      "kind": "cells",
+      "at": "82ec033031d4c959f3d73b81ab727a25bbe9a543",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:mission-control complete / mission-control/letterpress/warm-parchment/humanist-ui/system 390x844 contrast-more ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "readout",
+      "specs": ["tests/e2e/mission-control-readout-reflow-*.spec.ts"],
+      "tests": 4,
+      "files": 1
+    },
+    {
+      "label": "fold",
+      "specs": ["tests/e2e/mission-control-fold-ring.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "dock",
+      "specs": ["tests/e2e/mission-control-dock-ring.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "mc",
+      "specs": ["tests/e2e/mission-control*.spec.ts"],
+      "tests": 39,
+      "files": 9
+    }
+  ],
+  "cells": [
+    {
+      "label": "mc-sample",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:mission-control complete / mission-control/(art-deco/graphite/swiss-grotesque/dark 1440x900 default|blueprint/low-stimulus-warm/neutral-ui/dark 1024x768 forced-colors|letterpress/warm-parchment/humanist-ui/system 390x844 contrast-more) ",
+      "shards": ["find"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "readouts-console-mono",
+      "spec": "look/mc-readouts-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_PACK": "console-mono",
+        "PROOF_LOOK_LANGUAGE": "neumorphic",
+        "PROOF_LOOK_SCHEME": "reduced-chroma",
+        "PROOF_LOOK_MODE": "dark"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    },
+    {
+      "label": "readouts-paste-up",
+      "spec": "look/mc-readouts-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_PACK": "paste-up",
+        "PROOF_LOOK_LANGUAGE": "platform-neutral",
+        "PROOF_LOOK_SCHEME": "warm-parchment",
+        "PROOF_LOOK_MODE": "light"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    },
+    {
+      "label": "readouts-technical-sans-mono",
+      "spec": "look/mc-readouts-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_PACK": "technical-sans-mono",
+        "PROOF_LOOK_LANGUAGE": "platform-neutral",
+        "PROOF_LOOK_SCHEME": "warm-parchment",
+        "PROOF_LOOK_MODE": "light"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    },
+    {
+      "label": "readouts-swiss-grotesque",
+      "spec": "look/mc-readouts-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_PACK": "swiss-grotesque",
+        "PROOF_LOOK_LANGUAGE": "art-deco",
+        "PROOF_LOOK_SCHEME": "graphite",
+        "PROOF_LOOK_MODE": "dark"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    },
+    {
+      "label": "readouts-drafting-grotesk",
+      "spec": "look/mc-readouts-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_PACK": "drafting-grotesk",
+        "PROOF_LOOK_LANGUAGE": "glassmorphism",
+        "PROOF_LOOK_SCHEME": "jewel-twilight",
+        "PROOF_LOOK_MODE": "dark"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    },
+    {
+      "label": "fold-blueprint",
+      "spec": "look/mc-fold-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_LANGUAGE": "blueprint",
+        "PROOF_LOOK_SCHEME": "low-stimulus-warm"
+      },
+      "tests": 6,
+      "files": 1,
+      "shots": 18
+    },
+    {
+      "label": "fold-art-deco",
+      "spec": "look/mc-fold-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_LANGUAGE": "art-deco",
+        "PROOF_LOOK_SCHEME": "graphite"
+      },
+      "tests": 6,
+      "files": 1,
+      "shots": 18
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": ["mission-control"]
+  },
+  "budgets": true,
+  "kit": "b67ee7dabde7",
+  "kitScripts": "75dcf5c8906b"
+}
