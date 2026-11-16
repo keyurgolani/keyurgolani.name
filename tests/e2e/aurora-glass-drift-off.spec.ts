@@ -71,7 +71,7 @@ test.describe('between 48 and 56rem', () => {
     { annotation },
     async ({ page }) => {
       await page.goto('/', { waitUntil: 'networkidle' });
-      await expect(page.locator('.ag[data-ag-live]')).toHaveCount(1);
+      await expect(page.locator('.ag[data-ag-live]')).toHaveCount(2);
       await expect(page.locator('.ag-lens')).toBeHidden();
       await expect(page.getByRole('button', { name: 'Pause the sky' })).toHaveCount(0);
       await expect(page.locator('[data-ag-pause]:not([hidden])')).toHaveCount(0);
