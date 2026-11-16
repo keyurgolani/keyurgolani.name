@@ -2,11 +2,13 @@ import { expect, test } from '../harness/fixtures';
 import {
   annotation,
   arcStops,
+  bodiesOffSize,
   FIGURE,
   contrastFindings,
   described,
   kineticOptions,
   openHome,
+  planetBodies,
 } from './kinetic-cosmos-reading';
 
 // Kinetic Cosmos on Shell Mono (art-deco, forest-moss, dark), a wide monospace face, as its quality
@@ -92,5 +94,21 @@ for (const [width, height] of [
         (f) => f.rule === 'high-contrast-large-text',
       );
       expect(described(failing), 'the figure under the high-contrast large-text ratio').toEqual([]);
+    },
+  );
+
+for (const [width, height] of [
+  [1440, 900],
+  [1024, 768],
+  [390, 844],
+] as const)
+  test(
+    `at ${width}, every planet is the size its figure's magnitude gives, round, and never smaller than a lesser one`,
+    { annotation },
+    async ({ page }) => {
+      await openHome(page, { width, height, row: 'default' });
+      const bodies = await planetBodies(page);
+      expect(bodies.length, 'the planets').toBeGreaterThan(0);
+      expect(bodiesOffSize(bodies), 'the bodies off their size').toEqual([]);
     },
   );

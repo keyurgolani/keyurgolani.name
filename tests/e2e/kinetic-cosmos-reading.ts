@@ -115,3 +115,47 @@ export async function ringFindingsOf(page: Page, stop: Locator): Promise<Finding
   const active = await inPage<Active>(page, { kind: 'active' });
   return focusFindings(page, active);
 }
+
+/**
+ * Every planet: its body's box, and the size its figure's magnitude gives it, the body's space token
+ * (--space-3xl, or --space-2xl for a set on a phone) times its --layout-size.
+ */
+export const planetBodies = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('.kc-planet')].map((planet, index) => {
+      const body = planet.querySelector<HTMLElement>('.kc-planet__body')!;
+      const size = parseFloat(getComputedStyle(planet).getPropertyValue('--layout-size'));
+      const set = planet.closest('.kc-planets')!;
+      const small = matchMedia('(max-width: 47.99rem)').matches && !set.matches('.kc-planets--row');
+      const ruler = document.createElement('div');
+      ruler.style.cssText = `position: absolute; visibility: hidden; inline-size: var(${small ? '--space-2xl' : '--space-3xl'});`;
+      planet.append(ruler);
+      const token = ruler.getBoundingClientRect().width;
+      ruler.remove();
+      const box = body.getBoundingClientRect();
+      return {
+        planet: planet.id || `planet ${index + 1}`,
+        set: [...document.querySelectorAll('.kc-planets')].indexOf(set),
+        size,
+        width: box.width,
+        height: box.height,
+        expected: token * size,
+      };
+    }),
+  );
+
+/** Each body whose box isn't the size its magnitude gives, within 1 px, or isn't round. */
+export function bodiesOffSize(bodies: Awaited<ReturnType<typeof planetBodies>>): string[] {
+  const off = bodies
+    .filter((b) => Math.abs(b.width - b.expected) > 1 || Math.abs(b.height - b.width) > 1)
+    .map(
+      (b) =>
+        `${b.planet}: ${b.width.toFixed(1)} x ${b.height.toFixed(1)}, its magnitude's ${b.expected.toFixed(1)}`,
+    );
+  // No larger magnitude renders smaller than a smaller one in its set.
+  for (const a of bodies)
+    for (const b of bodies)
+      if (a.set === b.set && a.size > b.size && a.width < b.width - 0.5)
+        off.push(`${a.planet} (size ${a.size}) renders smaller than ${b.planet} (size ${b.size})`);
+  return off;
+}
