@@ -2488,10 +2488,15 @@
     display: none;
   }
 
-  /* The chapter index as a one-line chapter bar, under the masthead (EE-M4). */
+  /*
+   * The chapter index as a one-line chapter bar, under the masthead (EE-M4). Its box starts a
+   * ring's reach above its links, where their rings start, so docked under the masthead a
+   * focused link's ring starts at the masthead's foot, never under it.
+   */
   [data-variant='editorial-evidence'] .ee-rail {
     align-self: start;
-    margin-block-start: var(--space-l);
+    margin-block-start: calc(var(--space-l) - var(--layout-ee-ring));
+    padding-block-start: var(--layout-ee-ring);
     padding-inline: var(--layout-ee-inset);
     border-block-end: var(--ui-border-divider);
   }
