@@ -1,0 +1,18 @@
+{
+  "name": "swiss-signal-232-look2",
+  "summary": "Swiss Signal's part words, the look again: every part's h2 alone, scrolled below the sticky masthead, at 320 and 390 with 200% root text under Humanist UI and Accessible Reading, and stills at 320 and 390 at 100% and at 768 with 200% text",
+  "head": "1c7ebfa866165c23c776cb63272ab3087de3fac8",
+  "base": "b31f1d839f485237f696dd7e2e8305c2287f33fc",
+  "gate": false,
+  "look": [
+    {
+      "label": "swiss-232-v2",
+      "spec": "look/swiss-232-look2.spec.ts",
+      "project": "chromium",
+      "tests": 7,
+      "files": 1
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
