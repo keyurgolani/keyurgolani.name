@@ -2131,12 +2131,14 @@
 }
 
 /*
- * The next work's title is set at display size, where the shared underline offset, 0.2em, put
- * the underline below the link's own box in several faces, along its focus ring's foot: under
- * more contrast and forced colours the two drew in one colour, and the ring read as no change
- * there. Its underline sits a twentieth of an em under the line, inside the box in every face.
+ * A title is set tighter than running text, and at the shared underline offset, 0.2em, a title
+ * link's underline ran past the link's own box into its focus ring's band in several faces: the
+ * next work's title at display size, and among the headings a plate's title, an offer's name and
+ * a work row's title. Under more contrast and forced colours the two drew in one colour, and the
+ * ring read as no change along its foot. A title link's underline sits a twentieth of an em under
+ * the line, inside the box in every face.
  */
-[data-variant='editorial-evidence'] .ee-case__next-title a {
+[data-variant='editorial-evidence'] :is(h1, h2, h3, h4, h5, h6, .ee-case__next-title) a {
   text-underline-offset: 0.05em;
 }
 
