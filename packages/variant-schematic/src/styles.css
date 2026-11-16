@@ -907,9 +907,11 @@
   align-self: start;
 }
 
+/* A figure set large takes the accent text, the role every scheme solves to the text target: a data
+   colour is a mark's, and some schemes set it near the canvas (2.49:1 on Poster Primaries light). */
 [data-variant='schematic'] .sx-note__value[data-type-role='headline'] {
   font-size: var(--layout-type-head);
-  color: var(--color-data-categorical-2);
+  color: var(--color-accent-text);
 }
 
 [data-variant='schematic'] .sx-note__text {
@@ -1615,7 +1617,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2xs);
-  color: var(--color-data-categorical-2);
+  color: var(--color-accent-text);
 }
 
 [data-variant='schematic'] .sx-chain__value [data-type-role='numeric'] {
@@ -1794,7 +1796,7 @@
 }
 
 [data-variant='schematic'] .sx-cert__year {
-  color: var(--color-data-categorical-2);
+  color: var(--color-accent-text);
   font-size: var(--layout-type-head);
 }
 
