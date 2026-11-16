@@ -1,0 +1,19 @@
+{
+  "name": "singular-dark-grounds-pre",
+  "summary": "Singular's drawings and focus rings on its dark grounds read in pixels under forced colours, before the dark-ground inks change",
+  "head": "18be4c00561afc90e22119a591cfb7bf7910d930",
+  "base": "18be4c00561afc90e22119a591cfb7bf7910d930",
+  "look": [
+    {
+      "label": "forced",
+      "spec": "look/dark-grounds.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_ROW": "forced-colors"
+      },
+      "tests": 8
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
