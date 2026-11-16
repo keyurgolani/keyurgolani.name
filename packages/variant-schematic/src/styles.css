@@ -1403,6 +1403,17 @@
   row-gap: var(--space-3xs);
 }
 
+/* Each view's link, in the drawing index and in a sheet's list of its views, is a target 24 px tall
+   on its own (WCAG 2.5.8): under Paste-Up's and Shell Mono's lettering a line is 17 px, and the
+   lists' gaps left the next link closer than 24 px. An inline block, so the link's own box holds
+   the target and its ring; the padding sets its line in the middle, and a long title still wraps
+   inside it. */
+[data-variant='schematic'] :is(.sx-index__sheet ol, .sx-sheet__views) a {
+  display: inline-block;
+  min-block-size: 24px;
+  padding-block: max(0px, calc((24px - 1lh) / 2));
+}
+
 [data-variant='schematic'] .sx-dialog {
   inline-size: min(64rem, 100% - var(--space-l) * 2);
   max-block-size: calc(100svh - var(--space-l) * 2);
