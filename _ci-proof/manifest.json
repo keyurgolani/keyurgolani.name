@@ -1,0 +1,44 @@
+{
+  "name": "oa-plan-here",
+  "summary": "Obsidian Atelier's running head holds the page unsettled until its observer's first delivery has marked where the visitor is",
+  "head": "a7e714090a6a465f56f1e524c1a51a49479fddb3",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "plan",
+      "at": "7537220760cd513518a1d127de0b7886ea61712f",
+      "specs": ["tests/e2e/obsidian-atelier-plan-here.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "plan",
+      "specs": ["tests/e2e/obsidian-atelier-plan-here.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "oa",
+      "specs": ["tests/e2e/obsidian-atelier-*.spec.ts"],
+      "tests": 38,
+      "files": 9
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": [
+      "^obsidian-atelier/[^ ]+ > fixtures\\.spec\\.ts > (desktop|mobile) > obsidian-atelier-[a-z0-9-]+-(desktop|mobile)\\.png$"
+    ]
+  },
+  "budgets": true,
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
