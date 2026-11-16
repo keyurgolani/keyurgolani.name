@@ -4589,3 +4589,63 @@
     background-color: transparent;
   }
 }
+
+/*
+ * Forced colours lay a backplate under words, not under drawings. A stage's ground is the text
+ * colour, and its ink, there, is the page's ink too: its drawings (the orbits and bodies, the pills,
+ * the rules) take the canvas's colour, as they drew before. The dock, the dialogs without script and
+ * print keep the page's own pair.
+ */
+@media screen and (forced-colors: active) {
+  [data-variant='kinetic-cosmos']
+    :is(.kc-masthead, .kc-opening, .kc-closing, .kc-index, .kc-ring__opener)
+    :is(
+      .kc-orrery__orbit,
+      .kc-orrery__halo-orbit,
+      .kc-orrery__corona,
+      .kc-orrery__trail,
+      .kc-orrery__leader,
+      .kc-orrery__ring,
+      .kc-ways__orbits circle,
+      .kc-ways__halo,
+      .kc-index__orbit,
+      .kc-arc__line path,
+      .kc-moons__arc path
+    ) {
+    stroke: var(--color-canvas);
+  }
+
+  [data-variant='kinetic-cosmos']
+    :is(.kc-masthead, .kc-opening, .kc-closing, .kc-index, .kc-ring__opener)
+    :is(.kc-orrery__terminal, .kc-orrery__body, .kc-body, .kc-index__body) {
+    fill: var(--color-canvas);
+  }
+
+  [data-variant='kinetic-cosmos']
+    :is(.kc-masthead, .kc-opening, .kc-closing, .kc-index, .kc-ring__opener)
+    :is(
+      .kc-index-trigger,
+      .kc-signature-label,
+      .kc-band,
+      .kc-pause__control [data-ui-slot='action'],
+      .kc-cta,
+      .kc-way__body::before,
+      .kc-way:has(.kc-way__link:is(:hover, :focus-visible)) .kc-way__body::before,
+      .kc-index__close,
+      .kc-index__ring,
+      .kc-index__foot
+    ) {
+    border-color: var(--color-canvas);
+  }
+
+  [data-variant='kinetic-cosmos']
+    :is(.kc-masthead, .kc-opening, .kc-closing, .kc-index, .kc-ring__opener)
+    :is(
+      .kc-button--bright,
+      .kc-pause__control [data-ui-slot='action'][aria-pressed='true'],
+      .kc-way__body::after,
+      .kc-moon__body::after
+    ) {
+    background-color: var(--color-canvas);
+  }
+}
