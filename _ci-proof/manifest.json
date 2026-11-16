@@ -1,0 +1,44 @@
+{
+  "name": "schematic-226",
+  "summary": "Schematic's foot title block holds every word whole: each of its four columns at least its longest word past a phone, two cells to a row where four can't hold them, one under 200% text; and the schedule keeps its phone row under 200% text",
+  "head": "562c81aa7f035c2d62f148f00e433311a6a70e25",
+  "base": "75c2ccd3a7a84844e8cf48b7620bb2eaf99c00ca",
+  "gate": true,
+  "unit": {
+    "titles": ["no text takes a data colour"]
+  },
+  "reds": [
+    {
+      "label": "r226",
+      "at": "6c444b2e8612ef06659a6f6f733f64f2daa026e1",
+      "specs": ["tests/e2e/schematic-words-whole.spec.ts"],
+      "tests": 6,
+      "files": 1,
+      "failed": 5
+    }
+  ],
+  "e2e": [
+    {
+      "label": "sx",
+      "specs": ["tests/e2e/schematic*.spec.ts"],
+      "tests": 145,
+      "files": 18
+    }
+  ],
+  "look": [
+    {
+      "label": "schematic-226",
+      "spec": "look/schematic-226-look.spec.ts",
+      "project": "chromium",
+      "tests": 19
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
