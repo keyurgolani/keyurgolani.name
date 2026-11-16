@@ -1,5 +1,6 @@
 import type { PageOutline } from '@portfolio/kit/sections';
 import { routeHref, type VariantRenderInput } from '@portfolio/variant-contract';
+import { enhancementPending } from '@portfolio/variant-contract/settle';
 import { present, squash, type Stop } from '../model';
 import { uiLang, Words } from '../parts';
 import { ContentsDialog } from './contents-dialog';
@@ -9,7 +10,9 @@ import { ContentsDialog } from './contents-dialog';
 // phone, the name and Contents). It takes the ground of the panel under it
 // once the pager runs, and the name docks into panel 1's h1 while that's
 // on screen, so the name never shows twice. It's pinned chrome, so the
-// platform holds its actions to 44 px (data-pinned).
+// platform holds its actions to 44 px (data-pinned). Until the pager's
+// first passes have run it holds the page as unsettled (the settle signal),
+// so a capture shows the ground and the name they set.
 
 export function Bar({
   input,
@@ -28,7 +31,7 @@ export function Bar({
   const home =
     input.route.route === 'home' ? `#${input.ids.main}` : routeHref(input, { route: 'home' });
   return (
-    <header className="sg-bar" data-ground="canvas" data-pinned="">
+    <header className="sg-bar" data-ground="canvas" data-pinned="" {...enhancementPending('pager')}>
       <div className="sg-grid sg-bar__in">
         <a className="sg-bar__name" href={home} data-type-role="title">
           {squash(identity.name)}
