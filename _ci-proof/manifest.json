@@ -1,0 +1,43 @@
+{
+  "name": "chapters-stack",
+  "summary": "Chapters' frontispiece caption stacks by its figure's width in rem, and the endpaper's focused address draws its ring past its resting underline",
+  "head": "4ee01d11dd22c9dbf389246250449130e9bc4ca8",
+  "base": "276f5cf910f7184fae2bb2639d280a34a55a2d18",
+  "gate": {
+    "package": "chapters"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding"
+    ]
+  },
+  "reds": [
+    {
+      "label": "address",
+      "at": "f38b22383ea03abe0a5aadb58e902d25a83b6eb5",
+      "specs": ["tests/e2e/chapters-address-ring.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "caption",
+      "at": "d40e6f25c7fcae8d87998e3012274674961f57ea",
+      "specs": ["tests/e2e/chapters-frontispiece-reflow.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "chapters",
+      "specs": ["tests/e2e/chapters*.spec.ts"],
+      "tests": 26,
+      "files": 7
+    }
+  ],
+  "budgets": true,
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
