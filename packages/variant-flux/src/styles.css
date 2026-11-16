@@ -2936,10 +2936,13 @@
   gap: var(--space-m);
 }
 
+/* A wrapped crumb's lines stand a focus ring's reach and 1px apart, so the line under the link
+   never lies over its ring's foot: under forced colors its text plate covered it. */
 [data-variant='flux'] .fx-case__crumb {
   display: flex;
   flex-wrap: wrap;
   column-gap: var(--space-xs);
+  row-gap: calc(var(--ui-focus-offset) + var(--ui-focus-width) + 1px);
   color: var(--color-text-secondary);
 }
 
