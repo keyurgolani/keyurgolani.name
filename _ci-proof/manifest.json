@@ -1,0 +1,29 @@
+{
+  "name": "hc-next-ring-cells",
+  "summary": "Horizontal Cinema's bar Next links in Bauhaus Geometric, read as the quality cells read them on CI Linux, where their focus rings fall short",
+  "head": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "cells": [
+    {
+      "label": "next",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:horizontal-cinema complete / horizontal-cinema/bauhaus-geometric/(low-stimulus-warm/humanist-ui/dark (1440x900 forced-colors|1024x768 contrast-more)|warm-parchment/humanist-ui/system 1024x768 contrast-more) ",
+      "shards": ["find"],
+      "tests": 3,
+      "passed": 0,
+      "failed": 3
+    }
+  ],
+  "look": [
+    {
+      "label": "next",
+      "spec": "look/look-169-ci.spec.ts",
+      "project": "chromium",
+      "tests": 4,
+      "files": 1,
+      "shots": 16
+    }
+  ],
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
