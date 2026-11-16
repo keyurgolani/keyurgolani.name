@@ -1,0 +1,74 @@
+{
+  "name": "oa-entry-title-ring",
+  "summary": "Obsidian Atelier's entry title links reach under their underline, so a focus ring's foot passes under it",
+  "head": "e49f2de0d27e7bd1daf5ee479ab885d44273d461",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "an entry title's link box reaches under its underline, so the focus ring's foot passes under it (the Custom section's Recording title, 1024 focus perimeter in Accessible Reading's Verdana)",
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget"
+    ]
+  },
+  "reds": [
+    {
+      "label": "ring",
+      "at": "c2b3f94abdc83e9e8b0f84a837c5243c7491e87e",
+      "specs": ["tests/e2e/obsidian-atelier-entry-title-ring.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "cell",
+      "kind": "cells",
+      "at": "c2b3f94abdc83e9e8b0f84a837c5243c7491e87e",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/glassmorphism/lavender-dusk/accessible-reading/dark 1024x768 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ring",
+      "specs": ["tests/e2e/obsidian-atelier-entry-title-ring.spec.ts"],
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "oa",
+      "specs": ["tests/e2e/obsidian-atelier-*.spec.ts"],
+      "tests": 37,
+      "files": 9
+    }
+  ],
+  "cells": [
+    {
+      "label": "custom-1024",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/glassmorphism/lavender-dusk/accessible-reading/dark 1024x768 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "recording-title",
+      "spec": "look/look-213-proof.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true
+}
