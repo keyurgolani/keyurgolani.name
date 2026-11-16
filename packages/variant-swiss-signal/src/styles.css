@@ -814,6 +814,16 @@
   inset: 0;
 }
 
+/* Forced colours set each line's text on a backplate, and the title's link box reaches past its
+   line, so the next line's backplate covered the bottom of its focus ring (the quality cells' forced
+   colours focus check). There the link is a block of its line, so its ring runs round the line box
+   and clears the line under it; elsewhere nothing changes. */
+@media (forced-colors: active) {
+  [data-variant='swiss-signal'] .ss-row__title > a {
+    display: inline-block;
+  }
+}
+
 [data-variant='swiss-signal'] :is(.ss-row__meta, .ss-row__made, .ss-skills, .ss-tags) {
   color: var(--color-text-muted);
 }
