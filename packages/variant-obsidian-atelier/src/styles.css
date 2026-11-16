@@ -1692,6 +1692,16 @@
   border-block-end: var(--ui-border-divider);
 }
 
+/*
+ * An entry title's link reaches as far under the line as its underline hangs, as a room title's
+ * does, so the focus ring's foot passes under the underline, never over it: in a face whose descent
+ * is short of the underline's offset, Verdana's on Linux, the ring's foot lay on the underline's
+ * light ink, under 3:1 against the ring's colour.
+ */
+[data-variant='obsidian-atelier'] .oa-entry__title a {
+  padding-block-end: var(--layout-underline);
+}
+
 [data-variant='obsidian-atelier'] :is(.oa-entry__facts, .oa-entry__more, .oa-credit) {
   color: var(--color-text-secondary);
 }
