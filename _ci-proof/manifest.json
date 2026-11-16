@@ -1,0 +1,41 @@
+{
+  "name": "flux-crumb-ring",
+  "summary": "Flux's case page crumb link and its focus ring at 390 under forced colors, read at the base and at the head",
+  "head": "e0c7b4a97e9ef46740ac0d2694cc56a3a969bd82",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "reds": [
+    {
+      "label": "crumb-base",
+      "kind": "cells",
+      "at": "6cba8faa99b8e312236919b5500e210dec390343",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:flux complete /work/project-name flux/platform-neutral/warm-parchment/humanist-ui/(light|dark|system|high-contrast) 390x844 forced-colors ",
+      "shards": ["find"],
+      "tests": 4,
+      "failed": 4
+    }
+  ],
+  "cells": [
+    {
+      "label": "crumb-head",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:flux complete /work/project-name flux/platform-neutral/warm-parchment/humanist-ui/(light|dark|system|high-contrast) 390x844 forced-colors ",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 0,
+      "failed": 4
+    }
+  ],
+  "look": [
+    {
+      "label": "crumb",
+      "spec": "look/flux-crumb-ring.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    }
+  ],
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
