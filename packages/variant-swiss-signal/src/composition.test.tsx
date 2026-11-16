@@ -513,6 +513,16 @@ test('the sample: the poster, the band, five parts in their fixed order', () => 
   }
 });
 
+test("the sample: every part's opener carries one word fit, the page's longest part word", () => {
+  const markup = html(inputOf(samplePair(), '', SAMPLE_SNAPSHOTS));
+  const fits = [...markup.matchAll(/<h2 class="ss-part__title"[^>]*>/g)].map(
+    ([tag]) => /style="--layout-ss-word:(\d+)"/.exec(tag)?.[1],
+  );
+  // Five parts, one level, one size: WRITING is the longest word, seven letters, and WORK,
+  // RECORD, ABOUT and GET IN TOUCH fit to it too.
+  assert.deepEqual(fits, ['7', '7', '7', '7', '7']);
+});
+
 test('a long case title keeps its own class: no word fit, which is for the uppercase lines', () => {
   const pair = samplePair();
   const LONG =
