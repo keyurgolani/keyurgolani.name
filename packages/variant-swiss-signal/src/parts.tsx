@@ -26,8 +26,9 @@ export function Words({ lang, children }: { lang: 'en' | undefined; children: Re
 /**
  * The parenthetical, the composition's one voice device: the aside in the
  * quote role, set italic by the composition so it stays italic under every
- * typography pack (SS-M1, N9). `signal` sets it in the signal colour, for
- * sizes of 24 px and up; smaller ones take the accessible accent text (S5).
+ * typography pack (SS-M1, N9). `signal` marks the signal, for sizes of
+ * 24 px and up (S5). Both take the accent's text role, which every scheme
+ * solves to the text target: the bare accent reads under 3:1 on a pale one.
  */
 export function Paren({
   children,

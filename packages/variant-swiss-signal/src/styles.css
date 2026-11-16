@@ -132,9 +132,11 @@
   color: var(--color-accent-text);
 }
 
-/* The signal itself only at 24 px and up (S5). */
+/* The signal itself only at 24 px and up (S5), in the accent's text role: the accent anchor
+   carries no text target, and a pale scheme's reads under large text's 3:1 on its own canvas
+   (Pastel Sorbet's pink, 2.65:1). The text role is the accent itself wherever that reads. */
 [data-variant='swiss-signal'] .ss-paren--signal {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
 }
 
 [data-variant='swiss-signal'] .ss-muted,
