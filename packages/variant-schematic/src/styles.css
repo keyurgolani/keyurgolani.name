@@ -420,6 +420,7 @@
    each, 44 to 48 px, bubble, title, count and chevron; no gap inside, and a
    step less after it than an open view takes. */
 [data-variant='schematic'] .sx-schedule {
+  container-type: inline-size;
   display: grid;
   margin-block-end: calc(var(--space-xl) - var(--space-2xl));
   border-block: var(--layout-line-visible);
@@ -436,8 +437,13 @@
   border-block-start: var(--layout-line-hair);
 }
 
+/* The title's column is never narrower than its longest word, so a title breaks only between its
+   words; where the row is short for both, the count gives way and wraps between its own. Where
+   they fit, as at every width at 100% text past a narrow phone, nothing moves. */
 [data-variant='schematic'] .sx-schedule summary.sx-vt {
-  grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
+  grid-template-columns:
+    max-content minmax(min-content, 1fr) minmax(min-content, max-content)
+    max-content;
   min-block-size: max(var(--layout-control), 3rem);
   margin-block-end: 0;
   padding-block: var(--space-3xs);
@@ -469,27 +475,32 @@
 /* Past a phone the count is a quantity column, as a parts list sets it: the
    row runs on the views' own grid, the title in its first three columns
    beside the bubble, the count from the fourth ruler line, the chevron at the
-   end. On a phone the count keeps the right, and the title the width between. */
+   end. On a phone the count keeps the right, and the title the width between.
+   The parts list's columns hold while the schedule is 37rem or more, as it is at every width past a
+   phone at 100% text (38rem and up at 768). Under that, with the reader's text at 200%, three of
+   its columns held a title a few letters wide, and the row keeps its phone form instead. */
 @media (min-width: 48rem) {
-  [data-variant='schematic'] .sx-schedule summary.sx-vt {
-    grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
-    column-gap: var(--layout-grid-gutter);
-  }
-  [data-variant='schematic'] .sx-schedule summary.sx-vt > * {
-    grid-row: 1;
-  }
-  [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-bubble {
-    grid-column: 1;
-  }
-  [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-vt__title {
-    grid-column: 1 / 4;
-    padding-inline-start: calc(
-      max(min(var(--space-l), 3rem - var(--space-3xs) * 2), var(--layout-bubble-fit)) +
-        var(--space-s)
-    );
-  }
-  [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-vt__count {
-    grid-column: 4 / span 2;
+  @container (min-width: 37rem) {
+    [data-variant='schematic'] .sx-schedule summary.sx-vt {
+      grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+      column-gap: var(--layout-grid-gutter);
+    }
+    [data-variant='schematic'] .sx-schedule summary.sx-vt > * {
+      grid-row: 1;
+    }
+    [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-bubble {
+      grid-column: 1;
+    }
+    [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-vt__title {
+      grid-column: 1 / 4;
+      padding-inline-start: calc(
+        max(min(var(--space-l), 3rem - var(--space-3xs) * 2), var(--layout-bubble-fit)) +
+          var(--space-s)
+      );
+    }
+    [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-vt__count {
+      grid-column: 4 / span 2;
+    }
   }
 }
 
@@ -1396,6 +1407,17 @@
 
 [data-variant='schematic'] .sx-foot .sx-tb {
   grid-column: 6 / -1;
+}
+
+/* Past a phone, and until the page reaches its full width (the block then holds 33rem, where every
+   typography's words fit its four equal columns), each of the foot block's columns is at least its
+   longest word, so a name or a value breaks only between words: where every word fits its share the
+   columns stay equal, as before; where one wouldn't (Accessible Reading's wide letters up to 1440),
+   its column widens and the others give way. */
+@media (min-width: 48rem) and (max-width: 95.99rem) {
+  [data-variant='schematic'] .sx-foot .sx-tb {
+    grid-template-columns: repeat(4, minmax(min-content, 1fr));
+  }
 }
 
 [data-variant='schematic'] .sx-index__list {
@@ -2698,5 +2720,31 @@
   }
   [data-variant='schematic'] .sx-abstract > summary::after {
     content: none;
+  }
+}
+
+/* The foot's title block sets its cells one under another where it holds under 18rem, as 200% text
+   makes it at 1024 and 1440: there its four columns, a few letters wide, broke names and values
+   between their letters. At 100% text past a phone it holds 21rem or more and keeps its columns. */
+/* Past a phone, under 22rem, as at 1024 at 100% text, four columns can't hold every typography's
+   longest words side by side, so its cells set two to a row. On a phone the block has its own two
+   columns. */
+@media (min-width: 48rem) {
+  @container (max-width: 22rem) {
+    [data-variant='schematic'] .sx-foot .sx-tb__cell {
+      grid-column: span 2;
+    }
+
+    [data-variant='schematic']
+      .sx-foot
+      .sx-tb__cell:is([data-span='2'], [data-span='3'], [data-span='4']) {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+@container (max-width: 18rem) {
+  [data-variant='schematic'] .sx-foot .sx-tb__cell {
+    grid-column: 1 / -1;
   }
 }
