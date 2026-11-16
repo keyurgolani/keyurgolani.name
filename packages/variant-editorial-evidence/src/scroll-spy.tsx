@@ -80,6 +80,18 @@ export function ScrollSpy() {
       const stop = event.target as HTMLElement;
       // Whether focus is in the index, and if that changed, the index's yield again (K-12 keeps this).
       if (held != (held = !!rail?.contains(stop))) rewatch();
+      // Tab brings a chapter bar link into the bar's scroller only as far as its edge, where the
+      // scroller clips its ring: it keeps the ring's reach, the scroller's own padding, inside.
+      const list = stop.closest<HTMLElement>('.ee-rail__list');
+      if (list) {
+        const box = stop.getBoundingClientRect();
+        const edge = list.getBoundingClientRect();
+        const reach = parseFloat(getComputedStyle(list).paddingLeft) || 0;
+        // Whole pixels, rounded away from the link: the scroller moves by whole pixels.
+        list.scrollLeft +=
+          Math.ceil(Math.max(0, box.right + reach - edge.right)) +
+          Math.floor(Math.min(0, box.left - reach - edge.left));
+      }
       if (!stop.matches(':focus-visible') || stop.tabIndex < 0) return;
       const r = stop.getBoundingClientRect();
       let foot = 0;
