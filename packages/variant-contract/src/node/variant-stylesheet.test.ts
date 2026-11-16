@@ -489,7 +489,7 @@ test("a stylesheet the package doesn't have is a problem, not a throw", () => {
   assert.equal(found[0]!.message, "names styles.css, which the package doesn't have.");
 });
 
-test("a variant that reserves the window's block end gets the host's root scroll-padding after its layer, in its media query, and any other gets the same file as before", () => {
+test("a variant that reserves the window's block start or block end gets the host's root scroll-padding after its layer, in its media query, and any other gets the same file as before", () => {
   const dir = packageDir({ 'styles.css': "[data-variant='acme'] { display: block; }\n" });
   const layered = `${LAYER_ORDER}\n@layer variant-layout {\n[data-variant='acme'] { display: block; }\n}\n`;
   // Under a width: the root, while it holds this variant's boundary, scrolls focus clear of the bar.
@@ -501,6 +501,18 @@ test("a variant that reserves the window's block end gets the host's root scroll
   assert.equal(
     compiled(dir, { scrollReserve: { blockEnd: 'calc(4rem + 12px)' } }).css,
     `${layered}:root:has([data-variant="acme"]) {\n  scroll-padding-block-end: calc(4rem + 12px);\n}\n`,
+  );
+  // The block start, for a header row stuck at the top, while the window is tall enough.
+  assert.equal(
+    compiled(dir, {
+      scrollReserve: { blockStart: 'calc(3.5rem + 1.25rem)', media: '(min-height: 32rem)' },
+    }).css,
+    `${layered}@media (min-height: 32rem) {\n  :root:has([data-variant="acme"]) {\n    scroll-padding-block-start: calc(3.5rem + 1.25rem);\n  }\n}\n`,
+  );
+  // Both sides in one rule, the block start first.
+  assert.equal(
+    compiled(dir, { scrollReserve: { blockEnd: '5rem', blockStart: '3rem' } }).css,
+    `${layered}:root:has([data-variant="acme"]) {\n  scroll-padding-block-start: 3rem;\n  scroll-padding-block-end: 5rem;\n}\n`,
   );
   // After the view-transition rules when both are on, and outside every layer.
   const both = compiled(dir, {

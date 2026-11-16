@@ -919,12 +919,12 @@ test('a 2.1 manifest may opt in to cross-document view transitions, with up to 8
   ]);
 });
 
-test("a 2.1 manifest may reserve the window's block end for a bar pinned there, in lengths the root resolves, and a 2.0 one may not", () => {
-  // A bar fixed or stuck at the window's foot covers what sits under it, and focus that lands
-  // there without scrolling stays under it: a control's scroll-margin acts only when focus
+test("a 2.1 manifest may reserve the window's block start or block end for a bar pinned there, in lengths the root resolves, and a 2.0 one may not", () => {
+  // A bar fixed or stuck at the window's top or foot covers what sits under it, and focus that
+  // lands there without scrolling stays under it: a control's scroll-margin acts only when focus
   // scrolls. The scroller is the document's root, so the host gives the root the reserve as its
-  // scroll-padding-block-end. The packs' tokens sit on the boundary, not the root, so the reserve
-  // is a length the root resolves: rem or px, alone or in calc(), min() or max() of them.
+  // scroll-padding-block-start or -end. The packs' tokens sit on the boundary, not the root, so
+  // each length is one the root resolves: rem or px, alone or in calc(), min() or max() of them.
   const withReserve = (scrollReserve: unknown, contract = '2.1') =>
     manifest((m) => {
       m.contract = contract;
@@ -939,6 +939,11 @@ test("a 2.1 manifest may reserve the window's block end for a bar pinned there, 
     { blockEnd: 'max(4rem, 60px)' },
     { blockEnd: 'min(8rem, 100px)' },
     { blockEnd: '8rem' },
+    // A header row stuck at the top, while the window is tall enough for it to stick.
+    { blockStart: 'calc(3.5rem + 1.25rem)', media: '(min-height: 32rem)' },
+    { blockStart: '4rem' },
+    { blockStart: '3rem', blockEnd: '5rem', media: '(max-width: 39.99rem)' },
+    { blockEnd: '5rem', media: '(max-height: 40rem)' },
   ]) {
     assert.deepEqual(records(withReserve(reserve)), [], JSON.stringify(reserve));
   }
@@ -950,8 +955,8 @@ test("a 2.1 manifest may reserve the window's block end for a bar pinned there, 
   );
   assert.match(older[0]!.message, /contract 2\.1 adds, and the manifest declares contract 2\.0/);
   // A token, a viewport or percentage length, nothing, a negative, more than 8rem (128px at 16px),
-  // or a nested function: each refused on blockEnd.
-  for (const blockEnd of [
+  // or a nested function: each refused on the side that gives it.
+  for (const length of [
     'var(--ui-control-height)',
     'calc(var(--ui-control-height) + 1rem)',
     '10vh',
@@ -966,22 +971,30 @@ test("a 2.1 manifest may reserve the window's block end for a bar pinned there, 
     '5em',
     '5 rem',
   ]) {
-    const result = validateManifest(withReserve({ blockEnd }), CONTEXT).diagnostics;
-    assert.deepEqual(
-      result.map(({ code, pointer }) => [code, pointer]),
-      [['manifest.invalid', '/scrollReserve/blockEnd']],
-      blockEnd,
-    );
+    for (const side of ['blockStart', 'blockEnd']) {
+      const result = validateManifest(withReserve({ [side]: length }), CONTEXT).diagnostics;
+      assert.deepEqual(
+        result.map(({ code, pointer }) => [code, pointer]),
+        [['manifest.invalid', `/scrollReserve/${side}`]],
+        `${side}: ${length}`,
+      );
+    }
+    // Next to a good length, only the bad one is refused.
+    assert.deepEqual(records(withReserve({ blockStart: length, blockEnd: '5rem' })), [
+      ['manifest.invalid', '/scrollReserve/blockStart'],
+    ]);
   }
   assert.match(
     validateManifest(withReserve({ blockEnd: 'var(--ui-control-height)' }), CONTEXT).diagnostics[0]!
       .message,
     /the root resolves/,
   );
-  // One width condition in rem, or (hover: none): nothing else.
+  // One width or height condition in rem, or (hover: none): nothing else.
   for (const media of [
     '(max-width: 40em)',
     '(max-width: 640px)',
+    '(min-height: 512px)',
+    '(height >= 32rem)',
     '(max-width: 39.99rem) and (hover: none)',
     'screen',
     '(prefers-reduced-motion: reduce)',
@@ -993,15 +1006,22 @@ test("a 2.1 manifest may reserve the window's block end for a bar pinned there, 
       media,
     );
   }
-  // The shape is strict, and blockEnd is required.
-  assert.deepEqual(records(withReserve({ blockEnd: '5rem', blockStart: '3rem' })), [
-    ['manifest.unknown-key', '/scrollReserve/blockStart'],
+  // The shape is strict, and it reserves at least one side.
+  assert.deepEqual(records(withReserve({ blockEnd: '5rem', inlineStart: '3rem' })), [
+    ['manifest.unknown-key', '/scrollReserve/inlineStart'],
   ]);
-  assert.deepEqual(records(withReserve({ media: '(max-width: 39.99rem)' })), [
-    ['manifest.missing', '/scrollReserve/blockEnd'],
-  ]);
+  for (const reserve of [{ media: '(max-width: 39.99rem)' }, {}]) {
+    assert.deepEqual(
+      records(withReserve(reserve)),
+      [['manifest.missing', '/scrollReserve']],
+      JSON.stringify(reserve),
+    );
+  }
   assert.deepEqual(records(withReserve({ blockEnd: 80 })), [
     ['manifest.invalid', '/scrollReserve/blockEnd'],
+  ]);
+  assert.deepEqual(records(withReserve({ blockStart: 80 })), [
+    ['manifest.invalid', '/scrollReserve/blockStart'],
   ]);
 });
 

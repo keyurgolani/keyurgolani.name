@@ -49,6 +49,7 @@ import {
 } from './segments';
 import {
   SCROLL_RESERVE_MINOR,
+  SCROLL_RESERVE_SIDES,
   scrollReserveMediaProblem,
   scrollReserveProblem,
 } from './scroll-reserve';
@@ -1052,9 +1053,10 @@ function checkTransitions(manifest: VariantManifest, report: Report) {
 }
 
 /**
- * A reserve at the window's block end (contract 2.1): only in a 2.1
- * manifest, its blockEnd a length the root resolves, at most 8rem, and its
- * media, if any, one width condition in rem or (hover: none).
+ * A reserve at the window's block start or block end (contract 2.1): only in
+ * a 2.1 manifest, at least one of blockStart and blockEnd, each a length the
+ * root resolves, at most 8rem, and its media, if any, one width or height
+ * condition in rem or (hover: none).
  */
 function checkScrollReserve(manifest: VariantManifest, report: Report) {
   const reserve = manifest.scrollReserve;
@@ -1069,18 +1071,24 @@ function checkScrollReserve(manifest: VariantManifest, report: Report) {
       { expected: `contract 2.${SCROLL_RESERVE_MINOR} or later`, actual: manifest.contract },
     );
   }
-  const length = scrollReserveProblem(reserve.blockEnd);
-  if (length) {
+  if (reserve.blockStart === undefined && reserve.blockEnd === undefined) {
     report(
-      'manifest.invalid',
-      ['scrollReserve', 'blockEnd'],
-      length,
-      'Give it in rem, such as 5rem.',
-      {
-        expected: 'a rem or px length, or one calc(), min(), or max() of them, at most 8rem',
-        actual: reserve.blockEnd,
-      },
+      'manifest.missing',
+      ['scrollReserve'],
+      'reserves nothing: it needs blockStart, blockEnd, or both.',
+      "Give the room the bar covers at the window's top as blockStart, at its foot as blockEnd, or remove scrollReserve.",
+      { expected: 'blockStart, blockEnd, or both', actual: 'neither' },
     );
+  }
+  for (const side of SCROLL_RESERVE_SIDES) {
+    const value = reserve[side];
+    if (value === undefined) continue;
+    const length = scrollReserveProblem(value);
+    if (!length) continue;
+    report('manifest.invalid', ['scrollReserve', side], length, 'Give it in rem, such as 5rem.', {
+      expected: 'a rem or px length, or one calc(), min(), or max() of them, at most 8rem',
+      actual: value,
+    });
   }
   if (reserve.media !== undefined) {
     const media = scrollReserveMediaProblem(reserve.media);
@@ -1089,9 +1097,10 @@ function checkScrollReserve(manifest: VariantManifest, report: Report) {
         'manifest.invalid',
         ['scrollReserve', 'media'],
         media,
-        'Name the width the bar is pinned below or above, in rem, or leave media out.',
+        'Name the width or height the bar is pinned below or above, in rem, or leave media out.',
         {
-          expected: '(max-width: <n>rem), (min-width: <n>rem), or (hover: none)',
+          expected:
+            '(max-width: <n>rem), (min-width: <n>rem), (max-height: <n>rem), (min-height: <n>rem), or (hover: none)',
           actual: reserve.media,
         },
       );

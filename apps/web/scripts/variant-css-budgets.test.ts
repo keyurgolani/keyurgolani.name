@@ -43,7 +43,7 @@ function measured(): { id: string; gzip: number; budget: number }[] {
       id: string;
       budgets?: { css?: number };
       kitLayout?: boolean;
-      scrollReserve?: { blockEnd: string; media?: string };
+      scrollReserve?: { blockStart?: string; blockEnd?: string; media?: string };
     };
     const target = exportTarget(pkg, './styles.css');
     assert.ok(target, `${name} exports no ./styles.css`);
