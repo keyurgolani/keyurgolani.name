@@ -252,8 +252,12 @@ function WritingTable({ section, input }: { section: Works; input: VariantRender
   const lang = uiLang(input.portfolio.locale);
   const locale = input.portfolio.locale;
   const works = worksOf(section, input);
+  // A value and its unit never part: a no-break space between, so "14 min" keeps one line in an
+  // end column a phone's table narrows to its words, and on a row's sub-line.
   const minutes = (value: number | undefined) =>
-    value ? <Words lang={lang}>{`${formatNumber(Math.round(value), locale)} min`}</Words> : null;
+    value ? (
+      <Words lang={lang}>{`${formatNumber(Math.round(value), locale)}\u00a0min`}</Words>
+    ) : null;
   const summaryOf = (work: Work) => {
     const summary = work.summary ?? work.description;
     return present(summary) ? (
