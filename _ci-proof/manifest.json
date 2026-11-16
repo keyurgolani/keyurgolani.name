@@ -1,0 +1,11 @@
+{
+  "name": "variants-control",
+  "summary": "the variants shot comparison's no-op control, a docs-only head against the tree below it",
+  "head": "d984ee04ecee309ea219b6316834cd49a170fed7",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  }
+}
