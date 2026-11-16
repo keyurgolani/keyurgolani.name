@@ -1,0 +1,28 @@
+{
+  "name": "hc-forced-inks-read",
+  "summary": "Horizontal Cinema under forced colours: which painted texts read under 4.5:1 on their ground, and what the gallery credit's ink and ground compute to, in both palettes",
+  "head": "58673d4538eff5a78986b9d19edc1994c012d177",
+  "base": "2a65ded5c3cb3eced3b4948dbb8d27a48bdc09f1",
+  "reds": [
+    {
+      "label": "forced",
+      "at": "58673d4538eff5a78986b9d19edc1994c012d177",
+      "specs": ["tests/e2e/horizontal-cinema-forced-inks.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "look": [
+    {
+      "label": "credit",
+      "spec": "look/look-234-probe.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
