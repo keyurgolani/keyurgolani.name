@@ -1,0 +1,30 @@
+{
+  "name": "swiss-end-column-read",
+  "summary": "Swiss Signal's ruled tables on CI Linux: the red at its commit (words whole at 1440 with 200% root text, and a value with its unit on a phone), and per column of every table its room and widest word in rem, from 768 to 1920 and 100% to 200% text, under two typographies, with two candidate rules",
+  "head": "74c016a3b86a19295096a34d7d67cf9b7a4376bd",
+  "base": "44a4d1cbd5874fcbc7aefe105cc48cef38de256a",
+  "gate": false,
+  "reds": [
+    {
+      "label": "endcol",
+      "at": "74c016a3b86a19295096a34d7d67cf9b7a4376bd",
+      "specs": [
+        "tests/e2e/swiss-signal-table-end-column.spec.ts",
+        "tests/e2e/swiss-signal-table-units-sample.spec.ts"
+      ],
+      "tests": 2,
+      "files": 2,
+      "failed": 2
+    }
+  ],
+  "look": [
+    {
+      "label": "endprobe",
+      "spec": "look/swiss-end-probe.spec.ts",
+      "project": "chromium",
+      "tests": 2
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
