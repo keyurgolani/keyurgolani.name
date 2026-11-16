@@ -28,10 +28,11 @@
 // are, or (hover: none).
 //
 // Compositions whose bars this fits, besides Flux's dock (.fx-bar, fixed
-// under 40rem): Mission Control's .mc-rail (fixed under 47.5rem), Shell's
-// .sh-tmux (fixed at the foot), Horizontal Cinema's .hc-board__map (stuck at
-// the foot under 48rem), and Kinetic Cosmos's .kc-dock (stuck at the foot).
-// Each relies on a scroll-margin of its bar's height today.
+// under 40rem) and Mission Control's .mc-rail (fixed under 47.5rem), which
+// declare it: Shell's .sh-tmux (fixed at the foot), Horizontal Cinema's
+// .hc-board__map (stuck at the foot under 48rem), and Kinetic Cosmos's
+// .kc-dock (stuck at the foot). Each relies on a scroll-margin of its bar's
+// height today.
 
 /** The contract minor that adds `scrollReserve`: 2.1. */
 export const SCROLL_RESERVE_MINOR = 1;

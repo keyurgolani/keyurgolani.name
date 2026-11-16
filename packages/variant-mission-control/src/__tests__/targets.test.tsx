@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { githubSnapshot, isRoutedWork } from '@portfolio/kit/sections';
 import type { ViewGitHubData } from '@portfolio/schema';
-import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { scrollReservePx, type VariantRenderInput } from '@portfolio/variant-contract';
 import { relationsOf, repoKey, shownRepos } from '../model';
 import {
   FIXTURE_NAMES,
@@ -256,13 +256,23 @@ test('on a phone the docked rail is the page’s bottom inset: targets scroll ab
   const phone = css.slice(css.lastIndexOf('@media (width < 47.5rem) {'));
   const block = phone.slice(0, phone.indexOf('\n}\n'));
   assert.match(block, /--layout-dock: 3\.5rem;/);
-  // Every focus and fragment target keeps a margin above the dock.
+  // Every focus and fragment target lands above the dock: the manifest reserves the dock's 3.5rem,
+  // the widest focus ring's reach (Art Deco's, 5px at 3px) and 1px as the root's scroll-padding,
+  // in the dock's own query, so Tab onto a control already on screen scrolls it clear too. No
+  // scroll margin adds to it.
+  const manifest = JSON.parse(readFileSync(path.join(PACKAGE_DIR, 'manifest.json'), 'utf8')) as {
+    scrollReserve?: { blockEnd: string; media?: string };
+  };
+  assert.ok(manifest.scrollReserve, 'the manifest declares a scrollReserve');
+  assert.equal(manifest.scrollReserve.media, '(max-width: 47.49rem)');
+  assert.match(manifest.scrollReserve.blockEnd, /^calc\(3\.5rem \+ \d+px\)$/);
+  assert.ok(scrollReservePx(manifest.scrollReserve.blockEnd)! >= 3.5 * 16 + 8 + 1);
+  assert.doesNotMatch(block, /scroll-margin-block-end/);
+  // The page's own end clears it, rings and all, and the dock is that tall.
   assert.match(
     block,
-    /:is\(\[id\], a\[href\], button, summary, input, select, textarea, \[tabindex\]\) \{\s*scroll-margin-block-end: calc\(var\(--layout-dock\) \+ var\(--space-2xs\)\);/,
+    /padding-block-end: calc\(\s*var\(--layout-dock\) \+ var\(--space-2xs\) \+ var\(--ui-focus-width\) \+ var\(--ui-focus-offset\)\s*\);/,
   );
-  // The page's own end clears it, and the dock is that tall.
-  assert.match(block, /padding-block-end: calc\(var\(--layout-dock\) \+ var\(--space-2xs\)\);/);
   assert.match(block, /\.mc-rail \{[^}]*position: fixed;[^}]*block-size: var\(--layout-dock\);/);
   // Keyboard focus on the page past the dock moves it below the window, and only moves it: its
   // links stay focusable, so Shift+Tab reaches it.

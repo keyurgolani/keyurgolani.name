@@ -3,7 +3,7 @@
   "name": "Mission Control",
   "promise": "The portfolio as an operations wall: one measured instrument of square panels whose lamps report real state from the content.",
   "description": "A board rail and a status line frame one measured 16-column wall of uniform panels, packed by kind. Each panel has a title bar with its count, a body and a source line, and its lamps report state only from fields that exist, such as Archived, Active since or Granted. The first view is a monoscale anchor panel: the name at title size, the thesis's first sentence at lede size, and square readout modules for the metrics. Pointing at or pinning a record lights the records it names. The boards follow the content's destinations.",
-  "contract": "2.0",
+  "contract": "2.1",
   "schemas": {
     "portfolio": {
       "min": 3,
@@ -115,6 +115,7 @@
       "requires": []
     }
   ],
+  "scrollReserve": { "blockEnd": "calc(3.5rem + 9px)", "media": "(max-width: 47.49rem)" },
   "visitorControl": {
     "placement": "header"
   },
