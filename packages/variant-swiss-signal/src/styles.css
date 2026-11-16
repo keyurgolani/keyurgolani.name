@@ -2581,4 +2581,18 @@
     font-size: var(--type-body-font-size);
     overflow-wrap: anywhere;
   }
+
+  /*
+   * Its word the same way: its step, or the size at which the page's longest part word fits the opener
+   * at 1em a letter, never under body size, one size for every opener on the page (partsFit). At step 7
+   * each word ran wider than the opener and broke inside it ("WO / RK" at 320). The widest a part word
+   * sets on Linux is 0.94em a letter (WORK under Accessible Reading); six typographies are system
+   * stacks, whose faces differ by platform, so the fit leaves that room.
+   */
+  [data-variant='swiss-signal'] .ss-part__title {
+    font-size: max(
+      var(--type-body-font-size),
+      min(var(--type-step-7), calc(100cqi / var(--layout-ss-word, 8)))
+    );
+  }
 }

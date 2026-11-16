@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { SectionComposition, SectionFrameProps } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { figuresBand, headOf, heroOf, partContents, present, type Part } from './model';
@@ -124,15 +124,28 @@ export function compositionFor(
   return { renderers: RENDERERS, Frame };
 }
 
-/** A part's opener: its word at poster scale, its contents as the parenthetical. */
-export function PartOpener({ part, input }: { part: Part; input: VariantRenderInput }) {
+/** A part's opener: its word at poster scale, its contents as the parenthetical. `fit` is the page's (partsFit). */
+export function PartOpener({
+  part,
+  input,
+  fit,
+}: {
+  part: Part;
+  input: VariantRenderInput;
+  fit: Record<'--layout-ss-word', number>;
+}) {
   const lang = uiLang(input.portfolio.locale);
   const contents = partContents(part);
   const id = ownId(input.ids.prefix, `part-${part.id}--h`);
   return (
     <div className="ss-grid">
       <div className="ss-part__open">
-        <h2 className="ss-part__title" id={id} data-type-role="display">
+        <h2
+          className="ss-part__title"
+          id={id}
+          data-type-role="display"
+          style={fit as CSSProperties}
+        >
           {part.own ? <Words lang={lang}>{part.word}</Words> : part.word}
         </h2>
         {contents.length > 0 ? (

@@ -7,7 +7,7 @@ import { IndexSheet } from './chrome/index-sheet';
 import { Masthead } from './chrome/masthead';
 import { compositionFor, PartOpener } from './frame';
 import { Fold } from './fold';
-import { figuresBand, foldedOf, heroOf, partsOf, type Part } from './model';
+import { figuresBand, foldedOf, heroOf, partsFit, partsOf, type Part } from './model';
 import { ownId } from './parts';
 import { Position } from './position';
 import { Poster, posterHeading } from './poster';
@@ -37,6 +37,7 @@ function aboutSpread(part: Part): { lede: Section; side: Section[] } | undefined
 
 function HomePage({ input, outline }: HomePageProps) {
   const parts = partsOf(input, outline);
+  const fit = partsFit(parts);
   const composition = compositionFor(input, parts);
   const hero = heroOf(input);
   const band = figuresBand(input);
@@ -94,7 +95,7 @@ function HomePage({ input, outline }: HomePageProps) {
               data-part={part.id}
               data-position={part.position}
             >
-              <PartOpener part={part} input={input} />
+              <PartOpener part={part} input={input} fit={fit} />
               {blocks}
               {folds.length > 0 ? <div className="ss-folds">{folds}</div> : null}
             </div>
