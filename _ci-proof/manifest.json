@@ -1,0 +1,28 @@
+{
+  "name": "aurora-glass-address-read",
+  "summary": "Aurora Glass's closing call's address on letterpress at 390, read on Linux before a fix: the e2e red and the records' own quality cells",
+  "head": "e5ae482ec7d7e4183f45221baecd57a0dd966b09",
+  "base": "ea8539843d30ac90831df8e7c80e8a49ac08f1c0",
+  "reds": [
+    {
+      "label": "address",
+      "at": "e5ae482ec7d7e4183f45221baecd57a0dd966b09",
+      "specs": ["tests/e2e/aurora-glass-focus-perimeter-letterpress.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "address-cells",
+      "kind": "cells",
+      "at": "e5ae482ec7d7e4183f45221baecd57a0dd966b09",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/ocean\\-abyss/editorial\\-serif/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/ocean\\-abyss/editorial\\-serif/dark\\ 390x844\\ contrast\\-more\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/ocean\\-abyss/editorial\\-serif/dark\\ 390x844\\ forced\\-colors\\ )",
+      "shards": ["find"],
+      "tests": 3,
+      "failed": 3
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
