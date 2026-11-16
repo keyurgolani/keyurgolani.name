@@ -50,6 +50,10 @@
   --layout-type-body: var(--type-body-font-size);
   --layout-type-head: var(--type-step-2);
   --layout-type-display: var(--type-step-6);
+  /* A balloon's least size: its two numbers, a line each at the lettering's size, their padding,
+     the rule between them and its own edge, so under the largest lettering and 200% text it still
+     holds both (the reflow checks). */
+  --layout-bubble-fit: calc(var(--layout-type-small) * 2 + var(--space-3xs) * 2 + 4px);
   display: block;
   min-block-size: 100svh;
   background-color: var(--color-canvas);
@@ -446,7 +450,7 @@
 /* Rows are 48 px; the bubble fits inside them, at most 38 px, so a
    two-digit label clears the circle's edge (re-check carry, P3). */
 [data-variant='schematic'] .sx-schedule .sx-bubble {
-  inline-size: min(var(--space-l), 3rem - var(--space-3xs) * 2);
+  inline-size: max(min(var(--space-l), 3rem - var(--space-3xs) * 2), var(--layout-bubble-fit));
 }
 
 /* The lede's continuation (P2): a phone fold. Past a phone an open one shows no control
@@ -479,7 +483,10 @@
   }
   [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-vt__title {
     grid-column: 1 / 4;
-    padding-inline-start: calc(min(var(--space-l), 3rem - var(--space-3xs) * 2) + var(--space-s));
+    padding-inline-start: calc(
+      max(min(var(--space-l), 3rem - var(--space-3xs) * 2), var(--layout-bubble-fit)) +
+        var(--space-s)
+    );
   }
   [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-vt__count {
     grid-column: 4 / span 2;
@@ -509,7 +516,7 @@
 [data-variant='schematic'] .sx-bubble {
   display: grid;
   grid-template-rows: 1fr 1fr;
-  inline-size: calc(var(--space-l) * 1.25);
+  inline-size: max(calc(var(--space-l) * 1.25), var(--layout-bubble-fit));
   aspect-ratio: 1;
   border: var(--layout-line-thin);
   border-radius: var(--layout-round);
