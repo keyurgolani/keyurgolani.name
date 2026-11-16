@@ -1,0 +1,22 @@
+{
+  "name": "swiss-signal-base-read",
+  "summary": "Swiss Signal's case aside and phone page at 200% text on CI Linux at the landing tip, before any of the stack's changes",
+  "head": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "base": "5abb6ce52486c46224aa0efd1cb4520299c49dfa",
+  "gate": false,
+  "reds": [
+    {
+      "label": "aside-phone",
+      "at": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+      "specs": [
+        "tests/e2e/swiss-signal-poster-aside.spec.ts",
+        "tests/e2e/swiss-signal-root-text-phone.spec.ts"
+      ],
+      "tests": 10,
+      "files": 2,
+      "failed": 3
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
