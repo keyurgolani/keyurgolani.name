@@ -2129,7 +2129,7 @@ body:has(> studio-load-late) .studio-load {
 }
 
 .studio-transfer .studio-export {
-  padding-bottom: 1.25rem;
+  padding-bottom: 2rem;
   border-bottom: 1px solid var(--st-rule);
 }
 
