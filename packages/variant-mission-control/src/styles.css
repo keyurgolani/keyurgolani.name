@@ -861,8 +861,11 @@
   background: var(--color-surface-default);
 }
 
+/* The link's one column is the square's width, never its widest line's, so a long figure line
+   wraps inside the square rather than widen it past the panel (WCAG 1.4.10 under 200% text). */
 [data-variant='mission-control'] .mc-readout__link {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr;
   block-size: 100%;
   padding: max(0px, var(--space-xs) - var(--ui-focus-width) - var(--ui-focus-offset));
@@ -878,8 +881,11 @@
   line-height: var(--type-label-line-height);
 }
 
+/* The figure and its unit each stay whole; where both don't fit the square's width, the unit
+   goes under the figure. */
 [data-variant='mission-control'] .mc-readout__figure {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   align-self: end;
   gap: var(--space-3xs);
