@@ -2254,25 +2254,30 @@
 }
 
 /*
- * The summary's ring is drawn inside it, as the stretch links draw theirs (an inset ring on a
- * pseudo-element over the lite's own surface), so it never lands in the mullion where the sky
- * shows (the quality cells' focus contrast on the folds).
+ * The summary's ring is drawn inside it, over the lite's own surface, so it never lands in the
+ * mullion where the sky shows, nor past the band's pane, which clips at the summary's edge (the
+ * quality cells' focus contrast on the folds). Set as the platform's inset ring, the focus width
+ * negated: the platform draws the ring in a later layer, so a ring of the summary's own beside it
+ * left the platform's outside, cut away and over the fold above.
  */
-[data-variant='aurora-glass'] .ag-fold__summary {
-  position: relative;
-}
-
 [data-variant='aurora-glass'] .ag-fold__summary:focus-visible {
-  outline: none;
+  --ui-focus-offset: calc(var(--ui-focus-width) * -1);
 }
 
-[data-variant='aurora-glass'] .ag-fold__summary:focus-visible::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  outline: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);
-  outline-offset: calc(-1 * var(--ui-focus-width) - var(--ui-focus-offset));
-  pointer-events: none;
+/*
+ * The pane's last fold, closed, ends its summary a space step above the pane's edge: the fold takes
+ * the step as padding and the summary gives it back from its own, so nothing moves. The summary's
+ * foot takes the pane's corners. Its inset ring then lies on the lite's own surface all round, inside
+ * the pane's clip; at the pane's edge the ground beside the ring's foot was the pane's dark rim.
+ */
+[data-variant='aurora-glass'] .ag-band__pane > .ag-fold:last-child:not([open]) {
+  padding-block-end: var(--space-3xs);
+}
+
+[data-variant='aurora-glass'] .ag-band__pane > .ag-fold:last-child:not([open]) > .ag-fold__summary {
+  padding-block-end: calc(var(--space-m) - var(--space-3xs));
+  border-end-start-radius: var(--ui-radius-overlay);
+  border-end-end-radius: var(--ui-radius-overlay);
 }
 
 /* Hollow while closed, filled while open: the rail's study and work beads. */
