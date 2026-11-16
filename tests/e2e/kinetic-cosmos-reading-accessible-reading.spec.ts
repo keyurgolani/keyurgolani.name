@@ -7,6 +7,8 @@ import {
   FIGURE,
   kineticOptions,
   openHome,
+  ringFindingsOf,
+  type Row,
 } from './kinetic-cosmos-reading';
 
 // Kinetic Cosmos on Accessible Reading (paper-tactile, paper-ink, dark), a wide face at a large
@@ -69,5 +71,17 @@ for (const [width, height] of [
         (f) => f.rule === 'high-contrast-large-text',
       );
       expect(described(failing), 'the figure under the high-contrast large-text ratio').toEqual([]);
+    },
+  );
+
+for (const row of ['default', 'contrast-more'] as const satisfies readonly Row[])
+  test(
+    `at 1024, ${row}, the stage's first plate, focused by the keyboard, has a ring the focus check passes on its contrast`,
+    { annotation },
+    async ({ page }) => {
+      await openHome(page, { width: 1024, height: 768, row });
+      const plate = page.locator('.kc-plates .kc-plate__link').first();
+      const failing = (await ringFindingsOf(page, plate)).filter((f) => f.rule === 'contrast');
+      expect(described(failing), "the plate's ring under 3:1").toEqual([]);
     },
   );
