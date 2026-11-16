@@ -43,6 +43,8 @@
   --layout-ring-room: calc(2 * var(--ui-focus-width) + max(0px, var(--ui-focus-offset)));
   /* The room a focused link set among words keeps either side: its ring's reach, and 2px more. */
   --layout-ring-clear: calc(var(--ui-focus-width) + max(0px, var(--ui-focus-offset)) + 2px);
+  /* The open Appearance panel's measure: a line of its form's labels and choices, and no wider. */
+  --layout-panel: 22rem;
   --layout-pool-foot: 40%;
   --layout-plate: 60svh;
   /* The entrance's work: at most this tall, so its foot stands just above the floor line, and this wide. */
@@ -510,6 +512,40 @@
 
 [data-variant='obsidian-atelier'] .oa-chrome__appearance {
   margin-block: calc(-1 * var(--layout-ring-room));
+}
+
+/*
+ * Open, the control's panel hangs from the corner line at the corner's end, on a plate like
+ * Index's: the wall's prominent surface, the strong hairline drawn inside its edge and the primary
+ * ink, with its rings' room inside it. So its form reads on a ground of its own over the entrance,
+ * and the row keeps the target's height, its parts where they were. It keeps inside the window.
+ * Under more contrast and reduced transparency the platform sets the control on a plate of its
+ * own, which a panel hung outside the control's box doesn't sit on: there the panel takes that
+ * plate's surface.
+ */
+[data-variant='obsidian-atelier'] .oa-chrome__corner {
+  position: relative;
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome__appearance details > :not(summary) {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-end: 0;
+  inline-size: max-content;
+  max-inline-size: min(var(--layout-panel), calc(100vw - 2 * var(--space-s)));
+  padding: max(var(--space-s), var(--layout-ring-room));
+  border-radius: var(--ui-radius-control);
+  outline: var(--ui-border-divider);
+  outline-color: var(--color-border-strong);
+  outline-offset: calc(-1 * var(--layout-hairline));
+  background-color: var(--color-surface-prominent);
+  color: var(--color-text-primary);
+}
+
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  [data-variant='obsidian-atelier'] .oa-chrome__appearance details > :not(summary) {
+    background-color: var(--color-surface-default);
+  }
 }
 
 /*
