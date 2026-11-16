@@ -1,0 +1,27 @@
+{
+  "name": "swiss-signal-table-probe",
+  "summary": "Swiss Signal's ruled tables on CI Linux: each table's holder width in rem at 768, 1024 and 1440 at 100% and 200% text, the words broken in the episodes' and awards' tables under the phone's table rules at candidate holder widths, and the words-whole red at its commit",
+  "head": "a47dee29017dc311884747f356efdaba01778c20",
+  "base": "84e6845db764b6a4cc8e07d33833480be6aad358",
+  "gate": false,
+  "reds": [
+    {
+      "label": "r199t",
+      "at": "a47dee29017dc311884747f356efdaba01778c20",
+      "specs": ["tests/e2e/swiss-signal-table-words.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "look": [
+    {
+      "label": "tableprobe",
+      "spec": "look/swiss-table-probe.spec.ts",
+      "project": "chromium",
+      "tests": 3
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
