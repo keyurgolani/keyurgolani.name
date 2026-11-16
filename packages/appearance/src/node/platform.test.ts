@@ -662,3 +662,48 @@ test("under forced colors a focused band link's ring is the system color, whatev
   // Forced colors off: the composition's band color reaches its link's ring.
   assert.equal(resolve('link', false), 'var(--color-on-scrim)');
 });
+
+test("under forced colors no ink maps to the backplate's color, and a ring on a dark ground keeps a color off it", () => {
+  // Forced colors lay a backplate of Canvas under every line of text, so words in Canvas, or in
+  // ButtonFace (Canvas in both system palettes), vanish into it: an ink for a dark ground takes the
+  // page's ink, and the ground keeps its own mapping.
+  const forced = declarations('    [data-appearance-boundary]', '@media (forced-colors: active)');
+  for (const role of [
+    'text-primary',
+    'text-secondary',
+    'text-muted',
+    'text-inverse',
+    'accent-text',
+    'on-accent',
+    'on-status',
+    'on-scrim',
+    'on-emphasis',
+  ]) {
+    const value = forced.get(`--color-${role}`);
+    assert.ok(value !== 'Canvas' && value !== 'ButtonFace', `${role} maps to ${value}`);
+  }
+  // A ring on the inverse ground is Canvas; on the accent's ButtonText, ButtonFace; on the
+  // emphasis's Highlight, HighlightText; and on a status fill's CanvasText, Canvas.
+  assert.equal(forced.get('--color-focus-inverse'), 'Canvas');
+  assert.equal(
+    declarations(
+      "    [data-appearance-boundary] [data-ui-surface='accent']",
+      '@media (forced-colors: active)',
+    ).get('--color-focus'),
+    'ButtonFace',
+  );
+  assert.equal(
+    declarations(
+      "    [data-appearance-boundary] [data-ui-surface='emphasis']",
+      '@media (forced-colors: active)',
+    ).get('--color-focus'),
+    'HighlightText',
+  );
+  assert.equal(
+    declarations(
+      "    [data-appearance-boundary] [data-ui-slot='toast'][data-status] [data-ui-slot]:focus-visible",
+      '@media (forced-colors: active)',
+    ).get('outline-color'),
+    'Canvas',
+  );
+});
