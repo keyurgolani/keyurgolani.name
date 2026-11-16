@@ -1805,6 +1805,15 @@
   padding-block: 0.1em;
 }
 
+/*
+ * The plates' and the essays' title links have their words' underline too, and in forced colours
+ * it's the text's own colour, so a ring's foot over it changed nothing when focused. The same block
+ * padding moves their ring past it, and moves no line of text.
+ */
+[data-variant='terra-field'] :is(.tf-plate__title, .tf-essay__title) > a {
+  padding-block: 0.1em;
+}
+
 [data-variant='terra-field'] .tf-close__mail {
   font-family: var(--type-display-font-family);
   font-weight: var(--type-display-font-weight);
