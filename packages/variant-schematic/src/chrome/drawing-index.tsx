@@ -121,7 +121,7 @@ export function PhoneBar({ input, here }: { input: VariantRenderInput; here?: st
   return (
     <div className="sx-phone">
       <a className="sx-phone__name" href={`#${input.ids.main}`} data-type-role="title">
-        {input.portfolio.identity.name}
+        <span className="sx-phone__word">{input.portfolio.identity.name}</span>
       </a>
       <IndexControl input={input} label={t.sheet}>
         <span className="sx-phone__here">

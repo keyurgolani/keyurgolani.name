@@ -1988,17 +1988,30 @@
     border-block-end: var(--layout-line-heavy);
     background-color: var(--color-canvas);
   }
-  /* One line each, so the bar keeps the height the targets clear: the h1 and the index carry the full name and title. */
-  [data-variant='schematic'] :is(.sx-phone__name, .sx-phone__here) {
+  /* The sheet's name holds one line, so the bar keeps the height the targets clear: the index
+     carries the full title. */
+  [data-variant='schematic'] .sx-phone__here {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* A 44 px target that still ends in an ellipsis: one line as tall as a control. */
+  /* The name is a 44 px target, its words centred in it. Where the bar leaves it less room than the
+     name, as at 320 under a large lettering, its own text box wraps to a second line inside the
+     target at the role's own leading, and only a name longer than two lines ends in an ellipsis.
+     The link itself is never cut, so its ring isn't, and its whole name stays its name. */
   [data-variant='schematic'] .sx-phone__name {
-    display: block;
-    line-height: var(--layout-control);
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: var(--layout-control);
     text-decoration: none;
+  }
+  [data-variant='schematic'] .sx-phone__word {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
   }
   [data-variant='schematic'] .sx-run {
     display: none;
