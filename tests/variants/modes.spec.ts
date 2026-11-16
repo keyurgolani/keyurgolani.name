@@ -14,7 +14,9 @@ import {
   failEveryEnhancement,
   loadImages,
   prepareShot,
+  quietResize,
   settle,
+  SHOOTING,
 } from './modes';
 
 // The modes' own checks (#12), each on a page that stands in for a
@@ -621,6 +623,22 @@ test.describe("the capture's own resize", () => {
       expect(block(await capturePage(page, watch)), 'the block in the shot').toEqual([
         255, 255, 255,
       ]);
+    } finally {
+      watch.stop();
+    }
+  });
+
+  test('a quiet listener added once the page has loaded keeps nothing from its listeners, so prepareShot() adds it before', async ({
+    page,
+  }) => {
+    // Listeners on the event's target run in the order they were added: one
+    // added after the page's own runs after them, whatever its phase.
+    const watch = watchEnhancements(page);
+    try {
+      await open(page, RESIZED);
+      await settle(page, true);
+      await page.evaluate(quietResize, SHOOTING);
+      expect(block(await capturePage(page, watch)), 'the block in the shot').toEqual([255, 0, 0]);
     } finally {
       watch.stop();
     }

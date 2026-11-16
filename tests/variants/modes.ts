@@ -590,7 +590,7 @@ export async function expectEnhancementsSettled(watch: EnhancementWatch): Promis
 }
 
 /** The window property quietResize() reads: true only while a shot is taken. */
-const SHOOTING = '__portfolioShooting';
+export const SHOOTING = '__portfolioShooting';
 
 /**
  * The longest the shot waits, in all, for the finite animations running once
