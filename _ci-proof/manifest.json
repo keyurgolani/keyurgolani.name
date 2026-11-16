@@ -1,0 +1,94 @@
+{
+  "name": "serif-optional-planted",
+  "summary": "Aurora Glass's type packs with three planted breaks, a failing e2e test, a CSS budget over and a changed Studio shot",
+  "head": "258e696d2d5391295c783c67138005c6f0a74b46",
+  "base": "ad99c4679138ced199d7edf05adae43afebcab6a",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "a face whose manifest entry says display: optional loads optional, and every other face swaps",
+      "a default-row cell's own budget is at least 1.25 times the slowest default cell CI Linux ran"
+    ]
+  },
+  "reds": [
+    {
+      "label": "load-shift",
+      "at": "4b024f1515fdeb25187441375901c647969ec38e",
+      "specs": ["tests/e2e/aurora-glass-load-shift-*.spec.ts"],
+      "tests": 30,
+      "files": 1,
+      "failed": 3
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ls",
+      "specs": ["tests/e2e/aurora-glass-load-shift-*.spec.ts"],
+      "tests": 30,
+      "files": 1
+    },
+    {
+      "label": "hf",
+      "specs": ["tests/e2e/aurora-glass-header-fit-*.spec.ts"],
+      "tests": 44,
+      "files": 1
+    },
+    {
+      "label": "ag",
+      "specs": ["tests/e2e/aurora-glass-*.spec.ts"],
+      "tests": 128,
+      "files": 12
+    },
+    {
+      "label": "type",
+      "config": "tests/variants/playwright.config.ts",
+      "specs": [],
+      "project": "pack-distinct",
+      "env": {
+        "PORTFOLIO_PACK_DISTINCT_AXIS": "typography"
+      },
+      "tests": 2
+    }
+  ],
+  "cells": [
+    {
+      "label": "ag-field-serif",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:aurora-glass complete / aurora-glass/platform-neutral/warm-parchment/field-serif/system 1440x900 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "field-serif",
+      "spec": "look/aurora-type-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_PACK": "field-serif"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    },
+    {
+      "label": "paste-up",
+      "spec": "look/aurora-type-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_PACK": "paste-up"
+      },
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true
+}
