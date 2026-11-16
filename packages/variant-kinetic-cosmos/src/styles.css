@@ -3564,17 +3564,24 @@
   color: var(--layout-ink);
 }
 
-/* ---- Motion: the orbits turn and the far stars drift, only while the runtime runs ---- */
+/* ---- Motion: the orbits turn and settle as the stage opens, only while the runtime runs ---- */
 
 /*
- * The loops key on data-kit-runtime, which only the kit's runtime sets on the
+ * The opening's motion is one run, then rest. While any CSS animation runs,
+ * the browser's own observation of the page's links gives the main thread a
+ * frame every vsync, so an animation that never ends is idle work for as
+ * long as the page shows. Each run is a twentieth of the one ambient slot
+ * (K-4 b, R4-L2), never a multiplied token: 3 s of its 60 s, linear, with
+ * the keyframes easing out to their stop on the composition's curve
+ * (--motion-curve; the literal before it is the same curve, for a browser that
+ * drops a var() there) and the last frame held (forwards).
+ * The outer plane turns 18 degrees and the inner 36, twice as far, as on the
+ * cycle, and the far stars ease the hair they would have drifted in that time.
+ * The runs key on data-kit-runtime, which only the kit's runtime sets on the
  * stage's root, active or paused, and drops under static (motion-gate, K-4),
  * and each also reads the ambient state, which the platform pauses under
- * reduced motion, a static page, print, and a runtime that isn't active.
- * Every loop's cycle is the one ambient slot (K-4 b, R4-L2), never a
- * multiplied token: the inner plane turns twice a cycle and the outer once,
- * so the inner runs twice as fast, and the far stars sway a quarter tile
- * there and back, so they drift as slowly as before with no seam.
+ * reduced motion, a static page, print, and a runtime that isn't active: a
+ * pause holds a run part-way, and what is left of it goes on after.
  */
 
 @media (prefers-reduced-motion: no-preference) {
@@ -3583,7 +3590,7 @@
     .kc-plane--inner
     .kc-spin {
     will-change: transform;
-    animation: kinetic-cosmos-spin-inner var(--motion-ambient) linear infinite;
+    animation: kinetic-cosmos-spin-inner var(--motion-ambient) linear 0.05 forwards;
     animation-play-state: var(--motion-ambient-state);
   }
 
@@ -3592,7 +3599,7 @@
     .kc-plane--outer
     .kc-spin {
     will-change: transform;
-    animation: kinetic-cosmos-spin var(--motion-ambient) linear infinite;
+    animation: kinetic-cosmos-spin var(--motion-ambient) linear 0.05 forwards;
     animation-play-state: var(--motion-ambient-state);
   }
 
@@ -3600,7 +3607,7 @@
     .kc-opening[data-kit-runtime]
     .kc-sky__drift {
     will-change: transform;
-    animation: kinetic-cosmos-drift var(--motion-ambient) ease-in-out infinite alternate;
+    animation: kinetic-cosmos-drift var(--motion-ambient) linear 0.05 forwards;
     animation-play-state: var(--motion-ambient-state);
   }
 
@@ -3612,21 +3619,43 @@
   }
 }
 
+/* Each run ends at 5 % of its cycle, eased out to its stop there; the stop holds to the end. */
 @keyframes kinetic-cosmos-spin {
+  0% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-timing-function: var(--motion-curve);
+  }
+
+  5%,
   to {
-    transform: rotate(1turn);
+    transform: rotate(18deg);
   }
 }
 
 @keyframes kinetic-cosmos-spin-inner {
+  0% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-timing-function: var(--motion-curve);
+  }
+
+  5%,
   to {
-    transform: rotate(2turn);
+    transform: rotate(36deg);
   }
 }
 
 @keyframes kinetic-cosmos-drift {
+  0% {
+    transform: translateX(0);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-timing-function: var(--motion-curve);
+  }
+
+  5%,
   to {
-    transform: translateX(-12.5%);
+    transform: translateX(-0.06%);
   }
 }
 
