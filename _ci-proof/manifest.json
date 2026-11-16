@@ -1,0 +1,27 @@
+{
+  "name": "schematic-226-probe",
+  "summary": "Schematic at 200% text on CI Linux: the title blocks' and the schedule's widths in rem at 768, 1024 and 1440, and the words broken in the foot's title block and the schedule under candidate rules; the words-whole red at its commit",
+  "head": "c9d59387d93772e988f4cefc2122e59cac0da76c",
+  "base": "e6a3fd4a7b9d7e3e1ca3108fc90f64496d8876c2",
+  "gate": false,
+  "reds": [
+    {
+      "label": "r226",
+      "at": "c9d59387d93772e988f4cefc2122e59cac0da76c",
+      "specs": ["tests/e2e/schematic-words-whole.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "failed": 3
+    }
+  ],
+  "look": [
+    {
+      "label": "probe226",
+      "spec": "look/schematic-226-probe.spec.ts",
+      "project": "chromium",
+      "tests": 8
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
