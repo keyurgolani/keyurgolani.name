@@ -1,0 +1,18 @@
+{
+  "name": "kc-rest-look-b",
+  "summary": "What a reader sees of Kinetic Cosmos's opening when its three animations come to rest in 3 s (cut), against the landing tree, at 1024 and the lab phone",
+  "head": "d0c51aaa0d68c2eec45f3b77060e6a13f065e375",
+  "base": "2a65ded5c3cb3eced3b4948dbb8d27a48bdc09f1",
+  "look": [
+    {
+      "label": "kc-rest",
+      "spec": "look/kc-rest-look-v3.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 6
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
