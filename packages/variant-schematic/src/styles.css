@@ -1261,9 +1261,18 @@
   }
 }
 
-/* A drawing number or a sheet count holds one line. */
+/* A drawing number or a sheet count holds one line while the block holds its four columns at
+   about 31 of its letters' ems; under that, as with 200% text at 1024, where a column is narrower
+   than the number, it breaks at its own hyphen rather than run past the block and the window (the
+   quality cells' root-text reflow). At 100% every number fits its cell, so nothing changes there. */
 [data-variant='schematic'] .sx-tb__value > [data-type-role='numeric'] {
   white-space: nowrap;
+}
+
+@container (max-width: 31rem) {
+  [data-variant='schematic'] .sx-tb__value > [data-type-role='numeric'] {
+    white-space: normal;
+  }
 }
 
 [data-variant='schematic'] .sx-tb__here {
@@ -1499,8 +1508,11 @@
   background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
 }
 
+/* The revision line wraps under its mark when its block is narrower than the line, as under 200%
+   text at 1024, rather than hold one row past the window. */
 [data-variant='schematic'] .sx-delta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2xs);
   color: var(--color-accent-text);
