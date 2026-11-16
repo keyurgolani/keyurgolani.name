@@ -66,67 +66,69 @@ export function RuledTable({
     [column.end ? 'ss-end' : '', column.wide ? 'ss-wide' : '', extra].filter(Boolean).join(' ') ||
     undefined;
   return (
-    <table className="ss-table">
-      <caption>
-        <Hidden>{caption}</Hidden>
-      </caption>
-      <colgroup>
-        {columns.map((column, index) => (
-          <col key={index} className={`ss-c${column.span}${column.wide ? ' ss-wide' : ''}`} />
-        ))}
-      </colgroup>
-      <thead>
-        <tr>
+    <div className="ss-table-frame">
+      <table className="ss-table">
+        <caption>
+          <Hidden>{caption}</Hidden>
+        </caption>
+        <colgroup>
           {columns.map((column, index) => (
-            <th key={index} scope="col" className={cls(column)} data-type-role="label">
-              <Words lang={lang}>{column.label}</Words>
-            </th>
+            <col key={index} className={`ss-c${column.span}${column.wide ? ' ss-wide' : ''}`} />
           ))}
-        </tr>
-      </thead>
-      {groupsOf(rows).map(({ name, rows: grouped }, groupIndex) => (
-        <tbody key={groupIndex}>
-          {name ? (
-            <tr className="ss-group-row">
-              <th scope="rowgroup" colSpan={columns.length} data-type-role="title">
-                {name}
-              </th>
-            </tr>
-          ) : null}
-          {grouped.map((row) => (
-            <tr
-              key={row.key}
-              id={row.id}
-              lang={row.lang}
-              className={row.branch ? 'ss-branch' : undefined}
-            >
-              {row.cells.map((cell, index) => {
-                const column = columns[index]!;
-                return (
-                  <td key={index} className={cls(column)} data-type-role="body-compact">
-                    {cell}
-                    {index === (row.narrowAt ?? 0) && row.narrow ? (
-                      <div className="ss-narrow">{row.narrow}</div>
-                    ) : null}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      ))}
-      {foot ? (
-        <tfoot>
+        </colgroup>
+        <thead>
           <tr>
-            <th scope="row" colSpan={columns.length - 1} data-type-role="label">
-              <Words lang={lang}>{foot.label}</Words>
-            </th>
-            <td className="ss-end ss-num" data-type-role="body-compact">
-              {foot.value}
-            </td>
+            {columns.map((column, index) => (
+              <th key={index} scope="col" className={cls(column)} data-type-role="label">
+                <Words lang={lang}>{column.label}</Words>
+              </th>
+            ))}
           </tr>
-        </tfoot>
-      ) : null}
-    </table>
+        </thead>
+        {groupsOf(rows).map(({ name, rows: grouped }, groupIndex) => (
+          <tbody key={groupIndex}>
+            {name ? (
+              <tr className="ss-group-row">
+                <th scope="rowgroup" colSpan={columns.length} data-type-role="title">
+                  {name}
+                </th>
+              </tr>
+            ) : null}
+            {grouped.map((row) => (
+              <tr
+                key={row.key}
+                id={row.id}
+                lang={row.lang}
+                className={row.branch ? 'ss-branch' : undefined}
+              >
+                {row.cells.map((cell, index) => {
+                  const column = columns[index]!;
+                  return (
+                    <td key={index} className={cls(column)} data-type-role="body-compact">
+                      {cell}
+                      {index === (row.narrowAt ?? 0) && row.narrow ? (
+                        <div className="ss-narrow">{row.narrow}</div>
+                      ) : null}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        ))}
+        {foot ? (
+          <tfoot>
+            <tr>
+              <th scope="row" colSpan={columns.length - 1} data-type-role="label">
+                <Words lang={lang}>{foot.label}</Words>
+              </th>
+              <td className="ss-end ss-num" data-type-role="body-compact">
+                {foot.value}
+              </td>
+            </tr>
+          </tfoot>
+        ) : null}
+      </table>
+    </div>
   );
 }
