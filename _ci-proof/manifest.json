@@ -1,0 +1,134 @@
+{
+  "name": "flux-dock-case-folds",
+  "summary": "Flux's case sheets keep the page in its window at 200% text, an unavailable picture holds its label, a focused fold's ring clears the next hairline, a wrapped case crumb clears its link's ring, and the phone dock reserves its room and holds its name on two lines",
+  "head": "e22fbf90c7cd451cc1385391b631f1ec3c716e83",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "only author, homepage, bestFor, budgets, enhancements, keyBindings, kitLayout, recommendedAppearance, scrollReserve, studio, and transitions are optional",
+      "a 2.1 manifest may reserve the window's block end for a bar pinned there, in lengths the root resolves, and a 2.0 one may not",
+      "only a composition whose manifest reserves the window's block end gets the host's root scroll-padding, after its layer",
+      "a variant that reserves the window's block end gets the host's root scroll-padding after its layer, in its media query, and any other gets the same file as before",
+      "the phone dock: the tools keep their size, the destination being read keeps its own, and the name wraps onto two lines, then gives way whole before fewer than five of its letters would fit a line (B1, M1)",
+      "a case sheet's grid keeps the grid's own gutter: nothing on it sets column-gap, so 200% text at 1024 never widens the page",
+      "a case's facts stack under its intro once the sheet, measured in root rem, is too narrow for a fact to hold a word",
+      "folds run together only to a ring's reach and 1px: the next fold's hairline sits clear of a focused summary's ring",
+      "Flux reserves its phone dock's room at the window's block end, in the query the dock docks in"
+    ]
+  },
+  "reds": [
+    {
+      "label": "unavailable-label",
+      "at": "381619134a0d17e259b5d5c69639dac4e6d95179",
+      "specs": ["tests/e2e/flux-unavailable-label.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "fold-rings",
+      "at": "b4ae32f83ff8d808057e4fe0f0fb9e7a0366fe4f",
+      "specs": ["tests/e2e/flux-fold-rings.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "dock-name",
+      "at": "be3416f1dce0e14f33bb24c8e84fa0cdb687c0f0",
+      "specs": ["tests/e2e/flux-dock-name.spec.ts"],
+      "tests": 8,
+      "files": 1,
+      "failed": 4
+    },
+    {
+      "label": "crumb-lines",
+      "at": "8a262a56cacd0430c653329e69c1599fec303aeb",
+      "specs": ["tests/e2e/flux-crumb-lines.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "flux",
+      "specs": ["tests/e2e/flux*.spec.ts"],
+      "tests": 81,
+      "files": 14,
+      "skipped": 2
+    }
+  ],
+  "cells": [
+    {
+      "label": "c1440",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:flux (complete /work/project-name|missing-media /) flux/platform-neutral/warm-parchment/humanist-ui/(light|dark|system|high-contrast) 1440x900 default ",
+      "shards": ["find"],
+      "tests": 8,
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "label": "c390",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:flux complete (/|/work/project-name) flux/platform-neutral/warm-parchment/humanist-ui/(light|dark|system|high-contrast) 390x844 (default|contrast-more|forced-colors) ",
+      "shards": ["find"],
+      "tests": 24,
+      "passed": 24,
+      "failed": 0
+    },
+    {
+      "label": "c117new",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:flux complete / flux/fluent-2-inspired/liquid-dusk/neutral-ui/dark 390x844 forced-colors ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "complete",
+      "spec": "look/flux-look-complete.spec.ts",
+      "project": "chromium",
+      "tests": 14,
+      "files": 1,
+      "shots": 22
+    },
+    {
+      "label": "long-text",
+      "spec": "look/flux-look-long-text.spec.ts",
+      "project": "chromium",
+      "tests": 6,
+      "files": 1,
+      "shots": 12
+    },
+    {
+      "label": "missing-media",
+      "spec": "look/flux-look-missing-media.spec.ts",
+      "project": "chromium",
+      "tests": 6,
+      "files": 1,
+      "shots": 12
+    },
+    {
+      "label": "crumb",
+      "spec": "look/flux-crumb-ring.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": ["(^|[^-a-z])flux([^-a-z]|$)"]
+  },
+  "budgets": true,
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
