@@ -1923,11 +1923,14 @@
 }
 
 [data-variant='kinetic-cosmos'] .kc-planet__body {
+  /* The body's size, by its figure's magnitude: its plates read it for their room. */
+  --layout-body: calc(var(--space-3xl) * var(--layout-size));
+
   grid-column: 1;
   grid-row: 1;
   align-self: center;
   justify-self: center;
-  inline-size: calc(var(--space-3xl) * var(--layout-size));
+  inline-size: var(--layout-body);
   display: grid;
   place-content: center;
   aspect-ratio: 1;
@@ -1948,6 +1951,23 @@
   font-weight: var(--type-headline-font-weight);
   line-height: 1;
   font-variant-numeric: tabular-nums lining-nums;
+}
+
+/*
+ * The figure and its unit each sit on a plate of the body's own fill, in the composition's control
+ * radius, padded by no more than the room between the body's rim and its outer ring (13.5% of its
+ * radius). A figure wider than the fill, in a wide face or on a phone's smaller body, then reads as
+ * a label laid on its planet, breaking the rims where it crosses them, never as text on a rim. The
+ * body keeps its magnitude's size. The figure's own element sits inside its plate's line.
+ */
+[data-variant='kinetic-cosmos'] :is(.kc-planet__value, .kc-planet__unit) {
+  padding: min(0.15em, var(--layout-body) * 0.0675) min(0.25em, var(--layout-body) * 0.0675);
+  border-radius: var(--ui-radius-control);
+  background-color: var(--color-surface-subtle);
+}
+
+[data-variant='kinetic-cosmos'] .kc-planet__value > * {
+  display: inline-block;
 }
 
 [data-variant='kinetic-cosmos'] .kc-planet__unit {
@@ -3808,7 +3828,7 @@
   }
 
   [data-variant='kinetic-cosmos'] .kc-planets:not(.kc-planets--row) .kc-planet__body {
-    inline-size: calc(var(--space-2xl) * var(--layout-size));
+    --layout-body: calc(var(--space-2xl) * var(--layout-size));
   }
 
   [data-variant='kinetic-cosmos'] .kc-planets:not(.kc-planets--row) .kc-planet__value {
