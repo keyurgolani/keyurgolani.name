@@ -2413,11 +2413,11 @@
   }
 
   /* Whatever focus, a fragment or a scroll brings into view lands above the dock, never under
-     it, as the status line's offset keeps it below the top (C2, the quality occlusion check). */
-  [data-variant='mission-control']
-    :is([id], a[href], button, summary, input, select, textarea, [tabindex]) {
-    scroll-margin-block-end: calc(var(--layout-dock) + var(--space-2xs));
-  }
+     it, as the status line's offset keeps it below the top (C2, the quality occlusion check): the
+     manifest's scrollReserve, which the host sets as the root's scroll-padding at this width, the
+     dock and a focus ring's reach. A control already on screen is measured against it too, so
+     Tab onto one whose ring would reach into the dock's band scrolls it clear; a scroll margin
+     acts only when focus scrolls, and with the reserve it would add to it. */
 
   [data-variant='mission-control'] :is(.mc-panel, .mc-stack)[data-span] {
     --layout-span: 4;
@@ -2429,8 +2429,10 @@
       'status'
       'main'
       'foot';
-    /* The page ends clear of the dock, so its last links scroll out from under it. */
-    padding-block-end: calc(var(--layout-dock) + var(--space-2xs));
+    /* The page ends clear of the dock, so its last links scroll out from under it, rings and all. */
+    padding-block-end: calc(
+      var(--layout-dock) + var(--space-2xs) + var(--ui-focus-width) + var(--ui-focus-offset)
+    );
   }
 
   [data-variant='mission-control'] .mc-status {

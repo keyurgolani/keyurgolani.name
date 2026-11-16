@@ -101,7 +101,7 @@ A contract 2.1 variant whose layout pins a bar at the window's foot, fixed or st
 - **What the host writes:** `scroll-padding-block-end: <blockEnd>` on `:root:has([data-variant="<id>"])`, inside `@media <media>` if you give one, into your compiled stylesheet and no other's, after your layer and outside every cascade layer. The browser then scrolls a control Tab reaches clear of the bar.
 - **`blockEnd`:** a length the root resolves: rem or px, alone or in one `calc()`, `min()`, or `max()` of them, more than 0 and at most 8rem. The packs' tokens are on the boundary, not the root, so `var()` is refused. Give it in rem, so it grows with the root's text as your bar does.
 - **`media`:** one width condition in rem, or `(hover: none)`.
-- **Who declares it:** Flux declares its dock's. Mission Control's `.mc-rail`, Shell's `.sh-tmux`, Horizontal Cinema's `.hc-board__map` and Kinetic Cosmos's `.kc-dock` pin bars at the foot too, each with a `scroll-margin` of its bar today.
+- **Who declares it:** Flux declares its dock's, and Mission Control its phone rail's, `.mc-rail`, with the widest focus ring's reach and 1px, so its scroll margin of the rail is gone. Shell's `.sh-tmux`, Horizontal Cinema's `.hc-board__map` and Kinetic Cosmos's `.kc-dock` pin bars at the foot too, each with a `scroll-margin` of its bar today.
 
 ## The render path
 
