@@ -1,0 +1,66 @@
+{
+  "name": "skip-link-ink",
+  "summary": "The focused skip link's text and fill are one pair above every composition's layer, so its text reads on the accent",
+  "head": "e505c20a2778c3cbc4f9d1664388869d972ae397",
+  "base": "ad99c4679138ced199d7edf05adae43afebcab6a",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "on-fill: a part the primitives draw in on-* text takes only a fill its text is held to"
+    ]
+  },
+  "reds": [
+    {
+      "label": "ink",
+      "at": "c657e1c3aff95861b65e1cd807dea347b4707dcb",
+      "specs": ["tests/e2e/skip-link-ink.spec.ts"],
+      "tests": 120,
+      "files": 1,
+      "failed": 56
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ink",
+      "specs": ["tests/e2e/skip-link-ink.spec.ts"],
+      "tests": 120,
+      "files": 1
+    },
+    {
+      "label": "on-top",
+      "specs": ["tests/e2e/skip-link-on-top.spec.ts"],
+      "tests": 30,
+      "files": 1
+    },
+    {
+      "label": "oa-skip",
+      "specs": ["tests/e2e/obsidian-atelier-skip-link.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "focus-ring",
+      "specs": ["tests/e2e/focus-ring.spec.ts"],
+      "tests": 2,
+      "files": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "skip",
+      "spec": "look/look-208.spec.ts",
+      "project": "chromium",
+      "tests": 7,
+      "files": 1,
+      "shots": 14
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
