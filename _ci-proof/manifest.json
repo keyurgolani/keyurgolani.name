@@ -1,0 +1,50 @@
+{
+  "name": "singular-pager-settle",
+  "summary": "Singular's page holds as unsettled until the pager's first passes have run, so its home shoots the same whether they land early or late",
+  "head": "5ccf3fdedf3fbb997fa13402f822a2d23eb88b69",
+  "base": "0e5158081ee98f5a2b6892d735e5623430ba3815",
+  "gate": {
+    "package": "singular"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding",
+      "settlePager() leaves .sg-bar as enhancementSettled(…, \"pager\") does",
+      "the pager's hold is capped well inside the readers' settle wait"
+    ]
+  },
+  "reds": [
+    {
+      "label": "settle",
+      "at": "870b0688c9bb492fc438a42f09be941ef5666cd0",
+      "specs": ["tests/e2e/singular-pager-settle.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "shot",
+      "at": "27b4bf2b230bf2db77bd8a501b3c49cb84e9f6a0",
+      "specs": ["tests/e2e/singular-pager-settle-shot.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "singular",
+      "specs": ["tests/e2e/singular*.spec.ts", "tests/e2e/focus-perimeter-painted-offset.spec.ts"],
+      "tests": 63,
+      "files": 15
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
