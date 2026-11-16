@@ -469,6 +469,13 @@ test('the motion runs only inside no-preference, on the runtime: three transform
     assert.ok(seconds > 0 && seconds <= 3.5, `runs ${seconds} s: ${shorthand}`);
     assert.match(shorthand, /\b(?:forwards|both)\b/, `holds its last frame: ${shorthand}`);
   }
+  // The planes ease out on the composition's curve, read as the motion token on the animation,
+  // which eases each keyframe interval; Chromium reads a var() in a keyframe's own easing as ease.
+  const planes = runs.filter(([, selector]) => /\.kc-spin\s*$/.test(selector!));
+  assert.equal(planes.length, 2);
+  for (const match of planes) {
+    assert.match(match[2]!, /\banimation\s*:[^;]*var\(--motion-curve\)/, match[1]!.trim());
+  }
   const keyframes = [...CSS.matchAll(/@keyframes ([\w-]+)\s*\{([\s\S]*?\})\s*\}/g)];
   for (const [, name, frames] of keyframes) {
     assert.match(name!, /^kinetic-cosmos-/);
