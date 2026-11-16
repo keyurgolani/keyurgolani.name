@@ -856,3 +856,30 @@ test('a writing row keeps its title and facts apart from its words, so a wide ri
     assert.ok(row.indexOf('class="kc-actions"') > words);
   }
 });
+
+test("a planet's figure and its unit sit on plates of the body's fill, and the body keeps its magnitude's size", () => {
+  const plate =
+    ruleBody("[data-variant='kinetic-cosmos'] :is(.kc-planet__value, .kc-planet__unit)") ?? '';
+  assert.match(plate, /background-color: var\(--color-surface-subtle\);/);
+  assert.match(plate, /border-radius: var\(--ui-radius-control\);/);
+  // Padded by no more than the room between the rim and the outer ring: 96% less 82.5% of the radius.
+  assert.match(
+    plate,
+    /padding: min\(0\.15em, var\(--layout-body\) \* 0\.0675\) min\(0\.25em, var\(--layout-body\) \* 0\.0675\);/,
+  );
+  const body = ruleBody("[data-variant='kinetic-cosmos'] .kc-planet__body") ?? '';
+  assert.match(
+    body,
+    /var\(--color-surface-subtle\) 0 80%,\s*var\(--color-border-strong\) 81% 82\.5%/,
+  );
+  assert.match(body, /transparent 83\.5% 95%,\s*var\(--color-border-default\) 96% 97\.5%/);
+  // The body's size is its magnitude's, as before: space-3xl times its size, space-2xl on a phone.
+  assert.match(body, /--layout-body: calc\(var\(--space-3xl\) \* var\(--layout-size\)\);/);
+  assert.match(body, /inline-size: var\(--layout-body\);/);
+  assert.match(
+    ruleBody(
+      "[data-variant='kinetic-cosmos'] .kc-planets:not(.kc-planets--row) .kc-planet__body",
+    ) ?? '',
+    /--layout-body: calc\(var\(--space-2xl\) \* var\(--layout-size\)\);/,
+  );
+});
