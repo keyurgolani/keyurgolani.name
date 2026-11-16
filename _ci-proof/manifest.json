@@ -1,0 +1,67 @@
+{
+  "name": "shot-settle-quiet",
+  "summary": "A variant shot waits for animations an enhancement starts after the settle, and keeps the capture's own resize event from the page",
+  "head": "0bd5396f6c2e325d5b4d09207e848f851008b90c",
+  "base": "b31f1d839f485237f696dd7e2e8305c2287f33fc",
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "guard",
+      "at": "abdf3f6cf9e1d0a81e3a397e517ab2152b8890fd",
+      "specs": ["tests/variants/modes.spec.ts"],
+      "config": "tests/variants/playwright.config.ts",
+      "project": "modes",
+      "grep": "once the page has settled|four 1.05 s blinks|while it waits for another|more left than the shot waits|the capture's own resize",
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    },
+    {
+      "label": "quiet",
+      "at": "3d5ce03f6d4d2ea63feb826cdc861332870a5ad6",
+      "specs": ["tests/variants/modes.spec.ts"],
+      "config": "tests/variants/playwright.config.ts",
+      "project": "modes",
+      "grep": "once the page has settled|four 1.05 s blinks|while it waits for another|more left than the shot waits|the capture's own resize",
+      "tests": 5,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "modes-new",
+      "specs": ["tests/variants/modes.spec.ts"],
+      "config": "tests/variants/playwright.config.ts",
+      "project": "modes",
+      "grep": "once the page has settled|four 1.05 s blinks|while it waits for another|more left than the shot waits|the capture's own resize",
+      "tests": 6,
+      "files": 1
+    },
+    {
+      "label": "modes",
+      "specs": ["tests/variants/modes.spec.ts"],
+      "config": "tests/variants/playwright.config.ts",
+      "project": "modes",
+      "tests": 38,
+      "files": 1
+    },
+    {
+      "label": "hc-print",
+      "specs": ["tests/e2e/horizontal-cinema-print-coarse.spec.ts"],
+      "tests": 1,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3026,
+    "changed": []
+  },
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
