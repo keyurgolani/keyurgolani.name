@@ -688,7 +688,9 @@
   padding-block-start: var(--rhythm-section);
 }
 
+/* The opener measures its own width for its contents' size where it is narrow. */
 [data-variant='swiss-signal'] .ss-part__open {
+  container-type: inline-size;
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
@@ -2504,5 +2506,19 @@
      measure. Home's tagline keeps the italic lowercase's 0.5em, and with it 90% of its step. */
   [data-variant='swiss-signal'] .ss-case__poster .ss-poster__aside {
     --layout-ss-aside-em: 0.58;
+  }
+}
+
+/*
+ * A part's contents where its opener holds under 14rem, a phone with the root text at 200%: they set at body
+ * size, so a section title's longest word fits the column, and only a word wider than the column at that
+ * size breaks, inside it, as the poster line's floor has it. At step 2, on the fallback face Linux sets
+ * them in, "Discography" ran 37 px past the column and the page at 320. At 1x every opener holds 17.75rem
+ * or more, and nothing here applies.
+ */
+@container (max-width: 14rem) {
+  [data-variant='swiss-signal'] .ss-part__toc {
+    font-size: var(--type-body-font-size);
+    overflow-wrap: anywhere;
   }
 }
