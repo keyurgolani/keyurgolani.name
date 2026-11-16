@@ -1647,9 +1647,12 @@
   gap: var(--space-m);
 }
 
-/* The attribution: the name over the role, at the quote's edge. */
+/* The attribution: the name over the role, at the quote's edge, the role a focus ring's reach and
+   the scale's least step under the name's link, so under forced colors its text plate never covers
+   the ring's foot. */
 [data-variant='spatial-bento'] .sb-quote__who {
   display: grid;
+  row-gap: calc(var(--ui-focus-offset) + var(--ui-focus-width) + var(--space-3xs));
 }
 
 /* Tickets: the date punched out at the start, a dashed tear between. */
