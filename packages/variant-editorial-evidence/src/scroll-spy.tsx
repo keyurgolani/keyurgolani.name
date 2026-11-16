@@ -105,6 +105,17 @@ export function ScrollSpy() {
     if (typeof IntersectionObserver === 'undefined' || typeof ResizeObserver === 'undefined') {
       return off;
     }
+    // Where its name or its tools take two lines, as in larger type, the masthead outgrows its
+    // token: the chapter bar docks, the Contents sheet opens and the reading line falls under
+    // its real height then, so the token follows what it holds, read with the stylesheet's own
+    // token in place. Without script the stylesheet's token stands.
+    const masthead = root.querySelector<HTMLElement>('.ee-masthead');
+    const fit = new ResizeObserver(() => {
+      if (!masthead) return;
+      root.style.removeProperty('--layout-ee-bar');
+      root.style.setProperty('--layout-ee-bar', `${masthead.getBoundingClientRect().height}px`);
+    });
+    for (const item of masthead?.children ?? []) fit.observe(item);
     const folio = root.querySelector<HTMLElement>('[data-ee-folio]');
     const issue = root.querySelector<HTMLElement>('.ee-issue');
     const places = [
@@ -300,6 +311,8 @@ export function ScrollSpy() {
       off();
       paper.removeEventListener('change', unpaper);
       sized.disconnect();
+      fit.disconnect();
+      root.style.removeProperty('--layout-ee-bar');
       observer?.disconnect();
       before?.disconnect();
       dockWatch?.disconnect();
