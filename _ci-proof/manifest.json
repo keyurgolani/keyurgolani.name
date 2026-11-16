@@ -1,0 +1,26 @@
+{
+  "name": "hc-rg-reds-read",
+  "summary": "Horizontal Cinema's Next-link focus and Raw Grid's index occlusion, as e2e reds loaded and settled as the quality cells load them, read on CI Linux",
+  "head": "77eb9672ff1881180e2589e5bbe41b210c2ea480",
+  "base": "d9a9fab0ee48bc066eae8d392fd26aa19f185123",
+  "reds": [
+    {
+      "label": "hc",
+      "at": "6139feae1b2501c5e7a7a92fa392a81cf28a0db9",
+      "specs": ["tests/e2e/horizontal-cinema-next-ring.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    },
+    {
+      "label": "rg",
+      "at": "77eb9672ff1881180e2589e5bbe41b210c2ea480",
+      "specs": ["tests/e2e/raw-grid-index-occlusion.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
