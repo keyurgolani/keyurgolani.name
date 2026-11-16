@@ -1596,6 +1596,15 @@
     background-color: currentColor;
   }
 
+  /* A rail stop's label is a chip in the ground's ink, its text in the ground's colour. With one
+     ground here that colour is the canvas the chip itself is forced to, so the label vanished when
+     its stop was focused. It takes the text's ink on the canvas, with a rule of that ink round it. */
+  [data-variant='singular'] .sg-rail__label {
+    border: var(--layout-sg-hair) solid currentColor;
+    background-color: var(--color-canvas);
+    color: var(--color-text-primary);
+  }
+
   [data-variant='singular'] .sg-band {
     border-block-start: var(--layout-sg-hair) solid currentColor;
   }
