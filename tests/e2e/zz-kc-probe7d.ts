@@ -215,36 +215,45 @@ export async function check(
     document.body.append(s);
     const canvas = getComputedStyle(s).color;
     s.remove();
-    let at = 0;
-    for (const el of document.querySelectorAll('main p, main li, main dd')) {
-      if (at >= 5) break;
+    // The smallest and lightest first: thin strokes are what a judge drops if it drops any.
+    const found: { el: Element; size: number; weight: number }[] = [];
+    for (const el of document.querySelectorAll(
+      'main :is(p, li, dd, dt, small, figcaption, time, span, a)',
+    )) {
       if (
-        ![...el.childNodes].some(
-          (n) => n.nodeType === 3 && (n.textContent ?? '').trim().length > 12,
-        )
+        ![...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim().length > 3)
       )
         continue;
       const cs = getComputedStyle(el);
       if (cs.color === canvas || cs.visibility !== 'visible' || !el.getClientRects().length)
         continue;
       if (el.closest('[data-forced-text]') || el.querySelector('[data-forced-text]')) continue;
-      el.setAttribute('data-forced-text', `body-${at}`);
-      at += 1;
+      const box = el.getBoundingClientRect();
+      if (box.width < 4 || box.height < 4) continue;
+      found.push({ el, size: parseFloat(cs.fontSize), weight: Number(cs.fontWeight) || 400 });
     }
-    return at;
+    found.sort((x, y) => x.size - y.size || x.weight - y.weight);
+    const picked = found.slice(0, 5);
+    picked.forEach(({ el }, at) => el.setAttribute('data-forced-text', `body-${at}`));
+    return picked.map(({ size, weight }) => ({ size, weight }));
   });
   const body: string[] = [];
   let bodyJudged = 0;
   let bodyReadable = 0;
-  for (let at = 0; at < bodies; at += 1) {
+  let bodySmallest: number | null = null;
+  for (let at = 0; at < bodies.length; at += 1) {
     const [item] = await judgeTexts(page, `body-${at}`);
     if (!item) continue;
+    const { size, weight } = bodies[at]!;
     if (item.ratio !== null) {
       bodyJudged += 1;
-      if (item.ratio >= 4.5) bodyReadable += 1;
+      if (item.ratio >= 4.5) {
+        bodyReadable += 1;
+        bodySmallest = bodySmallest === null ? size : Math.min(bodySmallest, size);
+      }
     }
     body.push(
-      `"${item.words}": ${item.ratio === null ? item.unjudged : `${item.ratio.toFixed(2)}:1`}`,
+      `"${item.words}" ${size}px/${weight}: ${item.ratio === null ? item.unjudged : `${item.ratio.toFixed(2)}:1`}`,
     );
   }
   // The appearance control's panel, opened: its own texts judged as they read open.
@@ -323,6 +332,7 @@ export async function check(
     body,
     bodyJudged,
     bodyReadable,
+    bodySmallest,
     rings,
   });
 }
