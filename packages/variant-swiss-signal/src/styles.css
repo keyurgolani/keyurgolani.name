@@ -941,11 +941,15 @@
 
 /* ── Ruled tables: native tables on the column lines (SS-M2) ───────── */
 
+/* A table sizes its columns to their words: each keeps its share of the twelve where its words fit,
+   and one narrower than its widest word, as a twelfth becomes once the reader's text grows, takes
+   that word's width from the others, so no column breaks a word it could hold or parts a value from
+   its unit, under any typography. */
 [data-variant='swiss-signal'] .ss-table {
   inline-size: calc(100% + var(--layout-grid-gutter));
   margin-inline-end: calc(-1 * var(--layout-grid-gutter));
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 /* A table's frame measures the width the table has, so it takes its phone rows wherever that is
