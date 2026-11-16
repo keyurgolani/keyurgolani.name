@@ -80,13 +80,13 @@ export const VISUAL_SPEC = 'visual.spec.ts';
 export const FULL_SHARDS = 12;
 /**
  * The release's rc-quality matrix jobs, by job id, each with its max-parallel: three, since one
- * matrix makes at most MAX_RELEASE_SHARDS jobs, at 6, 5 and 5 at once, 16 together (the
- * coordinator's sizing ruling, 2026-11-11), under the account's 20 job slots.
+ * matrix makes at most MAX_RELEASE_SHARDS jobs, at 6 at once each, 18 together, so 2 of the
+ * account's 20 job slots stay free while a release runs.
  */
 export const RELEASE_JOBS: readonly { readonly id: string; readonly parallel: number }[] = [
   { id: 'rc-quality-1', parallel: 6 },
-  { id: 'rc-quality-2', parallel: 5 },
-  { id: 'rc-quality-3', parallel: 5 },
+  { id: 'rc-quality-2', parallel: 6 },
+  { id: 'rc-quality-3', parallel: 6 },
 ];
 /** The release's cap: the most rc-quality shard jobs at once, its jobs' max-parallel together. */
 export const RELEASE_PARALLEL = RELEASE_JOBS.reduce((sum, job) => sum + job.parallel, 0);
@@ -160,7 +160,8 @@ export const NIGHTLY_TIMEOUT_MINUTES = 120;
  * rc-quality's and rc-preflight's preflight-quality's timeout-minutes, the release shard's cap. It
  * stays at 120 (the coordinator's release-path ruling, 2026-11-07): the shard target,
  * RELEASE_CEILING, is fitted to this cap, never the cap to the target. RELEASE_PARALLEL went from
- * 10 to 16 with the split into three jobs (the sizing ruling, 2026-11-11).
+ * 10 to 16 with the split into three jobs (the sizing ruling, 2026-11-11), and to 18 with each
+ * job at 6.
  */
 export const RELEASE_TIMEOUT_MINUTES = 120;
 

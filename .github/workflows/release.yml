@@ -394,10 +394,10 @@ jobs:
   # (releaseDurations). One matrix makes at most 256 jobs, so the shards are
   # split across three jobs, rc-quality-1 to rc-quality-3, each running the
   # consecutive shards rc-quality-plan hands it (shards1 to shards3), and
-  # skipping when it hands it none. They run 6, 5 and 5 at a time, 16
+  # skipping when it hands it none. They run 6 at a time each, 18
   # together, the release's cap (RELEASE_PARALLEL, RELEASE_JOBS), so in
-  # waves that end together, and PR CI keeps the other 4 of the account's 20
-  # job slots. The three are one job but for their id, list and
+  # waves that end together, and 2 of the account's 20 job slots stay free
+  # for other work. The three are one job but for their id, list and
   # max-parallel (ci/release/release-workflow.test.mjs). The timeout is
   # releaseTimeoutMinutes(), the release
   # ceiling with its margin, and each shard fails before any test when the
@@ -479,8 +479,8 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Seven days: at 16 at a time the first wave's reports must outlast the last wave's
-          # end before the verdict downloads them, about 51 hours at the release scope's 611
+          # Seven days: at 18 at a time the first wave's reports must outlast the last wave's
+          # end before the verdict downloads them, about 45 hours at the release scope's 611
           # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
           retention-days: 7
 
@@ -492,7 +492,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 5
+      max-parallel: 6
       matrix:
         shard: ${{ fromJSON(needs.rc-quality-plan.outputs.shards2) }}
     container:
@@ -550,8 +550,8 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Seven days: at 16 at a time the first wave's reports must outlast the last wave's
-          # end before the verdict downloads them, about 51 hours at the release scope's 611
+          # Seven days: at 18 at a time the first wave's reports must outlast the last wave's
+          # end before the verdict downloads them, about 45 hours at the release scope's 611
           # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
           retention-days: 7
 
@@ -563,7 +563,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 5
+      max-parallel: 6
       matrix:
         shard: ${{ fromJSON(needs.rc-quality-plan.outputs.shards3) }}
     container:
@@ -621,8 +621,8 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Seven days: at 16 at a time the first wave's reports must outlast the last wave's
-          # end before the verdict downloads them, about 51 hours at the release scope's 611
+          # Seven days: at 18 at a time the first wave's reports must outlast the last wave's
+          # end before the verdict downloads them, about 45 hours at the release scope's 611
           # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
           retention-days: 7
 
