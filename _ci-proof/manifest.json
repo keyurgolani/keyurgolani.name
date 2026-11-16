@@ -1,0 +1,18 @@
+{
+  "name": "release-at-18",
+  "summary": "the release's quality shards run 18 at a time, 6 in each of its three jobs",
+  "head": "102001f0491925441e47d64a5f3153bceb321dc0",
+  "base": "6cba8faa99b8e312236919b5500e210dec390343",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "rc-quality's three matrix jobs are one job but for their id, shard list and max-parallel",
+      "inventory.yml runs (c′) whole in rc-quality's three matrices",
+      "the release cap stays 120 minutes, 18 at a time across its three jobs",
+      "its wall-clock at max-parallel 18 is its shards in matrix order",
+      "with the plan's estimates in the times file, the measured pace fits the target",
+      "the release's shards split across its three jobs",
+      "the caps: 12 shard jobs at once a night, 18 at release across its three jobs"
+    ]
+  }
+}
