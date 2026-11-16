@@ -256,3 +256,93 @@ export async function vanishedAmong(
       ),
   };
 }
+
+/** The ratio a drawing (a stroke, a fill, a border, a part's own ground) reaches on its ground. */
+export const DRAWING_RATIO = 3;
+
+/**
+ * Each of `selectors`' first shown match, judged as a drawing on its ground: with every word on the
+ * page hidden (no glyphs and no backplates, a part's ::before and ::after left out with them), its
+ * box is shot as it paints and again with the part itself hidden, and each pixel that changes is
+ * judged against the ground under it. A part that changes nothing when hidden draws in its
+ * ground's own colour. Returns how many it judged and each drawing under the ratio, as
+ * `<selector>: <why>`, so a list that found nothing can't pass.
+ */
+export async function drawingsAmong(
+  page: Page,
+  selectors: readonly string[],
+): Promise<{ judged: number; lost: string[] }> {
+  await page.evaluate(() => {
+    const style = document.createElement('style');
+    style.textContent =
+      '*::before, *::after { visibility: hidden !important; } x-forced-glyphs { visibility: hidden !important; }';
+    document.head.append(style);
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const nodes: Text[] = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode())
+      if (node.textContent?.trim()) nodes.push(node as Text);
+    for (const node of nodes) {
+      const parent = node.parentElement;
+      if (!parent) continue;
+      if (parent instanceof SVGElement) {
+        parent.style.setProperty('visibility', 'hidden', 'important');
+        continue;
+      }
+      const wrap = document.createElement('x-forced-glyphs');
+      node.replaceWith(wrap);
+      wrap.append(node);
+    }
+  });
+  const view = page.viewportSize() ?? { width: 1024, height: 768 };
+  let judged = 0;
+  const lost: string[] = [];
+  for (const selector of selectors) {
+    const box = await page.evaluate((s) => {
+      const el = [...document.querySelectorAll<HTMLElement | SVGElement>(s)].find(
+        (one) => one.getClientRects().length > 0,
+      );
+      if (!el) return null;
+      el.setAttribute('data-forced-drawing', '');
+      el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    }, selector);
+    if (!box) continue;
+    judged += 1;
+    const x = Math.max(0, Math.floor(box.x) - 1);
+    const y = Math.max(0, Math.floor(box.y) - 1);
+    const clip = {
+      x,
+      y,
+      width: Math.min(view.width, Math.ceil(box.x + box.width) + 1) - x,
+      height: Math.min(view.height, Math.ceil(box.y + box.height) + 1) - y,
+    };
+    if (clip.width < 2 || clip.height < 2) {
+      lost.push(`${selector}: outside the viewport`);
+      continue;
+    }
+    const shoot = async () =>
+      decodePng(await page.screenshot({ clip, animations: 'disabled', caret: 'hide' }));
+    const shot = await shoot();
+    const hide = (on: boolean) =>
+      page.evaluate((v) => {
+        const el = document.querySelector<HTMLElement | SVGElement>('[data-forced-drawing]')!;
+        if (v) el.style.setProperty('visibility', 'hidden', 'important');
+        else el.style.removeProperty('visibility');
+      }, on);
+    await hide(true);
+    const bare = await shoot();
+    await hide(false);
+    await page.evaluate(() =>
+      document.querySelector('[data-forced-drawing]')?.removeAttribute('data-forced-drawing'),
+    );
+    let ratio = 0;
+    for (let i = 0; i < shot.width * shot.height; i += 1)
+      ratio = Math.max(ratio, contrast(pixel(shot, i), pixel(bare, i)));
+    if (ratio < DRAWING_RATIO)
+      lost.push(
+        `${selector}: ${ratio <= 1 ? 'draws in the colour of its ground' : `${ratio.toFixed(2)}:1`}`,
+      );
+  }
+  return { judged, lost };
+}
