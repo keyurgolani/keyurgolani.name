@@ -1,0 +1,114 @@
+{
+  "name": "oa-root-text-reflow",
+  "summary": "Obsidian Atelier's page grid keeps its gaps inside a phone's window, and under a rem fold the top row comes into the flow, Index over Appearance beside the name",
+  "head": "d1941e7dc777793ed589b6a4295d50db38690280",
+  "base": "b31f1d839f485237f696dd7e2e8305c2287f33fc",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "the stylesheet styles its own elements, never a primitive's slots, and keys nothing on a display mode",
+      "the stylesheet reads the platform's scales: no length of its own in a padding, margin, or gap"
+    ]
+  },
+  "reds": [
+    {
+      "label": "reflow",
+      "at": "4acd27060a93ab88798874a67802d132f7d9f336",
+      "specs": ["tests/e2e/obsidian-atelier-root-text-reflow.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "long",
+      "at": "4acd27060a93ab88798874a67802d132f7d9f336",
+      "specs": ["tests/e2e/obsidian-atelier-root-text-long-name.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "panel",
+      "at": "4acd27060a93ab88798874a67802d132f7d9f336",
+      "specs": ["tests/e2e/obsidian-atelier-appearance-panel.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "lines",
+      "at": "6bf53b890bf3fac36c1e3ed228cd807dea8b4ecf",
+      "specs": ["tests/e2e/obsidian-atelier-root-text-long-name.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "words",
+      "at": "3ced2f330180a241cc1899904c4e0a3e067e8e54",
+      "specs": ["tests/e2e/obsidian-atelier-root-text-long-name.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "reflow",
+      "specs": ["tests/e2e/obsidian-atelier-root-text-reflow.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "long",
+      "specs": ["tests/e2e/obsidian-atelier-root-text-long-name.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "panel",
+      "specs": ["tests/e2e/obsidian-atelier-appearance-panel.spec.ts"],
+      "tests": 5,
+      "files": 1
+    },
+    {
+      "label": "plate",
+      "specs": ["tests/e2e/obsidian-atelier-appearance-plate.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "oa",
+      "specs": ["tests/e2e/obsidian-atelier-*.spec.ts", "tests/e2e/skip-link-on-top.spec.ts"],
+      "tests": 81,
+      "files": 15
+    }
+  ],
+  "look": [
+    {
+      "label": "fold",
+      "spec": "look/look-219-fold.spec.ts",
+      "project": "chromium",
+      "tests": 3,
+      "files": 1,
+      "shots": 4
+    },
+    {
+      "label": "long",
+      "spec": "look/look-219-long.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 5
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
