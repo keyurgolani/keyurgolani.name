@@ -1,0 +1,18 @@
+{
+  "name": "oa-root-text-reflow-look",
+  "summary": "Obsidian Atelier's long-text home at 390 with the root text at 200%: the top and the plaque, links, vitrine and checks whole, at the base and the head",
+  "head": "bad227cb0fb84accebad91ff70fb7a4e7af5c902",
+  "base": "2be9f91bd2e74c8bbe86060f0a97ca5e22a4cca4",
+  "look": [
+    {
+      "label": "long",
+      "spec": "look/look-219-long.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 5
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
