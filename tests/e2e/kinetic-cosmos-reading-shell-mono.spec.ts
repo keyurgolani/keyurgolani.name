@@ -64,3 +64,17 @@ test(
     expect(described(figure), 'the figure and its unit under the ratio').toEqual([]);
   },
 );
+
+for (const [width, height] of [
+  [1024, 768],
+  [1440, 900],
+] as const)
+  test(
+    `at ${width}, the stats figure reaches the large-text ratio against its worst background pixel`,
+    { annotation },
+    async ({ page }) => {
+      await openHome(page, { width, height, row: 'default' });
+      const failing = (await contrastFindings(page, FIGURE)).filter((f) => f.rule === 'large-text');
+      expect(described(failing), 'the figure under the large-text ratio').toEqual([]);
+    },
+  );
