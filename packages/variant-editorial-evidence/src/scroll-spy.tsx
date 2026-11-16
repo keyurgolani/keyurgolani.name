@@ -257,8 +257,10 @@ export function ScrollSpy() {
     // it. A fragment link lands its target just there, so the running head and the rail name
     // what the jump brought into view.
     let observer: IntersectionObserver | null = null;
+    let before: IntersectionObserver | null = null;
     const observe = () => {
       observer?.disconnect();
+      before?.disconnect();
       const line = Math.ceil(parseFloat(getComputedStyle(sentinel).paddingBlockStart) || 0) + 1;
       const below = Math.max(0, sentinel.clientHeight - line - 1);
       observer = new IntersectionObserver(
@@ -270,6 +272,21 @@ export function ScrollSpy() {
         { rootMargin: `-${line}px 0px -${below}px 0px` },
       );
       for (const place of places) observer.observe(place);
+      // Above the first place, where the reading line falls before the opening starts, the
+      // opening is the place being read, so no chapter is. A jump to the top from a chapter never
+      // brings the opening across the line, so it's also watched in the window under the line:
+      // in view there with its top below the line, it's read.
+      const first = places[0];
+      if (first?.matches('.ee-opening')) {
+        before = new IntersectionObserver(
+          ([entry]) => {
+            const top = entry?.rootBounds?.top ?? line;
+            if (entry?.isIntersecting && entry.boundingClientRect.top > top) show(first);
+          },
+          { rootMargin: `-${line}px 0px 0px 0px` },
+        );
+        before.observe(first);
+      }
       watchDock();
     };
     const sized = new ResizeObserver(observe);
@@ -284,6 +301,7 @@ export function ScrollSpy() {
       paper.removeEventListener('change', unpaper);
       sized.disconnect();
       observer?.disconnect();
+      before?.disconnect();
       dockWatch?.disconnect();
       for (const watch of railWatches) watch.disconnect();
     };
