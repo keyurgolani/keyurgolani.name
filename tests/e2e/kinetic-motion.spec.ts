@@ -8,8 +8,9 @@ import { loadHome, runningAnimations } from '../harness/motion';
 import { scriptingMediaFindings } from '../quality/lib/a11y/conditions';
 
 // Kinetic Cosmos's orrery (redesign, stream E), on #6's runtime, on the
-// complete contract fixture: while the runtime is active the two orbit
-// planes turn and the far stars drift, exactly three endless animations;
+// complete contract fixture: once the runtime is active the two orbit
+// planes turn and the far stars drift, three animations that come to rest in
+// about 3 s and hold where they stopped, so nothing is left running at rest;
 // reduced motion and a static environment are the still the server drew; a
 // background tab, the stage offscreen, the visitor's pause, and hovering
 // the orrery each hold them. The index opens from either trigger and gives
@@ -33,10 +34,49 @@ test.use({
   viewport: { width: 1280, height: 800 },
 });
 
-/** The animations that run forever and are running now. */
-async function endless(page: Page) {
-  return (await runningAnimations(page)).filter((animation) => animation.endless);
+/** The stage's three animations, running, held or finished: each one's kind, box, state and end. */
+function loops(page: Page) {
+  return page.evaluate(() =>
+    document
+      .getAnimations()
+      .filter(
+        (animation) =>
+          animation instanceof CSSAnimation &&
+          animation.animationName.startsWith('kinetic-cosmos-'),
+      )
+      .map((animation) => {
+        const target = (animation.effect as KeyframeEffect | null)?.target ?? null;
+        return {
+          kind: `css ${(animation as CSSAnimation).animationName}`,
+          target: target
+            ? [target.tagName.toLowerCase(), target.classList[0]].join('.')
+            : 'no target',
+          playState: animation.playState,
+          endMs: Number(animation.effect?.getComputedTiming().endTime ?? 0),
+        };
+      }),
+  );
 }
+
+/** The play state each of the three boxes computes to: what holds their run, finished or not. */
+function playStates(page: Page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('.kc-opening :is(.kc-spin, .kc-sky__drift)')].map(
+      (element) => getComputedStyle(element).animationPlayState,
+    ),
+  );
+}
+/**
+ * Which of the stage's three animations are running now. Only these: the pause control's own
+ * press and hover transitions run while it's used, and aren't the orbits.
+ */
+async function stillRunning(page: Page) {
+  return (await loops(page))
+    .filter(({ playState }) => playState === 'running')
+    .map(({ kind }) => kind);
+}
+const RUNNING = ['running', 'running', 'running'];
+const PAUSED = ['paused', 'paused', 'paused'];
 
 // Plain boxes around still SVGs, moved by transform alone, so the compositor turns them (code review M1).
 const THE_THREE = [
@@ -59,15 +99,26 @@ async function load(page: Page): Promise<void> {
 }
 
 test(
-  'running, the two orbit planes turn and the far stars drift: three transforms',
+  'running, the two orbit planes turn and the far stars drift: three transforms that come to rest in about 3 s and hold',
   { annotation },
   async ({ page }) => {
     await load(page);
     await expect.poll(() => stage(page)).toMatchObject({ runtime: 'active', activity: null });
     await expect
-      .poll(async () => (await endless(page)).map(({ kind, target }) => ({ kind, target })))
+      .poll(async () => (await loops(page)).map(({ kind, target }) => ({ kind, target })))
       .toEqual(expect.arrayContaining(THE_THREE));
-    expect(await endless(page)).toHaveLength(3);
+    const run = await loops(page);
+    expect(run).toHaveLength(3);
+    // Each a fraction of the ambient cycle, ending by about 3 s: none runs for as long as the page shows.
+    for (const { kind, endMs } of run) {
+      expect(endMs, kind).toBeGreaterThan(0);
+      expect(endMs, kind).toBeLessThanOrEqual(3_500);
+    }
+    // It comes to rest, and holds where it stopped.
+    await expect
+      .poll(async () => (await loops(page)).map(({ playState }) => playState), { timeout: 10_000 })
+      .toEqual(['finished', 'finished', 'finished']);
+    expect(await stillRunning(page)).toEqual([]);
     // The orrery is decoration, and every ring it stands for is a link beside it.
     await expect(page.locator('.kc-map__frame')).toHaveAttribute('aria-hidden', 'true');
     await expect(page.locator('.kc-plate__link')).not.toHaveCount(0);
@@ -76,12 +127,12 @@ test(
 
 test('hovering the orrery holds the orbits where they are', { annotation }, async ({ page }) => {
   await load(page);
-  await expect.poll(async () => (await endless(page)).length).toBe(3);
+  await expect.poll(async () => (await loops(page)).length).toBe(3);
   const map = (await page.locator('.kc-map').boundingBox())!;
   await page.mouse.move(map.x + map.width * 0.7, map.y + map.height * 0.5);
-  await expect.poll(async () => (await endless(page)).length).toBe(0);
+  await expect.poll(() => playStates(page)).toEqual(PAUSED);
   await page.mouse.move(2, 2);
-  await expect.poll(async () => (await endless(page)).length).toBe(3);
+  await expect.poll(() => playStates(page)).toEqual(RUNNING);
 });
 
 test.describe('reduced motion', () => {
@@ -113,24 +164,25 @@ test(
   { annotation },
   async ({ page }) => {
     await load(page);
-    await expect.poll(async () => (await endless(page)).length).toBe(3);
+    await expect.poll(async () => (await loops(page)).length).toBe(3);
     await page.evaluate(() =>
       document.querySelector('[data-variant]')!.setAttribute('data-motion', 'static'),
     );
     await expect.poll(() => stage(page)).toMatchObject({ runtime: null });
-    expect(await endless(page)).toEqual([]);
+    expect(await loops(page)).toEqual([]);
   },
 );
 
 test('a background tab: hidden, every animation holds', { annotation }, async ({ page }) => {
   await load(page);
-  await expect.poll(async () => (await endless(page)).length).toBe(3);
+  await expect.poll(async () => (await loops(page)).length).toBe(3);
   await page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
   });
   await expect.poll(() => stage(page)).toMatchObject({ runtime: 'paused', activity: 'paused' });
-  expect(await endless(page)).toEqual([]);
+  expect(await playStates(page)).toEqual(PAUSED);
+  expect(await stillRunning(page)).toEqual([]);
 });
 
 test(
@@ -138,7 +190,7 @@ test(
   { annotation },
   async ({ page }) => {
     await load(page);
-    await expect.poll(async () => (await endless(page)).length).toBe(3);
+    await expect.poll(async () => (await loops(page)).length).toBe(3);
     // While the stage is in view, the dock is out of view and out of the tab order.
     await expect(page.locator('.kc-dock')).toBeHidden();
     await page
@@ -146,12 +198,13 @@ test(
       .nth(1)
       .evaluate((ring) => ring.scrollIntoView({ block: 'start' }));
     await expect.poll(() => stage(page)).toMatchObject({ runtime: 'paused', activity: 'paused' });
-    expect(await endless(page)).toEqual([]);
+    expect(await playStates(page)).toEqual(PAUSED);
+    expect(await stillRunning(page)).toEqual([]);
     await expect(page.locator('.kc-dock')).toBeVisible();
     await expect(page.locator('.kc-dock [aria-current="location"]')).toHaveCount(1);
-    // Back in view, it runs again.
+    // Back in view, what is left of the run may go on.
     await page.evaluate(() => window.scrollTo(0, 0));
-    await expect.poll(async () => (await endless(page)).length).toBe(3);
+    await expect.poll(() => playStates(page)).toEqual(RUNNING);
   },
 );
 
@@ -160,16 +213,17 @@ test(
   { annotation },
   async ({ page }) => {
     await load(page);
-    await expect.poll(async () => (await endless(page)).length).toBe(3);
+    await expect.poll(async () => (await loops(page)).length).toBe(3);
     const control = page.locator('[data-motion-control] button');
     await control.click();
     await expect(control).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('[data-motion-control] [role="status"]')).toHaveText('Orbits paused');
     await expect.poll(() => stage(page)).toMatchObject({ runtime: 'paused' });
-    expect(await endless(page)).toEqual([]);
+    expect(await playStates(page)).toEqual(PAUSED);
+    expect(await stillRunning(page)).toEqual([]);
     await control.click();
     await expect(control).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(async () => (await endless(page)).length).toBe(3);
+    await expect.poll(() => playStates(page)).toEqual(RUNNING);
   },
 );
 

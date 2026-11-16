@@ -1346,14 +1346,13 @@ test(
             .filter(
               (animation) =>
                 animation instanceof CSSAnimation &&
-                animation.animationName.startsWith('kinetic-cosmos-') &&
-                animation.effect?.getComputedTiming().endTime === Infinity,
+                animation.animationName.startsWith('kinetic-cosmos-'),
             )
             .map((animation) => animation.playState),
         }))
         .catch(() => null);
     };
-    // The loops this portfolio's orrery has are there under the kit's gate, and each one is held.
+    // The runs this portfolio's orrery has are there under the kit's gate, and each one is held.
     const held = (state: Awaited<ReturnType<typeof loops>>) =>
       state?.activity === 'paused' &&
       state.loops.length > 0 &&
