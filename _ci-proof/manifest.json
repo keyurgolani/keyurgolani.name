@@ -1,0 +1,17 @@
+{
+  "name": "held-delivery",
+  "summary": "Each composition's home shoots the same with its IntersectionObserver deliveries held back",
+  "head": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "look": [
+    {
+      "label": "held",
+      "spec": "look/held-delivery.spec.ts",
+      "project": "chromium",
+      "tests": 30,
+      "files": 1
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
