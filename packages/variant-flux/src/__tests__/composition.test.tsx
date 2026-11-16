@@ -613,6 +613,24 @@ test("a case's facts stack under its intro once the sheet, measured in root rem,
   assert.ok(threshold > 1224 / 32 && threshold < 886 / 16, `${threshold}rem`);
 });
 
+test("the line of figures sets each figure in the text's own role, never an ink: the inks are fills, not text colours", () => {
+  // A sheet's ink (signature-start, signature-end or emphasis) is a fill: the scheme gate reads it
+  // as a ground under text, never as text over the canvas. Set as the figures' colour, it read
+  // 1.25:1 on paper ('1,200 Stat unit' and '12 years', Bauhaus Geometric on Aurora Meadow, dark,
+  // printed at 1024), and the inventory found it under 4.5:1 on screen in other schemes too.
+  const figures = rulesFor('.fx-glance__line strong');
+  assert.ok(figures.length > 0, "the figures' rule");
+  for (const rule of figures) {
+    const color = valueOf(rule.body, 'color');
+    if (color === undefined) continue;
+    assert.equal(color, 'var(--color-text-primary)', rule.at.join(' ') || 'everywhere');
+  }
+  assert.ok(
+    figures.some((rule) => valueOf(rule.body, 'color') === 'var(--color-text-primary)'),
+    'a colour is set',
+  );
+});
+
 test("folds run together only to a ring's reach and 1px: the next fold's hairline sits clear of a focused summary's ring", () => {
   // A fold's summary carries a hairline on its top edge, and the folds after the first pull up by
   // the sheet's gap so they run together. That put the next fold's hairline about 3.5px under the
