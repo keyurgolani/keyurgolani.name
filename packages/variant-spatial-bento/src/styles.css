@@ -3420,3 +3420,36 @@
     display: block;
   }
 }
+
+/*
+ * Forced colours lay a backplate under words, not under drawings. On the inverse and accent tiles
+ * the ink is, there, the tile's own ground: their drawings (a ghost button's edge, the rules, the
+ * bar, the reach tile's mark) take the canvas's colour, and a ring the inverse ground's focus colour.
+ */
+@media screen and (forced-colors: active) {
+  [data-variant='spatial-bento'] :is(.sb-tile--inverse, .sb-tile--accent) .sb-btn--ghost,
+  [data-variant='spatial-bento']
+    .sb-tile--inverse
+    :is(.sb-ruled > :not(:first-child), .sb-ev > :not(:first-child), .sb-repos) {
+    border-color: var(--color-canvas);
+  }
+
+  /* A bar's fill is a data colour, the text colour here, so the tile's own ground: the fill takes
+     the canvas's colour, and the track's length shows as an edge in it. */
+  [data-variant='spatial-bento'] .sb-tile--inverse .sb-bar {
+    background: transparent;
+    outline: 1px solid var(--color-canvas);
+  }
+
+  [data-variant='spatial-bento'] .sb-tile--inverse .sb-bar__fill {
+    background: var(--color-canvas);
+  }
+
+  [data-variant='spatial-bento'] .sb-reach__mark {
+    stroke: var(--color-canvas);
+  }
+
+  [data-variant='spatial-bento'] :is(.sb-tile--inverse, .sb-tile--accent) :focus-visible {
+    outline-color: var(--color-focus-inverse);
+  }
+}
