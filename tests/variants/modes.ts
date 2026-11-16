@@ -589,6 +589,9 @@ export async function expectEnhancementsSettled(watch: EnhancementWatch): Promis
   expect(await watch.settled(), stillEnhancingText(watch.held())).toBe(true);
 }
 
+/** The window property quietResize() reads: true only while a shot is taken. */
+const SHOOTING = '__portfolioShooting';
+
 /**
  * The longest the shot waits, in all, for the finite animations running once
  * the page has settled to end on their own (waitOutAnimations()).
@@ -625,10 +628,55 @@ async function waitOutAnimations(page: Page, when: string): Promise<void> {
 }
 
 /**
- * What a page that shoots needs before it loads: the enhancement watch the
- * shot waits on, started before the page's first chunk.
+ * Keeps the capture's own resize event from the page's resize listeners
+ * while `window[flag]` is true. A full-page capture past the window fires
+ * one resize at the page, and every change a listener makes then, at once,
+ * on the next frame or on a timer, is in the shot (CI Linux and macOS,
+ * 2026-11-16), so a page that re-measures on resize shot itself mid-change.
+ *
+ * It's a capture-phase listener on window, and stopImmediatePropagation()
+ * keeps every resize listener added after it from the event. So it has to be
+ * the first: an init script adds it before the page's own script runs. Added
+ * later, just before the shot, it runs after the page's own listeners
+ * (listeners on the event's target run in the order they were added) and
+ * keeps nothing from them, so it can't be added in capturePage().
+ */
+export function quietResize(flag: string): void {
+  window.addEventListener(
+    'resize',
+    (event) => {
+      if ((window as unknown as Record<string, unknown>)[flag] === true) {
+        event.stopImmediatePropagation();
+      }
+    },
+    true,
+  );
+}
+
+/** Runs `take` with the page's resize listeners kept from the capture's own resize. */
+async function quietly<T>(page: Page, take: () => Promise<T>): Promise<T> {
+  const set = (value: boolean) =>
+    page.evaluate(
+      ([flag, on]) => {
+        (window as unknown as Record<string, unknown>)[flag] = on;
+      },
+      [SHOOTING, value] as [string, boolean],
+    );
+  await set(true);
+  try {
+    return await take();
+  } finally {
+    await set(false);
+  }
+}
+
+/**
+ * What a page that shoots needs before it loads: quietResize() as the first
+ * resize listener, and the enhancement watch the shot waits on, started
+ * before the page's first chunk.
  */
 export async function prepareShot(page: Page): Promise<EnhancementWatch> {
+  await page.addInitScript(quietResize, SHOOTING);
   return watchEnhancements(page);
 }
 
@@ -657,7 +705,7 @@ export async function capturePage(
   await loadImages(page);
   await waitOutAnimations(page, 'before the shot');
   await beforeShot?.();
-  return page.screenshot(SHOT);
+  return quietly(page, () => page.screenshot(SHOT));
 }
 
 /**
@@ -687,7 +735,7 @@ async function screenshot(
         description: pendingAnnotation(pending),
       });
     } else {
-      await expect(page).toHaveScreenshot(`${name}.png`, SHOT);
+      await quietly(page, () => expect(page).toHaveScreenshot(`${name}.png`, SHOT));
     }
   }
 }
