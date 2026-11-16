@@ -124,13 +124,14 @@ const ENTRANCE_WAIT_MS = 3_000;
 const ENTRANCE_POLL_MS = 100;
 
 /**
- * The finite animations still running on the document timeline, each as
- * `<name> on <target>`. Not one that repeats forever, which never ends; one
- * a scroll or view timeline drives, which moves only as the page scrolls;
- * one paused or pending, which doesn't move on its own; or one on a target
- * that doesn't render. Self-contained, for page.evaluate().
+ * The finite animations still running on the document timeline, each named
+ * `<name> on <target>`, with the time it has left in ms. Not one that repeats
+ * forever, which never ends; one a scroll or view timeline drives, which
+ * moves only as the page scrolls; one paused or pending, which doesn't move
+ * on its own; or one on a target that doesn't render. Self-contained, for
+ * page.evaluate().
  */
-function finiteRunning(): string[] {
+function finiteRunning(): { readonly name: string; readonly left: number }[] {
   return document.getAnimations().flatMap((animation) => {
     if (animation.playState !== 'running' || animation.pending) return [];
     if (animation.timeline !== document.timeline) return [];
@@ -147,7 +148,11 @@ function finiteRunning(): string[] {
     const on = target
       ? `${[target.tagName.toLowerCase(), ...target.classList].join('.')}${effect?.pseudoElement ?? ''}`
       : 'no target';
-    return [`${name} on ${on}`];
+    const timing = effect!.getComputedTiming();
+    const left =
+      (Number(timing.endTime) - Number(timing.localTime ?? 0)) /
+      Math.abs(animation.playbackRate || 1);
+    return [{ name: `${name} on ${on}`, left: Math.max(0, left) }];
   });
 }
 
@@ -182,7 +187,10 @@ async function finishAnimations(page: Page, when: string): Promise<void> {
     await page.waitForTimeout(ENTRANCE_POLL_MS);
     running = await page.evaluate(finiteRunning);
   }
-  expect(running, `finite animations still running ${ENTRANCE_WAIT_MS} ms ${when}`).toEqual([]);
+  expect(
+    running.map(({ name }) => name),
+    `finite animations still running ${ENTRANCE_WAIT_MS} ms ${when}`,
+  ).toEqual([]);
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
   );
@@ -581,13 +589,56 @@ export async function expectEnhancementsSettled(watch: EnhancementWatch): Promis
   expect(await watch.settled(), stillEnhancingText(watch.held())).toBe(true);
 }
 
+/**
+ * The longest the shot waits, in all, for the finite animations running once
+ * the page has settled to end on their own (waitOutAnimations()).
+ */
+const SHOT_WAIT_MS = 8_000;
+
+/**
+ * Every finite animation running ended on its own, then two frames more. It
+ * waits out the time each has left, then reads them again, since one can start
+ * while it waits, as Shell's caret blinks once its footer comes into view, up
+ * to SHOT_WAIT_MS in all. It fails closed at once, naming each one and its time
+ * left, when any has more left than the wait has; one that repeats forever is
+ * left alone, as finiteRunning() leaves it.
+ */
+async function waitOutAnimations(page: Page, when: string): Promise<void> {
+  const until = Date.now() + SHOT_WAIT_MS;
+  for (;;) {
+    const running = await page.evaluate(finiteRunning);
+    if (running.length === 0) break;
+    const budget = until - Date.now();
+    expect(
+      running
+        .filter(({ left }) => left > budget)
+        .map(({ name, left }) => `${name}: ${Math.ceil(left)} ms left`),
+      `finite animations with more time left than the ${SHOT_WAIT_MS} ms the shot waits in all, ${when}`,
+    ).toEqual([]);
+    await page.waitForTimeout(
+      Math.ceil(Math.max(...running.map(({ left }) => left))) + ENTRANCE_POLL_MS,
+    );
+  }
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+}
+
 /** The shot's options: the whole page, finite animations finished, no caret. */
 const SHOT = { animations: 'disabled', caret: 'hide', fullPage: true } as const;
 
 /**
  * The page as the shot takes it: once its enhancements have mounted or
- * failed and every image on it has loaded, the whole page. `beforeShot`
- * runs just before the capture, for the modes' own checks.
+ * failed, every image on it has loaded, and every finite animation has
+ * ended, the whole page. `beforeShot` runs just before the capture, for the
+ * modes' own checks.
+ *
+ * settle() waits for the animations running at load, but an enhancement can
+ * start one after it, as Swiss Signal's rows rise once its runtime turns
+ * active on an observer's first delivery. Caught running, it is ended by
+ * `animations: 'disabled'` inside the capture, which a later shot of the
+ * same page doesn't match, so each is waited out here to its own end
+ * (waitOutAnimations()), bounded in all and failing closed.
  */
 export async function capturePage(
   page: Page,
@@ -596,6 +647,7 @@ export async function capturePage(
 ): Promise<Buffer> {
   await expectEnhancementsSettled(watch);
   await loadImages(page);
+  await waitOutAnimations(page, 'before the shot');
   await beforeShot?.();
   return page.screenshot(SHOT);
 }
