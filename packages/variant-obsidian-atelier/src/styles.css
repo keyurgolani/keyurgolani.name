@@ -1130,7 +1130,8 @@
   display: grid;
   align-items: end;
   gap: var(--space-l) var(--layout-grid-gutter);
-  padding: var(--space-xl) var(--space-l);
+  /* Folded (a phone at large text), the title page takes its wall's width, as the column's text does. */
+  padding: var(--space-xl) min(var(--space-l), var(--layout-unfolded));
 }
 
 /* No floor under the title page: its wall is the plate and its label, nothing standing empty (P1-8). */
@@ -1141,6 +1142,8 @@
 [data-variant='obsidian-atelier'] .oa-vitrine > .oa-folio {
   justify-self: center;
   inline-size: min(100%, var(--type-measure-compact));
+  /* Folded, a small inset, so its title's words keep their lines whole rather than a letter a line. */
+  padding-inline: min(var(--space-l), max(var(--space-xs), var(--layout-unfolded)));
 }
 
 [data-variant='obsidian-atelier'] .oa-folio {
