@@ -1,0 +1,241 @@
+{
+  "name": "kc-171-176",
+  "summary": "Kinetic Cosmos keeps its planet figures, crowded orbit-line labels and focus rings legible in every face and mode",
+  "head": "935293c355c29a61902f9a8e2f77508feba0337f",
+  "base": "d9a9fab0ee48bc066eae8d392fd26aa19f185123",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "an orbit line too crowded for its labels lists its stops until the width they fit from",
+      "a planet's figure and its unit sit on plates of the body's fill, and the body keeps its magnitude's size"
+    ]
+  },
+  "reds": [
+    {
+      "label": "r171",
+      "at": "1e86625ab575ca2cc52489336f2e8c827d208812",
+      "specs": [
+        "tests/e2e/kinetic-cosmos-reading-shell-mono.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-book-serif.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-field-serif.spec.ts"
+      ],
+      "tests": 5,
+      "files": 3,
+      "failed": 5
+    },
+    {
+      "label": "r172",
+      "at": "ffa95454ce30c20fdce526726117f0c068a96e70",
+      "specs": [
+        "tests/e2e/kinetic-cosmos-reading-shell-mono.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-accessible-reading.spec.ts"
+      ],
+      "tests": 4,
+      "files": 2,
+      "failed": 4
+    },
+    {
+      "label": "r173",
+      "at": "8443fd21d4c39d065e20f99be4a19808f2aea9b0",
+      "specs": ["tests/e2e/kinetic-cosmos-reading-paste-up.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "r174",
+      "at": "0d8f72bf55fdd39bbbf80f949cf2f537a37f2233",
+      "specs": [
+        "tests/e2e/kinetic-cosmos-reading-shell-mono.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-accessible-reading.spec.ts"
+      ],
+      "tests": 8,
+      "files": 2,
+      "failed": 8
+    },
+    {
+      "label": "r175",
+      "at": "00ac93a0381e516bd844f9a1e971adafa1255c11",
+      "specs": [
+        "tests/e2e/kinetic-cosmos-reading-shell-mono.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-accessible-reading.spec.ts"
+      ],
+      "tests": 12,
+      "files": 2,
+      "failed": 12
+    },
+    {
+      "label": "r176",
+      "at": "3696bfeb3048519f0ba30839461f9bd1c3da8b49",
+      "specs": ["tests/e2e/kinetic-cosmos-reading-accessible-reading.spec.ts"],
+      "tests": 7,
+      "files": 1,
+      "failed": 7
+    },
+    {
+      "label": "cells",
+      "kind": "cells",
+      "at": "1e86625ab575ca2cc52489336f2e8c827d208812",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:kinetic-cosmos complete / kinetic-cosmos/(art-deco/forest-moss/shell-mono/dark 1024x768 default|art-deco/forest-moss/shell-mono/dark 1024x768 contrast-more|paper-tactile/paper-ink/accessible-reading/dark 1024x768 contrast-more|letterpress/low-stimulus-warm/paste-up/dark 1024x768 forced-colors|fluent-2-inspired/coral-lagoon/field-serif/dark 390x844 no-javascript|international-grid/botanical-sage/field-serif/dark 390x844 no-javascript|material-expressive-inspired/jewel-twilight/book-serif/dark 390x844 default|material-expressive-inspired/jewel-twilight/book-serif/dark 390x844 no-javascript|memphis/night-terminal/book-serif/dark 390x844 default|memphis/night-terminal/book-serif/dark 390x844 no-javascript|neobrutalist/high-contrast/field-serif/dark 390x844 no-javascript|platform-neutral/warm-parchment/book-serif/system 390x844 default|platform-neutral/warm-parchment/book-serif/system 390x844 no-javascript|platform-neutral/warm-parchment/field-serif/system 390x844 no-javascript|poster-press/reduced-chroma/book-serif/dark 390x844 default|poster-press/reduced-chroma/book-serif/dark 390x844 no-javascript|primer-inspired/arctic-aurora/field-serif/dark 390x844 no-javascript|skeuomorphic/ultramarine-ink/book-serif/dark 390x844 default|skeuomorphic/ultramarine-ink/book-serif/dark 390x844 no-javascript) ",
+      "shards": ["find"],
+      "tests": 19,
+      "failed": 19
+    }
+  ],
+  "e2e": [
+    {
+      "label": "kc",
+      "specs": ["tests/e2e/kinetic-*.spec.ts"],
+      "tests": 64,
+      "files": 10
+    }
+  ],
+  "cells": [
+    {
+      "label": "kc",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:kinetic-cosmos complete / kinetic-cosmos/(art-deco/forest-moss/shell-mono/dark 1024x768 default|art-deco/forest-moss/shell-mono/dark 1024x768 contrast-more|paper-tactile/paper-ink/accessible-reading/dark 1024x768 contrast-more|letterpress/low-stimulus-warm/paste-up/dark 1024x768 forced-colors|fluent-2-inspired/coral-lagoon/field-serif/dark 390x844 no-javascript|international-grid/botanical-sage/field-serif/dark 390x844 no-javascript|material-expressive-inspired/jewel-twilight/book-serif/dark 390x844 default|material-expressive-inspired/jewel-twilight/book-serif/dark 390x844 no-javascript|memphis/night-terminal/book-serif/dark 390x844 default|memphis/night-terminal/book-serif/dark 390x844 no-javascript|neobrutalist/high-contrast/field-serif/dark 390x844 no-javascript|platform-neutral/warm-parchment/book-serif/system 390x844 default|platform-neutral/warm-parchment/book-serif/system 390x844 no-javascript|platform-neutral/warm-parchment/field-serif/system 390x844 no-javascript|poster-press/reduced-chroma/book-serif/dark 390x844 default|poster-press/reduced-chroma/book-serif/dark 390x844 no-javascript|primer-inspired/arctic-aurora/field-serif/dark 390x844 no-javascript|skeuomorphic/ultramarine-ink/book-serif/dark 390x844 default|skeuomorphic/ultramarine-ink/book-serif/dark 390x844 no-javascript) ",
+      "shards": ["find"],
+      "tests": 19,
+      "passed": 19,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "planets-serif-light",
+      "spec": "look/kc-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_KIND": "planets",
+        "PROOF_LOOK_LANG": "platform-neutral",
+        "PROOF_LOOK_SCHEME": "warm-parchment",
+        "PROOF_LOOK_PACK": "book-serif",
+        "PROOF_LOOK_MODE": "light"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "planets-serif-dark",
+      "spec": "look/kc-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_KIND": "planets",
+        "PROOF_LOOK_LANG": "platform-neutral",
+        "PROOF_LOOK_SCHEME": "warm-parchment",
+        "PROOF_LOOK_PACK": "book-serif",
+        "PROOF_LOOK_MODE": "dark"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "planets-mono-light",
+      "spec": "look/kc-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_KIND": "planets",
+        "PROOF_LOOK_LANG": "platform-neutral",
+        "PROOF_LOOK_SCHEME": "warm-parchment",
+        "PROOF_LOOK_PACK": "console-mono",
+        "PROOF_LOOK_MODE": "light"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "planets-mono-dark",
+      "spec": "look/kc-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_KIND": "planets",
+        "PROOF_LOOK_LANG": "platform-neutral",
+        "PROOF_LOOK_SCHEME": "warm-parchment",
+        "PROOF_LOOK_PACK": "console-mono",
+        "PROOF_LOOK_MODE": "dark"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "planets-mono-hc",
+      "spec": "look/kc-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_KIND": "planets",
+        "PROOF_LOOK_LANG": "platform-neutral",
+        "PROOF_LOOK_SCHEME": "warm-parchment",
+        "PROOF_LOOK_PACK": "console-mono",
+        "PROOF_LOOK_MODE": "high-contrast"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "lines-mono",
+      "spec": "look/kc-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_KIND": "lines",
+        "PROOF_LOOK_LANG": "platform-neutral",
+        "PROOF_LOOK_SCHEME": "warm-parchment",
+        "PROOF_LOOK_PACK": "console-mono",
+        "PROOF_LOOK_MODE": "dark"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "lines-reading",
+      "spec": "look/kc-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_KIND": "lines",
+        "PROOF_LOOK_LANG": "paper-tactile",
+        "PROOF_LOOK_SCHEME": "paper-ink",
+        "PROOF_LOOK_PACK": "accessible-reading",
+        "PROOF_LOOK_MODE": "dark"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "focus-reading",
+      "spec": "look/kc-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_KIND": "focus",
+        "PROOF_LOOK_LANG": "paper-tactile",
+        "PROOF_LOOK_SCHEME": "paper-ink",
+        "PROOF_LOOK_PACK": "accessible-reading",
+        "PROOF_LOOK_MODE": "dark"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "focus-paste-up",
+      "spec": "look/kc-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_KIND": "focus",
+        "PROOF_LOOK_LANG": "letterpress",
+        "PROOF_LOOK_SCHEME": "low-stimulus-warm",
+        "PROOF_LOOK_PACK": "paste-up",
+        "PROOF_LOOK_MODE": "dark"
+      },
+      "tests": 1,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": ["^kinetic-cosmos/"]
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
