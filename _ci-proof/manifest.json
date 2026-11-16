@@ -1,0 +1,87 @@
+{
+  "name": "aurora-glass-ring-contrast-read",
+  "summary": "Aurora Glass's hero and offer buttons' focus rings read under more contrast at 390, before and after the inset ring",
+  "head": "6ac64fc8b033640f48b754ffcc47245cf9dd7cc3",
+  "base": "75c2ccd3a7a84844e8cf48b7620bb2eaf99c00ca",
+  "cells": [
+    {
+      "label": "cm",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/editorial\\-serif/system\\ 390x844\\ contrast\\-more\\ )",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1
+    },
+    {
+      "label": "cm",
+      "at": "base",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/editorial\\-serif/system\\ 390x844\\ contrast\\-more\\ )",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "pn-hero-cm",
+      "spec": "look/cm.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "platform-neutral/warm-parchment/editorial-serif/system",
+        "L1_LOOK_NAME": "hero",
+        "L1_LOOK_SELECTOR": "#top > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > p:nth-child(4) > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390",
+        "L1_LOOK_ROW": "contrast-more"
+      },
+      "tests": 1,
+      "shots": 2
+    },
+    {
+      "label": "pn-hero-d",
+      "spec": "look/cm.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "platform-neutral/warm-parchment/editorial-serif/system",
+        "L1_LOOK_NAME": "hero",
+        "L1_LOOK_SELECTOR": "#top > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > p:nth-child(4) > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1,
+      "shots": 2
+    },
+    {
+      "label": "pn-cta-cm",
+      "spec": "look/cm.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "platform-neutral/warm-parchment/editorial-serif/system",
+        "L1_LOOK_NAME": "cta",
+        "L1_LOOK_SELECTOR": "#cta > div:nth-child(2) > p:nth-child(2) > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390",
+        "L1_LOOK_ROW": "contrast-more"
+      },
+      "tests": 1,
+      "shots": 2
+    },
+    {
+      "label": "pn-cta-d",
+      "spec": "look/cm.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "platform-neutral/warm-parchment/editorial-serif/system",
+        "L1_LOOK_NAME": "cta",
+        "L1_LOOK_SELECTOR": "#cta > div:nth-child(2) > p:nth-child(2) > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
