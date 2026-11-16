@@ -167,15 +167,22 @@ export async function settle(page: Page, javaScript: boolean): Promise<void> {
     await document.fonts.ready;
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
+  await finishAnimations(page, 'after settle');
+}
+
+/**
+ * Every finite animation ended, waiting up to ENTRANCE_WAIT_MS, then two
+ * frames more. It fails closed, naming each one still running at the bound,
+ * `when` saying at which step.
+ */
+async function finishAnimations(page: Page, when: string): Promise<void> {
   const until = Date.now() + ENTRANCE_WAIT_MS;
   let running = await page.evaluate(finiteRunning);
   while (running.length > 0 && Date.now() < until) {
     await page.waitForTimeout(ENTRANCE_POLL_MS);
     running = await page.evaluate(finiteRunning);
   }
-  expect(running, `finite animations still running ${ENTRANCE_WAIT_MS} ms after settle`).toEqual(
-    [],
-  );
+  expect(running, `finite animations still running ${ENTRANCE_WAIT_MS} ms ${when}`).toEqual([]);
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
   );
@@ -574,10 +581,29 @@ export async function expectEnhancementsSettled(watch: EnhancementWatch): Promis
   expect(await watch.settled(), stillEnhancingText(watch.held())).toBe(true);
 }
 
+/** The shot's options: the whole page, finite animations finished, no caret. */
+const SHOT = { animations: 'disabled', caret: 'hide', fullPage: true } as const;
+
 /**
- * The whole page's screenshot, once its enhancements have mounted or failed
- * and every image on it has loaded, attached to the report, and compared
- * against its baseline for the platform's own variants in the pinned image.
+ * The page as the shot takes it: once its enhancements have mounted or
+ * failed and every image on it has loaded, the whole page. `beforeShot`
+ * runs just before the capture, for the modes' own checks.
+ */
+export async function capturePage(
+  page: Page,
+  watch: EnhancementWatch,
+  { beforeShot }: { readonly beforeShot?: () => Promise<void> } = {},
+): Promise<Buffer> {
+  await expectEnhancementsSettled(watch);
+  await loadImages(page);
+  await beforeShot?.();
+  return page.screenshot(SHOT);
+}
+
+/**
+ * The whole page's screenshot (capturePage()), attached to the report, and
+ * compared against its baseline for the platform's own variants in the
+ * pinned image.
  */
 async function screenshot(
   page: Page,
@@ -586,11 +612,8 @@ async function screenshot(
   name: string,
   watch: EnhancementWatch,
 ): Promise<void> {
-  await expectEnhancementsSettled(watch);
-  await loadImages(page);
-  const options = { animations: 'disabled', caret: 'hide', fullPage: true } as const;
   await testInfo.attach(`${name}.png`, {
-    body: await page.screenshot(options),
+    body: await capturePage(page, watch),
     contentType: 'image/png',
   });
   if (COMPARE_SCREENSHOTS && firstParty(variant)) {
@@ -604,7 +627,7 @@ async function screenshot(
         description: pendingAnnotation(pending),
       });
     } else {
-      await expect(page).toHaveScreenshot(`${name}.png`, options);
+      await expect(page).toHaveScreenshot(`${name}.png`, SHOT);
     }
   }
 }
