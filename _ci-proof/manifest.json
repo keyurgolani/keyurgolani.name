@@ -1,0 +1,146 @@
+{
+  "name": "singular-rail-labels-forced",
+  "summary": "Singular's rail stop labels read on their chips when their stops are focused under forced colours",
+  "head": "3a2168b2b8baeed85e5513e85342555a65a2fa9b",
+  "base": "b31f1d839f485237f696dd7e2e8305c2287f33fc",
+  "gate": {
+    "package": "singular"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding"
+    ]
+  },
+  "reds": [
+    {
+      "label": "rail",
+      "at": "1ed17abafdcb57f1b898fdd50f794d7e1bf91965",
+      "specs": ["tests/e2e/singular-rail-labels-forced.spec.ts"],
+      "tests": 8,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "singular",
+      "specs": ["tests/e2e/singular*.spec.ts", "tests/e2e/focus-perimeter-painted-offset.spec.ts"],
+      "tests": 68,
+      "files": 14
+    }
+  ],
+  "look": [
+    {
+      "label": "home-light-f",
+      "spec": "look/rail.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/",
+        "L1_LOOK_PALETTE": "light",
+        "L1_LOOK_ROW": "forced-colors",
+        "L1_LOOK_STOPS": "0,5"
+      },
+      "tests": 1,
+      "shots": 4
+    },
+    {
+      "label": "home-light-d",
+      "spec": "look/rail.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/",
+        "L1_LOOK_PALETTE": "light",
+        "L1_LOOK_ROW": "default",
+        "L1_LOOK_STOPS": "0,5"
+      },
+      "tests": 1,
+      "shots": 4
+    },
+    {
+      "label": "home-dark-f",
+      "spec": "look/rail.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/",
+        "L1_LOOK_PALETTE": "dark",
+        "L1_LOOK_ROW": "forced-colors",
+        "L1_LOOK_STOPS": "0,5"
+      },
+      "tests": 1,
+      "shots": 4
+    },
+    {
+      "label": "home-dark-d",
+      "spec": "look/rail.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/",
+        "L1_LOOK_PALETTE": "dark",
+        "L1_LOOK_ROW": "default",
+        "L1_LOOK_STOPS": "0,5"
+      },
+      "tests": 1,
+      "shots": 4
+    },
+    {
+      "label": "work-light-f",
+      "spec": "look/rail.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/work/project-name",
+        "L1_LOOK_PALETTE": "light",
+        "L1_LOOK_ROW": "forced-colors",
+        "L1_LOOK_STOPS": "0,6"
+      },
+      "tests": 1,
+      "shots": 4
+    },
+    {
+      "label": "work-light-d",
+      "spec": "look/rail.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/work/project-name",
+        "L1_LOOK_PALETTE": "light",
+        "L1_LOOK_ROW": "default",
+        "L1_LOOK_STOPS": "0,6"
+      },
+      "tests": 1,
+      "shots": 4
+    },
+    {
+      "label": "work-dark-f",
+      "spec": "look/rail.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/work/project-name",
+        "L1_LOOK_PALETTE": "dark",
+        "L1_LOOK_ROW": "forced-colors",
+        "L1_LOOK_STOPS": "0,6"
+      },
+      "tests": 1,
+      "shots": 4
+    },
+    {
+      "label": "work-dark-d",
+      "spec": "look/rail.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/work/project-name",
+        "L1_LOOK_PALETTE": "dark",
+        "L1_LOOK_ROW": "default",
+        "L1_LOOK_STOPS": "0,6"
+      },
+      "tests": 1,
+      "shots": 4
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
