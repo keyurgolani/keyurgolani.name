@@ -1,0 +1,29 @@
+{
+  "name": "rg-index-occlusion-cells",
+  "summary": "Raw Grid's site index in Cyberpunk, Liquid Dusk and Accessible Reading, read as the quality cell reads it on CI Linux, where two links were obscured by the header's row",
+  "head": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "cells": [
+    {
+      "label": "index",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:raw-grid complete / raw-grid/cyberpunk/liquid-dusk/accessible-reading/dark 1440x900 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "index",
+      "spec": "look/look-180-ci.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
