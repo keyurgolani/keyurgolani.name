@@ -1,0 +1,54 @@
+{
+  "name": "swiss-end-column",
+  "summary": "Swiss Signal's ruled tables size their columns to their words, so no column breaks a word it could hold, and a reading time's or an episode's minutes keep their value with their unit",
+  "head": "79a1988740307ea5cabe98a2192616df02e4b555",
+  "base": "2a65ded5c3cb3eced3b4948dbb8d27a48bdc09f1",
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "endcol",
+      "at": "3c6f9a1fd6c96fc2ea2d56b3d7a393455b3d0cb0",
+      "specs": [
+        "tests/e2e/swiss-signal-table-end-column.spec.ts",
+        "tests/e2e/swiss-signal-table-units-sample.spec.ts"
+      ],
+      "tests": 2,
+      "files": 2,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ss",
+      "specs": ["tests/e2e/swiss-signal*.spec.ts"],
+      "tests": 78,
+      "files": 18,
+      "skipped": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "swiss231",
+      "spec": "look/swiss-231-look.spec.ts",
+      "project": "chromium",
+      "tests": 16,
+      "files": 1,
+      "shots": 68
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": [
+      "^swiss-signal/sample > sample\\.spec\\.ts > mobile > ",
+      "^swiss-signal/music > fixtures\\.spec\\.ts > desktop > ",
+      "^swiss-signal/(complete|mixed|writing) > fixtures\\.spec\\.ts > mobile > "
+    ]
+  },
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
