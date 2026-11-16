@@ -1,0 +1,82 @@
+{
+  "name": "singular-stack",
+  "summary": "Singular's bar controls on a phone draw their focus ring inside their own box, and a closed record row's count wraps rather than clipping",
+  "head": "d8bd34301b847fc15e20c0092e869ed302469469",
+  "base": "d9a9fab0ee48bc066eae8d392fd26aa19f185123",
+  "gate": {
+    "package": "singular"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding"
+    ]
+  },
+  "reds": [
+    {
+      "label": "bar-contents",
+      "at": "cc3f6aa9d675b3f46441cd0071ba1379a7835664",
+      "specs": [
+        "tests/e2e/singular-focus-perimeter-blueprint-lavender-dusk.spec.ts",
+        "tests/e2e/singular-focus-perimeter-claymorphic.spec.ts",
+        "tests/e2e/singular-focus-perimeter-letterpress.spec.ts"
+      ],
+      "tests": 9,
+      "files": 1,
+      "failed": 9
+    },
+    {
+      "label": "fold-line",
+      "at": "e6860b5dc61a2ecd31a42f42146b020efe5eeb72",
+      "specs": ["tests/e2e/singular-fold-line-reflow.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "fold-line-cell",
+      "kind": "cells",
+      "at": "e6860b5dc61a2ecd31a42f42146b020efe5eeb72",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:singular\\ complete\\ /\\ singular/platform\\-neutral/warm\\-parchment/accessible\\-reading/system\\ 1440x900\\ default\\ )",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "singular",
+      "specs": ["tests/e2e/singular*.spec.ts", "tests/e2e/focus-perimeter-painted-offset.spec.ts"],
+      "tests": 60,
+      "files": 13
+    }
+  ],
+  "cells": [
+    {
+      "label": "bar-contents",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:singular\\ complete\\ /\\ singular/blueprint/lavender\\-dusk/humanist\\-ui/dark\\ 390x844\\ default\\ |composition:singular\\ complete\\ /\\ singular/blueprint/lavender\\-dusk/humanist\\-ui/dark\\ 390x844\\ contrast\\-more\\ |composition:singular\\ complete\\ /\\ singular/blueprint/lavender\\-dusk/humanist\\-ui/dark\\ 390x844\\ forced\\-colors\\ |composition:singular\\ complete\\ /\\ singular/blueprint/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ |composition:singular\\ complete\\ /\\ singular/blueprint/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ contrast\\-more\\ |composition:singular\\ complete\\ /\\ singular/blueprint/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ forced\\-colors\\ |composition:singular\\ complete\\ /\\ singular/claymorphic/botanical\\-sage/shell\\-mono/dark\\ 390x844\\ default\\ |composition:singular\\ complete\\ /\\ singular/claymorphic/botanical\\-sage/shell\\-mono/dark\\ 390x844\\ contrast\\-more\\ |composition:singular\\ complete\\ /\\ singular/claymorphic/botanical\\-sage/shell\\-mono/dark\\ 390x844\\ forced\\-colors\\ |composition:singular\\ complete\\ /\\ singular/international\\-grid/drafting\\-blue/paste\\-up/high\\-contrast\\ 390x844\\ default\\ |composition:singular\\ complete\\ /\\ singular/international\\-grid/drafting\\-blue/paste\\-up/high\\-contrast\\ 390x844\\ contrast\\-more\\ |composition:singular\\ complete\\ /\\ singular/international\\-grid/drafting\\-blue/paste\\-up/high\\-contrast\\ 390x844\\ forced\\-colors\\ |composition:singular\\ complete\\ /\\ singular/letterpress/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ |composition:singular\\ complete\\ /\\ singular/letterpress/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ contrast\\-more\\ |composition:singular\\ complete\\ /\\ singular/letterpress/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ forced\\-colors\\ )",
+      "shards": ["find"],
+      "tests": 15,
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "label": "fold-lines",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:singular\\ complete\\ /\\ singular/claymorphic/botanical\\-sage/shell\\-mono/dark\\ 1440x900\\ default\\ |composition:singular\\ complete\\ /\\ singular/paper\\-tactile/sunset\\-ember/shell\\-mono/dark\\ 1440x900\\ default\\ |composition:singular\\ complete\\ /\\ singular/platform\\-neutral/warm\\-parchment/accessible\\-reading/system\\ 1440x900\\ default\\ |composition:singular\\ complete\\ /\\ singular/platform\\-neutral/warm\\-parchment/shell\\-mono/system\\ 1440x900\\ default\\ )",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
