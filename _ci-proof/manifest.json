@@ -1,0 +1,17 @@
+{
+  "name": "schematic-226-tb-probe2",
+  "summary": "Schematic's foot title block at 100% text on CI Linux, under every typography and two design languages from 1024 to 1920: broken words in its four columns as they are and with each column at least its longest word, whether it then overflows, and whether its cells move",
+  "head": "8fef809e37c76cb640b461d8d159ec4c43d4c1e8",
+  "base": "75c2ccd3a7a84844e8cf48b7620bb2eaf99c00ca",
+  "gate": false,
+  "look": [
+    {
+      "label": "tbprobe2",
+      "spec": "look/schematic-tb-probe2.spec.ts",
+      "project": "chromium",
+      "tests": 2
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
