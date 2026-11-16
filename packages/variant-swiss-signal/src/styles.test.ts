@@ -174,3 +174,28 @@ test("a secondary line after the owner's paragraph, in a cell or a fact sheet, t
   assert.match(rules[0]!.selector, /:is\(td, \.ss-sheet-fact__main\) \.pf-rich-text \+ p$/);
   assert.match(rules[0]!.body, /margin-block-start:\s*var\(--space-xs\)/);
 });
+
+test("no text takes the bare accent: the signal and every parenthetical take the accent's text role", () => {
+  // The accent anchor carries no text target, and a pale scheme's reads under 3:1 on its canvas
+  // (Pastel Sorbet's pink, 2.65:1): text takes the accent's text role, which every scheme solves
+  // to the text target. A rule, an underline or a band may still take the accent.
+  const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  const colours = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((rule) =>
+    [...rule[2]!.matchAll(/(?<![-\w])color\s*:\s*([^;]+)/g)].map((decl) => ({
+      selector: rule[1]!.trim().replace(/\s+/g, ' '),
+      value: decl[1]!.trim(),
+    })),
+  );
+  assert.ok(colours.length > 20, 'the stylesheet sets text colours');
+  assert.deepEqual(
+    colours.filter(({ value }) => /var\(--color-accent\)/.test(value)),
+    [],
+  );
+  const signal = colours.filter(
+    ({ selector }) => selector === "[data-variant='swiss-signal'] .ss-paren--signal",
+  );
+  assert.deepEqual(
+    signal.map(({ value }) => value),
+    ['var(--color-accent-text)'],
+  );
+});
