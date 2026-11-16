@@ -156,6 +156,13 @@
   color: var(--layout-matte);
 }
 
+/* Under forced colours the ground is a system colour and stays, but the matte is a mix and gives way to the link colour, so the ink is the ground's own pair. */
+@media (forced-colors: active) {
+  [data-variant='horizontal-cinema'] .hc-chrome__views a[aria-current] {
+    color: var(--color-scrim);
+  }
+}
+
 /* An empty visitor control takes no room, so the top line ends on the page's last column line. */
 [data-variant='horizontal-cinema'] .hc-chrome > [data-visitor-control-slot]:empty {
   display: none;
