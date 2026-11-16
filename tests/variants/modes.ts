@@ -624,6 +624,14 @@ async function waitOutAnimations(page: Page, when: string): Promise<void> {
   );
 }
 
+/**
+ * What a page that shoots needs before it loads: the enhancement watch the
+ * shot waits on, started before the page's first chunk.
+ */
+export async function prepareShot(page: Page): Promise<EnhancementWatch> {
+  return watchEnhancements(page);
+}
+
 /** The shot's options: the whole page, finite animations finished, no caret. */
 const SHOT = { animations: 'disabled', caret: 'hide', fullPage: true } as const;
 
@@ -742,7 +750,7 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
   const failed = run === 'throw-switch' ? await failEveryEnhancement(page) : undefined;
   // The shot waits for the enhancements, so its watch starts before the page loads.
   const shot = takesShot(mode);
-  const watch = shot ? watchEnhancements(page) : undefined;
+  const watch = shot ? await prepareShot(page) : undefined;
   try {
     await check.go(page);
     await settle(page, mode !== 'no-javascript' && run !== 'blocked-chunks');
