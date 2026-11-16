@@ -1,77 +1,53 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { transitionNames } from '@portfolio/variant-contract';
-import {
-  compileVariantStylesheet,
-  exportTarget,
-  findInstalled,
-  registryMeta,
-  type PackageJson,
-} from '@portfolio/variant-contract/node';
-import { generateRegistry, HOST, renderOptions, stylesheetHooks } from './registry-options';
+import { registryMeta, type RegistryResult } from '@portfolio/variant-contract/node';
+import { generateRegistry, renderOptions } from './registry-options';
 
-// Every variant the host depends on, its stylesheet compiled as registry
-// generation compiles it, the kit's shared layout first (stylesheetHooks()),
-// and measured as #6's budget check reads it: the compiled bytes gzipped at
-// level 9, the size codegen writes into ASSET_MANIFEST. Each must be inside
-// its manifest's `budgets.css`, so a kit change that grows every
-// composition's stylesheet can't push one over without a test failing first.
+// Every variant the budget check registers, its stylesheet as registry
+// generation compiles it for the host to serve: the kit's shared layout
+// first (stylesheetHooks()) unless its manifest sets kitLayout false, and
+// after its layer the host's own rules for it, such as the view-transition
+// rules of a variant that opts in to them. Measured as #6's budget check reads
+// it: the served bytes gzipped at level 9, the size codegen writes into
+// ASSET_MANIFEST. Each must be inside its manifest's `budgets.css`, so a kit
+// or host change that grows every composition's stylesheet can't push one
+// over without a test failing first.
 
-const host = JSON.parse(fs.readFileSync(path.join(HOST, 'package.json'), 'utf8')) as PackageJson & {
-  dependencies?: Record<string, string>;
-};
+// The flags the budget check's own build registers under (ci/budgets.mjs): the
+// production compositions and the light and medium fixture variants. The one
+// over its budget on purpose registers under BUDGET_FIXTURES=over alone.
+const ENV = { BUDGET_FIXTURES: '1' };
 
-/** Each installed variant package the host depends on: its id, its compiled gzip size, and its css budget. */
-function measured(): { id: string; gzip: number; budget: number }[] {
-  const hooks = stylesheetHooks();
-  const found: { id: string; gzip: number; budget: number }[] = [];
-  for (const name of Object.keys(host.dependencies ?? {})) {
-    const dir = findInstalled(name, HOST);
-    if (!dir) continue;
-    const pkg = JSON.parse(
-      fs.readFileSync(path.join(dir, 'package.json'), 'utf8'),
-    ) as PackageJson & {
-      portfolio?: { kind?: string; manifest?: string };
-    };
-    if (pkg.portfolio?.kind !== 'variant' || !pkg.portfolio.manifest) continue;
-    // The budget check's own over-budget fixture is over on purpose (ci/budgets.mjs).
-    if (name.endsWith('/fixture-over-budget')) continue;
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(dir, pkg.portfolio.manifest), 'utf8'),
-    ) as {
-      id: string;
-      budgets?: { css?: number };
-      kitLayout?: boolean;
-      scrollReserve?: { blockStart?: string; blockEnd?: string; media?: string };
-    };
-    const target = exportTarget(pkg, './styles.css');
-    assert.ok(target, `${name} exports no ./styles.css`);
-    const result = compileVariantStylesheet({
-      id: manifest.id,
-      source: { dir, file: path.resolve(dir, target) },
-      // K-5: as registry generation compiles it, without the kit's layout under kitLayout: false.
-      shared: manifest.kitLayout === false ? [] : hooks.shared,
-      layerOrder: hooks.layerOrder,
-      layer: hooks.layer,
-      // With the host's root scroll-padding, as registry generation writes it.
-      scrollReserve: manifest.scrollReserve,
-    });
-    assert.ok(result.ok, `${manifest.id}: ${JSON.stringify(!result.ok && result.problems)}`);
-    assert.ok(manifest.budgets?.css, `${manifest.id} declares no css budget`);
-    found.push({
-      id: manifest.id,
-      gzip: gzipSync(result.stylesheet.bytes, { level: 9 }).byteLength,
-      budget: manifest.budgets.css,
-    });
-  }
-  return found.sort((a, b) => (a.id < b.id ? -1 : 1));
+let generated: Promise<RegistryResult> | undefined;
+/** Registry generation's result under ENV, as the build reads it, without writing anything. */
+function registry(): Promise<RegistryResult> {
+  generated ??= generateRegistry(ENV, { write: false }).then(({ result }) => {
+    assert.ok(result.ok, JSON.stringify(result.diagnostics, null, 2));
+    return result;
+  });
+  return generated;
 }
 
-test("every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget", () => {
-  const sizes = measured();
+/** Each registered variant: its id, its served stylesheet's gzip size, and its css budget. */
+async function measured(): Promise<{ id: string; gzip: number; budget: number }[]> {
+  const { variants } = await registry();
+  return variants
+    .map(({ manifest, stylesheet }) => {
+      assert.ok(stylesheet, `${manifest.id} has no stylesheet`);
+      assert.ok(manifest.budgets?.css, `${manifest.id} declares no css budget`);
+      return {
+        id: manifest.id,
+        gzip: gzipSync(stylesheet.bytes, { level: 9 }).byteLength,
+        budget: manifest.budgets.css,
+      };
+    })
+    .sort((a, b) => (a.id < b.id ? -1 : 1));
+}
+
+test("every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget", async () => {
+  const sizes = await measured();
   // The fallback and the first-party compositions at least.
   for (const id of [
     'fallback',
@@ -106,19 +82,18 @@ test("every variant's compiled stylesheet, the kit's layout included, is inside 
 // The figure the budget check reads is the gzipBytes registry generation writes into ASSET_MANIFEST,
 // from each stylesheet as the host serves it: for a variant whose manifest opts in to cross-document
 // view transitions, with the host's view-transition rules after its layer. What this file measures
-// is that figure for every variant the production build registers (the fixture variants register
-// under their flags alone), so none can pass here and fail the budget check.
+// is that figure for every variant the budget check's build registers, so none can pass here and
+// fail the budget check.
 test("each variant's measured size is the gzipBytes registry generation writes into ASSET_MANIFEST, view transitions included", async () => {
-  const { result } = await generateRegistry({}, { write: false });
-  assert.ok(result.ok, JSON.stringify(result.diagnostics, null, 2));
+  const result = await registry();
   const written = new Map(
-    registryMeta(result, renderOptions({})).ASSET_MANIFEST.flatMap((unit) =>
+    registryMeta(result, renderOptions(ENV)).ASSET_MANIFEST.flatMap((unit) =>
       unit.kind === 'variant' && unit.stylesheet
         ? [[unit.id, unit.stylesheet.gzipBytes] as const]
         : [],
     ),
   );
-  const sizes = measured().filter(({ id }) => written.has(id));
+  const sizes = (await measured()).filter(({ id }) => written.has(id));
   const optedIn = result.variants
     .filter(({ manifest }) => transitionNames(manifest) !== null)
     .map(({ manifest }) => manifest.id);
