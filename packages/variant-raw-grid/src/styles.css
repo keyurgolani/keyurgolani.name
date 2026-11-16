@@ -2265,6 +2265,30 @@
   }
 }
 
+/* Under forced colours the inks a dark ground takes are the page's ink, and these islands keep no
+   backplate (forced-color-adjust: none, above): on their dark grounds they ink in the canvas's own
+   colour, as they read before. */
+@media (forced-colors: active) {
+  [data-variant='raw-grid']
+    :is(
+      .rg-tab,
+      .rg-index__tab,
+      .rg-sticker[data-tone='emphasis'],
+      .rg-act:first-child,
+      .rg-head__dest[aria-current],
+      .rg-ticker__toggle [aria-pressed='true']
+    ),
+  [data-variant='raw-grid'] .rg-sticker[data-tone='emphasis'] a {
+    color: var(--color-canvas);
+  }
+
+  /* The first action's own ground, the accent (ButtonText), takes the other islands' CanvasText,
+     so its canvas ink sits on the pair the system guarantees. */
+  [data-variant='raw-grid'] .rg-act:first-child {
+    background-color: var(--color-text-primary);
+  }
+}
+
 /* A long address wraps at the points Breakable gives it, a label never inside a word (X1). Its
    ring lies a ring's reach inside its way's own ground, never on the block's rules, where under
    forced colours or more contrast it would be the rules' colour (the sweep's quality cells). */
