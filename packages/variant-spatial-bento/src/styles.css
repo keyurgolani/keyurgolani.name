@@ -3228,9 +3228,19 @@
     padding-block-end: calc(var(--ui-control-height) + var(--space-xl));
   }
 
-  /* Whatever takes focus or a jump stops above the dock, never under it. */
+  /*
+   * Whatever takes focus or a jump stops above the dock and its shadow, never under them, with its
+   * focus ring clear by 1px. The dock casts the language's overlay shadow, which paints above its
+   * box by blur + spread - y, the most over its outer layers: neumorphic's light 36px, glassmorphism's
+   * 38px, the deepest in the catalog. The 38px here is that allowance, written out rather than kept
+   * in a custom property, which the css budget has no room for; dock-shadow.test.tsx holds every
+   * pack, shipping or held, to it.
+   */
   [data-variant='spatial-bento'] :is(.sb-page, .sb-footer) :is(a[href], button, summary, [id]) {
-    scroll-margin-block-end: calc(var(--ui-control-height) + var(--space-xl));
+    scroll-margin-block-end: calc(
+      var(--ui-control-height) + var(--space-xl) + 38px + var(--ui-focus-offset) +
+        var(--ui-focus-width) + 1px
+    );
   }
 }
 

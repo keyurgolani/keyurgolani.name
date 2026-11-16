@@ -962,10 +962,10 @@ test('on a phone the dock is three cells, the works, Contact and the Menu, shari
     cells,
     /<a href="#work-showcase">Work<\/a>[\s\S]*<a href="#sb--contact">Contact<\/a>[\s\S]*commandfor="[^"]*sb-menu"[^>]*command="show-modal"|command="show-modal"[^>]*commandfor="[^"]*sb-menu"/,
   );
-  // Nothing focused or jumped to stops under the dock (SB-S13).
+  // Nothing focused or jumped to stops under the dock (SB-S13), nor its shadow (dock-shadow.test.tsx).
   assert.match(
     block,
-    /:is\(\.sb-page, \.sb-footer\) :is\(a\[href\], button, summary, \[id\]\) \{\s*scroll-margin-block-end: calc\(var\(--ui-control-height\) \+ var\(--space-xl\)\);/,
+    /:is\(\.sb-page, \.sb-footer\) :is\(a\[href\], button, summary, \[id\]\) \{\s*scroll-margin-block-end: calc\(\s*var\(--ui-control-height\) \+ var\(--space-xl\) \+/,
   );
   // And the talks list can't take a max-content column wider than its tile at 320.
   assert.match(CSS, /\.sb-ev--talk \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { shadowAbove } from './dock';
 
 // On a phone the dock holds the window's block end, and whatever Tab or a jump brings into view
 // stops above it (scroll-margin-block-end). The dock casts the design language's overlay shadow,
@@ -128,4 +129,14 @@ test("every pack's overlay shadow, shipping or held, reaches above the dock no f
 
 test("the phone's Tab stop clears the dock, its shadow's allowance, and a ring's reach and 1px", () => {
   assert.ok(stop().allowance > 0);
+});
+
+test("the dock's own lift reads its computed shadow the same way, so a ring Tab leaves in view clears it", () => {
+  const dark = 'color(srgb 0.17 0.14 0.11 / 0.18)';
+  const light = 'color(srgb 0.96 0.93 0.86 / 0.85)';
+  assert.equal(shadowAbove(`${dark} 12px 12px 24px 0px, ${light} -12px -12px 24px 0px`), 36);
+  assert.equal(shadowAbove('rgba(43, 36, 28, 0.22) 0px 22px 60px 0px'), 38);
+  assert.equal(shadowAbove('rgb(0, 0, 0) 0px 32px 64px -32px'), 0);
+  assert.equal(shadowAbove(`${light} 0px -40px 80px 0px inset, ${dark} 0px 2px 6px 0px`), 4);
+  assert.equal(shadowAbove('none'), 0);
 });
