@@ -29,7 +29,6 @@ async function readOpen(
 ) {
   await home(page, origin, setting);
   const closed = await rowNow(page);
-  const closedWide = await page.evaluate(() => document.scrollingElement!.scrollWidth);
   await openFromKeyboard(page);
   const open = await rowNow(page);
   const text = await panelText(page);
@@ -41,23 +40,17 @@ async function readOpen(
       ([part, top]) => Math.abs((open.tops[part] ?? -99) - top) <= 1,
     ),
     summaryKeepsItsHeight: Math.abs(open.summary - closed.summary) <= 0.5,
-    // At the default text size, against the phone's own width: a page wider than it widens the
-    // window a phone emulates, so innerWidth would follow it, and the page is held to it too. At
-    // 200% root text the page already runs wider than the phone with the panel closed, a reflow of
-    // its own, and the window it lays out in widens with it: there the open panel stays inside that
-    // window and adds no width to the page.
+    // Against the phone's own width: a page wider than it widens the window a phone emulates, so
+    // innerWidth would follow it. The page's own width is held to it too, at 200% root text as at
+    // the default text size.
     insideTheViewport:
       phone === undefined ||
-      (setting.rootText === undefined
-        ? text.box[0]! >= -0.5 && text.box[2]! <= phone + 0.5 && text.pageWide <= phone
-        : text.box[0]! >= -0.5 &&
-          text.box[2]! <= text.viewport + 0.5 &&
-          text.pageWide <= closedWide),
+      (text.box[0]! >= -0.5 && text.box[2]! <= phone + 0.5 && text.pageWide <= phone),
     holdsItsForm: !text.overflowing && text.controlsInside,
     tabWalksTheForm: stops.length > 0,
     eachStopPassesTheFocusCheck: stops.every((stop) => stop.findings.length === 0),
   };
-  const why = JSON.stringify({ closed, closedWide, open, text, stops });
+  const why = JSON.stringify({ closed, open, text, stops });
   expect(read, why).toEqual({
     textOnItsOwnPlate: true,
     textAtLeast45: true,
