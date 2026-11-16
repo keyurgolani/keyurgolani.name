@@ -1,0 +1,17 @@
+{
+  "name": "swiss-signal-cover-probe",
+  "summary": "Swiss Signal's sample at 1440, shot as the variant shots take it, 10 runs plain and 10 with observer deliveries held, at the base and with the selected index's rise hold: whether work 1's cover is painted, and the page's state at the shot",
+  "head": "97dec244406cb920b8cf2bf12ab08f3445b225bf",
+  "base": "d9a9fab0ee48bc066eae8d392fd26aa19f185123",
+  "gate": false,
+  "look": [
+    {
+      "label": "coverprobe",
+      "spec": "look/swiss-cover-probe.spec.ts",
+      "project": "chromium",
+      "tests": 20
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
