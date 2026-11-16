@@ -7,4 +7,16 @@ focusPerimeter('letterpress/ocean-abyss/editorial-serif/dark', [
     widths: [390],
     rows: ['default', 'contrast-more', 'forced-colors'],
   },
+  {
+    name: "opening's primary action",
+    selector: '#top .ag-id__acts > a:nth-child(1)',
+    widths: [390],
+    rows: ['forced-colors'],
+  },
+  {
+    name: "closing call's primary action",
+    selector: '#cta .ag-offer__acts > a:nth-child(1)',
+    widths: [390],
+    rows: ['forced-colors'],
+  },
 ]);
