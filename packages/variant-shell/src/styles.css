@@ -450,10 +450,13 @@
 
 /* ── Buttons: whiptail's < Ok > ── */
 
+/* Wrapped onto two lines, the buttons stand a ring's reach and a clear pixel apart, so a focused
+   button's ring falls on the page, never on the fill or edge of the button beside it. */
 [data-variant='shell'] .sh-btns {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3xs) calc(var(--layout-cell) * 2);
+  gap: max(var(--space-3xs), calc(var(--ui-focus-width) + var(--ui-focus-offset) + 1px))
+    calc(var(--layout-cell) * 2);
 }
 
 [data-variant='shell'] .sh-btn {
