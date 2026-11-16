@@ -2086,9 +2086,10 @@
  * of text, they passed only by the spacing exception, at exactly 24 px to the
  * link above, and a pixel's move failed it. An inline block, so the link's own
  * box holds the target and its ring; the padding sets its line in the middle;
- * the address still breaks after its slashes, inside it.
+ * the address still breaks after its slashes, inside it. A works row's plate link at the end of
+ * its line, Pl. 1 or Pl. 2 in 17 px of caption text, is one too.
  */
-[data-variant='editorial-evidence'] :is(.ee-case__matter li > a, .ee-links > a) {
+[data-variant='editorial-evidence'] :is(.ee-case__matter li > a, .ee-links > a, .ee-row__end > a) {
   display: inline-block;
   min-block-size: 24px;
   min-inline-size: 24px;
