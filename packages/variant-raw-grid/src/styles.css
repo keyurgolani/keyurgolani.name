@@ -405,11 +405,6 @@
   background-color: var(--color-canvas);
 }
 
-/* Whatever a link lands on or focus reaches clears the sticky header row. */
-[data-variant='raw-grid'] :is([id], a[href], button) {
-  scroll-margin-block-start: calc(var(--layout-head) + var(--space-s));
-}
-
 /* The full record's folds (gate item 8): a ruled cell whose summary, a ring's reach inside its
    rules, reads as content (the title as tape, the first item, the count); open, the section's
    band runs under it on the sheet's columns, its own head left to the summary. */
@@ -669,7 +664,9 @@
   }
 }
 
-/* The header row of cells: the name, the destinations, where you are, the Index. */
+/* The header row of cells: the name, the destinations, where you are, the Index. While it sticks,
+   the manifest's scrollReserve gives the root its height and a space-s as scroll-padding, so the
+   browser scrolls whatever a link lands on or Tab reaches clear of it, one already in the window too. */
 [data-variant='raw-grid'] .rg-head {
   position: sticky;
   inset-block-start: 0;
