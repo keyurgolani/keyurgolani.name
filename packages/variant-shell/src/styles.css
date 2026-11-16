@@ -37,7 +37,10 @@
   /* Syntax colours, from roles only, pulled toward the text so they read as text in any scheme. */
   --layout-ps1: color-mix(in oklab, var(--color-data-categorical-2) 72%, var(--color-text-primary));
   --layout-dir: var(--color-accent-text);
-  --layout-fig: color-mix(in oklab, var(--color-emphasis) 72%, var(--color-text-primary));
+  /* Emphasis is a fill, never held to text contrast on the page, and a light scheme's can be pale
+     (a lime crest), so a figure takes less of it: 40% keeps its hue and reads at 4.5:1, 7:1 in
+     high contrast, on every ground in every scheme (figure-contrast.test.ts). */
+  --layout-fig: color-mix(in oklab, var(--color-emphasis) 40%, var(--color-text-primary));
   --layout-rule: color-mix(in oklab, var(--color-border-default) 72%, var(--color-canvas));
 
   display: block;
