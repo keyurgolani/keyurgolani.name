@@ -2503,10 +2503,13 @@
     overflow-x: auto;
   }
 
+  /* Focus scrolls a link's own box into the bar's view, so each keeps a ring's reach of margin
+     for it: the last one's ring came to rest past the bar's edge, clipped there. */
   [data-variant='editorial-evidence'] .ee-rail__link {
     align-items: center;
     min-block-size: var(--ui-control-height);
     white-space: nowrap;
+    scroll-margin-inline: var(--layout-ee-ring);
   }
 
   [data-variant='editorial-evidence'] .ee-rail__link[aria-current] {
