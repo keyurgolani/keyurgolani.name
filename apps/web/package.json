@@ -56,7 +56,7 @@
     "@portfolio/variant-spatial-bento": "workspace:*",
     "@portfolio/variant-swiss-signal": "workspace:*",
     "@portfolio/variant-terra-field": "workspace:*",
-    "next": "16.4.1",
+    "next": "16.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "server-only": "0.0.1",
