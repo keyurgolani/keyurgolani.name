@@ -1539,6 +1539,49 @@
   border-block-end: 1px solid var(--color-border-subtle);
 }
 
+/* A folded panel's bar holds its focus ring inside the panel, as a readout square holds its link:
+   the bar stands a ring's reach in from the panel's edges, its padding less by the same, so its
+   text stays where it was and the ring lands on the panel's own surface, never on its border or
+   the seam past it. Its rule and its hover fill are painted a reach out on every side, behind its
+   text, so they still run edge to edge; its own rule keeps its width and paints nothing. */
+[data-variant='mission-control'] .mc-panel--fold > .mc-fold > .mc-fold__bar {
+  --layout-reach: calc(var(--ui-focus-width) + var(--ui-focus-offset));
+
+  position: relative;
+  isolation: isolate;
+  margin: var(--layout-reach);
+  padding-block: max(0px, calc(var(--space-2xs) - var(--layout-reach)));
+  padding-inline: calc(var(--space-s) - var(--layout-reach));
+  border-image: linear-gradient(transparent, transparent) 1;
+}
+
+[data-variant='mission-control'] .mc-panel--fold > .mc-fold > .mc-fold__bar::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: calc(-1 * var(--layout-reach));
+  pointer-events: none;
+}
+
+/* Where the bar is ruled off from what it shows, open or opened by a link before the script runs,
+   the rule is the bar's last pixel row, as the bar's own was. */
+[data-variant='mission-control'] .mc-panel--fold > .mc-fold[open] > .mc-fold__bar::before,
+[data-variant='mission-control']
+  .mc-root:not([data-mc-folds])
+  :is(.mc-panel--fold:target > details.mc-fold, .mc-panel--fold > details.mc-fold:has(:target))
+  > .mc-fold__bar::before {
+  inset-block-end: calc(-1 * var(--layout-reach) - 1px);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-panel--fold > .mc-fold > .mc-fold__bar:hover {
+  background: none;
+}
+
+[data-variant='mission-control'] .mc-panel--fold > .mc-fold > .mc-fold__bar:hover::before {
+  background: var(--color-surface-subtle);
+}
+
 /* The practice's manifest: the group on the left track, its items on the right. */
 [data-variant='mission-control'] .mc-manifest__row {
   display: grid;
