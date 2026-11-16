@@ -1,0 +1,19 @@
+{
+  "name": "appearance-ring-cells",
+  "summary": "Aurora Glass's focused Appearance summary takes its slot's radius: the small-badge languages' reachable quality cells at 1440, read at the head",
+  "head": "da25bb5cf4b32d30011f2fdaa4bca64bdaec35b2",
+  "base": "94c7bb36affd79f27be8b7d4203886621d838f02",
+  "cells": [
+    {
+      "label": "small-badge",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/industrial/warm\\-parchment/fixture\\-typography\\-experimental/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/industrial/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/material\\-3\\-inspired/neutral\\-slate/field\\-serif/light\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/material\\-expressive\\-inspired/jewel\\-twilight/swiss\\-grotesque/light\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/monochrome\\-functional/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/spectrum\\-2\\-inspired/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ default\\ )",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  ],
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
