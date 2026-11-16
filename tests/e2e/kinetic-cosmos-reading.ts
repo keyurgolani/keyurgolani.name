@@ -159,3 +159,29 @@ export function bodiesOffSize(bodies: Awaited<ReturnType<typeof planetBodies>>):
         off.push(`${a.planet} (size ${a.size}) renders smaller than ${b.planet} (size ${b.size})`);
   return off;
 }
+
+/** Each ring's orbit line by its section id: 'absolute' while its stops ride it, 'static' while listed. */
+export const lineStates = (page: Page) =>
+  page.evaluate(() =>
+    Object.fromEntries(
+      [...document.querySelectorAll('.kc-ring')].map((ring) => {
+        const stop = ring.querySelector('.kc-arc__stop');
+        return [ring.id, stop ? getComputedStyle(stop).position : 'none'];
+      }),
+    ),
+  );
+
+/** The layout shift the page has had since its navigation, leaving out any with recent input. */
+export const loadShift = (page: Page) =>
+  page.evaluate(() => {
+    const observer = new PerformanceObserver(() => undefined);
+    observer.observe({ type: 'layout-shift', buffered: true });
+    const entries = observer.takeRecords() as unknown as {
+      value: number;
+      hadRecentInput: boolean;
+    }[];
+    observer.disconnect();
+    return entries
+      .filter((entry) => !entry.hadRecentInput)
+      .reduce((sum, entry) => sum + entry.value, 0);
+  });
