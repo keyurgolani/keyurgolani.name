@@ -1,0 +1,79 @@
+{
+  "name": "bento-dock-quote-titles",
+  "summary": "Spatial Bento's phone Tab stop and the dock's own lift clear the dock's shadow, a testimonial's name and role stand a ring's reach apart, and a title-size link's underline sits inside its box",
+  "head": "46b763e515fa28ef8a8ccfcf3b6ebb86be2109f0",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "a shadow reaches above its box by its blur and spread less its y offset, inset layers aside",
+      "every pack's overlay shadow, shipping or held, reaches above the dock no further than Spatial Bento's allowance",
+      "the phone's Tab stop clears the dock, its shadow's allowance, and a ring's reach and 1px",
+      "the dock's own lift reads its computed shadow the same way, so a ring Tab leaves in view clears it"
+    ]
+  },
+  "reds": [
+    {
+      "label": "dock-shadow",
+      "at": "2bda68085311919403acb1536bea6066440bc9c8",
+      "specs": ["tests/e2e/spatial-bento-dock-shadow.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "quote-who",
+      "at": "c11eae576f129ddfbfb7077e1faeafdbbe09cc33",
+      "specs": ["tests/e2e/spatial-bento-quote-who.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "title-links",
+      "at": "5cb748ea922d67c91cf363459c8e34fc728b8687",
+      "specs": ["tests/e2e/spatial-bento-title-links.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "spatial-bento",
+      "specs": ["tests/e2e/spatial-bento*.spec.ts"],
+      "tests": 114,
+      "files": 6,
+      "skipped": 24
+    }
+  ],
+  "cells": [
+    {
+      "label": "bento",
+      "at": "base",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:spatial-bento complete / spatial-bento/(neumorphic/sepia-film/swiss-grotesque/dark 390x844 default|neumorphic/warm-parchment/humanist-ui/system 390x844 default|minimal-flat/neutral-slate/accessible-reading/system 390x844 default|platform-neutral/warm-parchment/accessible-reading/system 390x844 default|platform-neutral/warm-parchment/drafting-grotesk/system 390x844 forced-colors) ",
+      "shards": ["find"],
+      "tests": 5,
+      "passed": 0,
+      "failed": 5
+    },
+    {
+      "label": "bento",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:spatial-bento complete / spatial-bento/(neumorphic/sepia-film/swiss-grotesque/dark 390x844 default|neumorphic/warm-parchment/humanist-ui/system 390x844 default|minimal-flat/neutral-slate/accessible-reading/system 390x844 default|platform-neutral/warm-parchment/accessible-reading/system 390x844 default|platform-neutral/warm-parchment/drafting-grotesk/system 390x844 forced-colors) ",
+      "shards": ["find"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": ["^spatial-bento/"]
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
