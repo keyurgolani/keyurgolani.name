@@ -1,0 +1,180 @@
+{
+  "name": "ee-235-read",
+  "summary": "Editorial Evidence's title links in Accessible Reading at 1440, read on Linux before a fix: the focus perimeter red for a plate's title link and the first offer's name link, the cell that finds them, and every link kind's underline against its box in 15 typographies",
+  "head": "c92e7da53e604e6840088e1403e7ebb3457d5441",
+  "base": "2a65ded5c3cb3eced3b4948dbb8d27a48bdc09f1",
+  "reds": [
+    {
+      "label": "title-links",
+      "at": "c92e7da53e604e6840088e1403e7ebb3457d5441",
+      "specs": ["tests/e2e/editorial-evidence-focus-perimeter-title-links.spec.ts"],
+      "tests": 6,
+      "files": 1,
+      "failed": 4
+    },
+    {
+      "label": "ar-cell",
+      "kind": "cells",
+      "at": "c92e7da53e604e6840088e1403e7ebb3457d5441",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:editorial-evidence complete / editorial-evidence/platform-neutral/warm-parchment/accessible-reading/system 1440x900 contrast-more ",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "underlines-accessible-reading",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "accessible-reading"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-book-serif",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "book-serif"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-console-mono",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "console-mono"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-drafting-grotesk",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "drafting-grotesk"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-editorial-serif",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "editorial-serif"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-field-serif",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "field-serif"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-geometric-display",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "geometric-display"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-humanist-ui",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "humanist-ui"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-multilingual-system",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "multilingual-system"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-neutral-ui",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "neutral-ui"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-paste-up",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "paste-up"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-screen-grotesque",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "screen-grotesque"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-shell-mono",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "shell-mono"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-swiss-grotesque",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "swiss-grotesque"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "underlines-technical-sans-mono",
+      "spec": "look/ee-link-underline-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_TYPO": "technical-sans-mono"
+      },
+      "tests": 2,
+      "files": 1
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
