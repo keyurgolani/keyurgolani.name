@@ -1,0 +1,18 @@
+{
+  "name": "capture-probe",
+  "summary": "What a Chromium full-page capture shows a settled page's script, and whether a resize handler's change reaches the shot",
+  "head": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "base": "31b3d196443fa5a97da564c0ab283d13cd2dad89",
+  "look": [
+    {
+      "label": "capture",
+      "spec": "look/capture-probe.spec.ts",
+      "project": "chromium",
+      "tests": 12,
+      "files": 1,
+      "shots": 12
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
