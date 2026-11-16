@@ -2128,6 +2128,16 @@
   font-weight: var(--type-display-font-weight);
 }
 
+/*
+ * The next work's title is set at display size, where the shared underline offset, 0.2em, put
+ * the underline below the link's own box in several faces, along its focus ring's foot: under
+ * more contrast and forced colours the two drew in one colour, and the ring read as no change
+ * there. Its underline sits a twentieth of an em under the line, inside the box in every face.
+ */
+[data-variant='editorial-evidence'] .ee-case__next-title a {
+  text-underline-offset: 0.05em;
+}
+
 [data-variant='editorial-evidence'] .ee-case__out {
   grid-column: var(--layout-ee-notes);
 }
