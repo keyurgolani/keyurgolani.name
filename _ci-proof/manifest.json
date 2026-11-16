@@ -1,0 +1,62 @@
+{
+  "name": "oa-appearance-panel",
+  "summary": "Obsidian Atelier's open Appearance panel hangs from the corner line on a plate of its own, inside a phone's viewport, and the chrome's row stays put",
+  "head": "2be9f91bd2e74c8bbe86060f0a97ca5e22a4cca4",
+  "base": "94c7bb36affd79f27be8b7d4203886621d838f02",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "the stylesheet styles its own elements, never a primitive's slots, and keys nothing on a display mode",
+      "the stylesheet reads the platform's scales: no length of its own in a padding, margin, or gap"
+    ]
+  },
+  "reds": [
+    {
+      "label": "panel",
+      "at": "0d8a4cf0b4dce706575f61587719946af57651c2",
+      "specs": ["tests/e2e/obsidian-atelier-appearance-panel.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "failed": 5
+    }
+  ],
+  "e2e": [
+    {
+      "label": "panel",
+      "specs": ["tests/e2e/obsidian-atelier-appearance-panel.spec.ts"],
+      "tests": 5,
+      "files": 1
+    },
+    {
+      "label": "plate",
+      "specs": ["tests/e2e/obsidian-atelier-appearance-plate.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "oa",
+      "specs": ["tests/e2e/obsidian-atelier-*.spec.ts", "tests/e2e/skip-link-on-top.spec.ts"],
+      "tests": 74,
+      "files": 11
+    }
+  ],
+  "look": [
+    {
+      "label": "panel",
+      "spec": "look/ci-look-159.spec.ts",
+      "project": "chromium",
+      "tests": 5,
+      "files": 1,
+      "shots": 10
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "a9eec6de12e8",
+  "kitScripts": "cfb8c15cf6e8"
+}
