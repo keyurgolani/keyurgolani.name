@@ -26,6 +26,23 @@ export interface PhoneDock {
   readonly menu: string;
 }
 
+/**
+ * How far a computed box-shadow paints above its box, in px: blur + spread - y, the most over its
+ * outer layers, and never under 0. The dock casts the language's overlay shadow, which under
+ * neumorphic is a light in the canvas's colour 36px above it.
+ */
+export function shadowAbove(boxShadow: string): number {
+  let most = 0;
+  for (const layer of boxShadow.split(/,(?![^(]*\))/)) {
+    if (/\binset\b/.test(layer)) continue;
+    const [, y = 0, blur = 0, spread = 0] = [
+      ...layer.replace(/[a-z-]+\([^)]*\)/gi, '').matchAll(/(-?\d*\.?\d+)px/g),
+    ].map(([, n]) => Number(n));
+    most = Math.max(most, blur + spread - y);
+  }
+  return most;
+}
+
 /** One of the dock's links. */
 export interface DockLink {
   /** The DOM id of what it links to. */
@@ -77,7 +94,8 @@ export function Dock({
       from.button.focus({ preventScroll: true });
     };
     // A stop already in view is never scrolled to, so on a phone one can take focus under the
-    // dock at the window's foot: it's lifted clear, by the dock's height and the ring's reach.
+    // dock at the window's foot: it's lifted clear, by the dock's height, the shadow the dock
+    // casts above it, and the ring's reach, so the ring's foot never lies under that shadow.
     // Only a real stop that fits above the dock moves, and never past its own top: a place
     // focused for a jump (tabindex -1, such as a board from the Menu) keeps its start in view.
     const onFocus = (event: FocusEvent) => {
@@ -93,8 +111,9 @@ export function Dock({
         (Number.parseFloat(style.outlineWidth) || 0) +
         Math.max(Number.parseFloat(style.outlineOffset) || 0, 0);
       const box = target.getBoundingClientRect();
-      if (box.height + reach * 2 > dock.top) return;
-      const over = Math.min(box.bottom + reach * 2 - dock.top, box.top - reach);
+      const above = dock.top - shadowAbove(getComputedStyle(nav).boxShadow);
+      if (box.height + reach * 2 > above) return;
+      const over = Math.min(box.bottom + reach * 2 - above, box.top - reach);
       if (over > 0 && box.top < dock.bottom) window.scrollBy({ top: over, behavior: 'instant' });
     };
     menu?.addEventListener('close', onClose);
