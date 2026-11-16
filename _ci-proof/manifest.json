@@ -1,0 +1,80 @@
+{
+  "name": "rg-head-scroll-reserve",
+  "summary": "Raw Grid's stuck header row reserves its room as the root's scroll-padding through variant-contract 2.1's scrollReserve, now with blockStart, so Tab scrolls an index heading clear of the row",
+  "head": "3be9e0e9ef662f5defab02c87d0772a1846f8690",
+  "base": "608dc0e3d98fce2cf8001e34b23fb27331bc4374",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "Raw Grid reserves its stuck header row's room at the window's block start, in the query the row sticks in",
+      "a 2.1 manifest may reserve the window's block start or block end for a bar pinned there, in lengths the root resolves, and a 2.0 one may not",
+      "a variant that reserves the window's block start or block end gets the host's root scroll-padding after its layer, in its media query, and any other gets the same file as before",
+      "only a composition whose manifest reserves the window's block start or block end gets the host's root scroll-padding, after its layer",
+      "Flux reserves its phone dock's room at the window's block end, in the query the dock docks in",
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget"
+    ]
+  },
+  "reds": [
+    {
+      "label": "occlusion",
+      "at": "1b0fef5f38e966e628995c0065a334abe7bb8efc",
+      "specs": ["tests/e2e/raw-grid-index-occlusion.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "occlusion",
+      "specs": ["tests/e2e/raw-grid-index-occlusion.spec.ts"],
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "rg",
+      "specs": ["tests/e2e/raw-grid*.spec.ts"],
+      "tests": 91,
+      "files": 4
+    }
+  ],
+  "cells": [
+    {
+      "label": "index-base",
+      "at": "base",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:raw-grid complete / raw-grid/cyberpunk/liquid-dusk/accessible-reading/dark 1440x900 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1
+    },
+    {
+      "label": "index",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:raw-grid complete / raw-grid/cyberpunk/liquid-dusk/accessible-reading/dark 1440x900 default ",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "tab",
+      "spec": "look/look-180-fix.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
