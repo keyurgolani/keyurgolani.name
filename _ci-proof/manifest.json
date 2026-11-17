@@ -1,0 +1,33 @@
+{
+  "name": "schematic-265-c",
+  "summary": "Schematic's cover note link to Fig. 1: the line over it keeps a quarter of its size as leading, so under Paste-Up at 1440 the quality cells' own keyboard walk finds nothing on the link, with and without forced colours",
+  "head": "71df18fa16caab4c609bc802bf5cbbc075b3c52b",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "reds": [
+    {
+      "label": "r265",
+      "at": "72cab39e398f7bdee46bb42f1475aff60e0c2f92",
+      "specs": ["tests/e2e/schematic-note-ring.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "sx-note-ring",
+      "specs": ["tests/e2e/schematic-note-ring.spec.ts"],
+      "tests": 2,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
