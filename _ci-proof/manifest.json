@@ -1,0 +1,54 @@
+{
+  "name": "hc-load-reads",
+  "summary": "Horizontal Cinema's phone load restyles the page once, in its frame, not twice more inside the hydration's task",
+  "head": "b8e6d39a06268ee86d781a3f7aa2a29f55be5ab6",
+  "base": "6835c3d4ae620a6791a5136048c994bc413eefa7",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "torn down, the controller refits nothing and leaves none of its attributes on the shell"
+    ]
+  },
+  "reds": [
+    {
+      "label": "reads",
+      "at": "d41b389104ca50984bead66166700268a3405820",
+      "specs": ["tests/e2e/horizontal-cinema-load-reads.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "reads",
+      "specs": ["tests/e2e/horizontal-cinema-load-reads.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "hc",
+      "specs": ["tests/e2e/horizontal-cinema*.spec.ts"],
+      "tests": 207,
+      "files": 24
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "look": [
+    {
+      "label": "trace",
+      "spec": "look/look-246-trace.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
