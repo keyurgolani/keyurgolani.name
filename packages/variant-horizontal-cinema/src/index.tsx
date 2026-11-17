@@ -165,7 +165,8 @@ function HomePage({ input }: HomePageProps) {
         <Words lang={lang}>Skip the strip</Words>
       </a>
       <header className="hc-chrome">
-        <a className="hc-chrome__name" href={home} aria-current="page">
+        {/* Home is the page the reader is on only on the strip; in the List view the name links away. */}
+        <a className="hc-chrome__name" href={home} aria-current={listing ? undefined : 'page'}>
           <span className="hc-chrome__title" data-type-role="body">
             {portfolio.identity.name}
           </span>
