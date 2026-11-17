@@ -1,0 +1,37 @@
+{
+  "name": "ee-root-text-fixtures",
+  "summary": "Editorial Evidence at 200% root text on a phone keeps a skills term, a pull quote, the byline's facts, a work row's address and the contact links inside the page, so the home page doesn't scroll sideways on the long-text, music, photography and writing fixtures",
+  "head": "a5e4167b550c396852131cc5d02d5b58ab64e44b",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "fx",
+      "at": "1955b0eb9e676daddfeec3e8de0f5297ca0a1597",
+      "specs": ["tests/e2e/editorial-evidence-root-text-fixtures.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "failed": 5
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ee",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 166,
+      "files": 20,
+      "skipped": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
