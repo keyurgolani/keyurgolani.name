@@ -1,0 +1,15 @@
+--project=fallback/large
+--project=obsidian-atelier/academic
+--project=obsidian-atelier/engineering
+--project=obsidian-atelier/large
+--project=obsidian-atelier/photography
+--project=obsidian-atelier/sample
+--project=obsidian-atelier/sparse
+--project=spatial-bento/academic
+--project=spatial-bento/consulting
+--project=spatial-bento/engineering
+--project=spatial-bento/rtl
+--project=spatial-bento/writing
+--project=terra-field/complete
+--project=terra-field/large
+--project=swiss-signal/sample

@@ -13,6 +13,7 @@
 // runs twice: with every script chunk blocked while the stylesheets load, and
 // with the kit's throw switch on, which fails every enhancement the kit
 // mounted on the page.
+import { appendFileSync } from 'node:fs';
 import {
   expect,
   type APIRequestContext,
@@ -724,6 +725,22 @@ async function screenshot(
     body: await capturePage(page, watch),
     contentType: 'image/png',
   });
+  // The capture branch's look line: what the boundary rendered, read after the shot.
+  const looks = process.env.CAPTURE_LOOKS;
+  if (looks) {
+    const look = await page.evaluate(() => {
+      const boundary = document.querySelector('[data-appearance-boundary="document"]');
+      return {
+        displayMode: boundary?.getAttribute('data-display-mode') ?? null,
+        colorScheme: boundary ? getComputedStyle(boundary).colorScheme : null,
+        prefersDark: matchMedia('(prefers-color-scheme: dark)').matches,
+      };
+    });
+    appendFileSync(
+      looks,
+      `${JSON.stringify({ file: `${name}.png`, variant: variant.manifest.id, ...look })}\n`,
+    );
+  }
   if (COMPARE_SCREENSHOTS && firstParty(variant)) {
     // A composition baseline-pending.json lists has no baselines yet: its
     // shot is attached above, and the test names the fix that will commit
