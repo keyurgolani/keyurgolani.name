@@ -2299,6 +2299,11 @@
     z-index: 3;
     /* Over a crossing head, it takes the canvas, so text never prints over text. */
     background: var(--color-canvas);
+    /*
+     * No scroller then: Tab into it, low on the page, scrolls the page to the entry. As one, it
+     * kept the browser from scrolling the page to an entry under the window's foot.
+     */
+    overflow-y: visible;
   }
 
   [data-variant='editorial-evidence'] .ee-contents__list {
