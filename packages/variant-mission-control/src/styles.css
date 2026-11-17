@@ -985,8 +985,11 @@
   letter-spacing: var(--type-headline-letter-spacing);
 }
 
+/* No wider than the title's row: a name whose one word is wider still, as a work's long title with
+   the text at 200% on a phone, goes under the icon and breaks within the row, never past it. */
 [data-variant='mission-control'] .mc-board__title > span {
   flex: 1 1 0%;
+  max-inline-size: 100%;
 }
 
 [data-variant='mission-control'] .mc-board__title .mc-icon {
