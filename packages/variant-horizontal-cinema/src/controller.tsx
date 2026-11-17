@@ -484,8 +484,10 @@ function LiveStage(props: StageProps) {
     // Whether a resize's burst is waiting for its refit, and when the reader's own input last came.
     let burst = false;
     let inputAt = Number.NEGATIVE_INFINITY;
-    // When the reader last moved the strip sideways while a move of the controller's was on its way.
+    // When the reader last moved the strip sideways while a move of the controller's was on its way,
+    // and when the strip last scrolled: event times, so the reader's moment is read without a clock.
     let tookAt = Number.NEGATIVE_INFINITY;
+    let stageAt = Number.NEGATIVE_INFINITY;
     // The scene a move the controller started is headed for, until it settles: a second key retargets from it.
     let aligning: number | null = null;
     /**
@@ -657,7 +659,7 @@ function LiveStage(props: StageProps) {
       if (!pinned) return;
       if (wrote.along !== undefined && Math.abs(along() - wrote.along) <= 1) return;
       // A scroll of the strip just after the reader's own wheel or moving touch is theirs: a swipe.
-      const own = performance.now() - inputAt < OWN_MS;
+      const own = stageAt - inputAt < OWN_MS;
       if (aligning !== null) {
         // While the controller moves the page, the strip's scroll is its own doing, unless the reader
         // moved it: then the move is theirs, and the page goes where they took the strip.
@@ -1110,7 +1112,7 @@ function LiveStage(props: StageProps) {
       if (timer !== undefined) clearTimeout(timer);
       timer = setTimeout(settle, SETTLE_MS);
     };
-    const onPageScroll = () => {
+    const onPageScroll = (event: Event) => {
       if (snapTo) {
         const y = window.scrollY;
         if (y !== lastY) lastStep = Math.sign(y - lastY);
@@ -1120,10 +1122,11 @@ function LiveStage(props: StageProps) {
       // Just after the reader moved the strip sideways during a step, the strip is theirs: the
       // step's glide, still on its way, doesn't write it back over their scroll, and lead() takes
       // the page from the strip instead, which ends the glide and hands the step over.
-      if (aligning === null || performance.now() - tookAt >= OWN_MS) follow();
+      if (aligning === null || event.timeStamp - tookAt >= OWN_MS) follow();
       onScroll();
     };
-    const onStageScroll = () => {
+    const onStageScroll = (event: Event) => {
+      stageAt = event.timeStamp;
       lead();
       onScroll();
     };
