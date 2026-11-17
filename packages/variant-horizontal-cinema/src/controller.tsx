@@ -1121,8 +1121,12 @@ function LiveStage(props: StageProps) {
       arrive();
       // Just after the reader moved the strip sideways during a step, the strip is theirs: the
       // step's glide, still on its way, doesn't write it back over their scroll, and lead() takes
-      // the page from the strip instead, which ends the glide and hands the step over.
-      if (aligning === null || event.timeStamp - tookAt >= OWN_MS) follow();
+      // the page from the strip instead, which ends the glide and hands the step over. Inside a
+      // resize's burst, the page's own scrolls (the layout's, or a snap's) are read on the layout
+      // the burst is leaving: the strip stays where the reader has it, and the refit at the burst's
+      // end brings the two back together.
+      const moving = aligning !== null;
+      if (moving ? event.timeStamp - tookAt >= OWN_MS : !burst) follow();
       onScroll();
     };
     const onStageScroll = (event: Event) => {
