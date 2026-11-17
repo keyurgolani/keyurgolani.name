@@ -2770,6 +2770,36 @@
   }
 }
 
+/*
+ * Columns that measure their words: each box's width is its column's, never its content's, so it
+ * can be a container. A container query's rem is the root's, so a column under 16rem, which none
+ * of these is at 1x from a 320 px window up, is large text on a narrow window. There a run in the
+ * column, a title's, an award's or an address's, breaks where it alone is wider than the column,
+ * instead of holding its track or its flex item past the window, and the citation's mat and the
+ * next room's card give their sides back to the words.
+ */
+[data-variant='obsidian-atelier']
+  :is(.oa-side, .oa-caseplate, .oa-backmatter__sources, .oa-nextroom) {
+  container: oa-column / inline-size;
+}
+
+@container oa-column (width < 16rem) {
+  [data-variant='obsidian-atelier']
+    :is(.oa-side, .oa-caseplate, .oa-backmatter__sources, .oa-nextroom)
+    > * {
+    overflow-wrap: anywhere;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-caseplate--citation .oa-caseplate__mat {
+    padding-inline: var(--space-2xs);
+    outline-offset: calc(-1 * var(--space-3xs));
+  }
+
+  [data-variant='obsidian-atelier'] .oa-nextroom__link {
+    padding-inline: var(--space-s);
+  }
+}
+
 /* From a tablet's width the case bar stays at the window's top while the case is read. */
 @media (min-width: 48rem) {
   [data-variant='obsidian-atelier'] .oa-casebar {
