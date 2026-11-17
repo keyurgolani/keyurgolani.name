@@ -4,7 +4,7 @@ import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { anchorOf, CHAPTERS } from './chapters';
 import { creditOf } from './credit';
 import { LeadWork } from './lead-work';
-import { numeralOf, ownId, SceneTitle, uiLang, Words } from './parts';
+import { numeralOf, Own, ownId, Phrase, SceneTitle, uiLang, Words } from './parts';
 import { chapterScenes, foldsOnPhone, isClosing, sceneAnchor, type PlacedScene } from './scenes';
 
 // A scene (redesign): one frame of the strip. A picture between two matte
@@ -55,9 +55,12 @@ function NextLink({
           lang={lang}
         >{`Next: Chapter ${numeralOf(next.chapter)}, ${CHAPTERS[next.chapter]!.label}`}</Words>
       ) : (
-        <>
-          <Words lang={lang}>Next:</Words> <SceneTitle mark={next} lang={lang} />
-        </>
+        <Phrase lang={lang}>
+          <Words lang={lang}>Next:</Words>{' '}
+          <Own lang={lang}>
+            <SceneTitle mark={next} lang={lang} />
+          </Own>
+        </Phrase>
       )}
     </a>
   );

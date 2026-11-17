@@ -1,6 +1,7 @@
 // What the composition's own pieces share: its own ids, and the language
 // of the words it adds. Browser-safe, so the controller reads the same ids
 // the server writes.
+import type { ReactNode } from 'react';
 
 /**
  * The id of one of the composition's own elements. Two hyphens: no content
@@ -11,6 +12,20 @@ export const ownId = (prefix: string, name: string) => `${prefix}hc--${name}`;
 /** `en` when the portfolio isn't in English, for the words the composition adds, such as Index. */
 export function uiLang(locale: string): 'en' | undefined {
   return /^en(?:-|$)/i.test(locale) ? undefined : 'en';
+}
+
+/**
+ * An English phrase the composition builds round the portfolio's own words, as "Next:" and a scene's
+ * name: in a portfolio in another language it reads left to right whatever the page's direction,
+ * and the portfolio's words inside it, isolated (Own), keep theirs.
+ */
+export function Phrase({ lang, children }: { lang: 'en' | undefined; children: ReactNode }) {
+  return lang ? <span dir="ltr">{children}</span> : <>{children}</>;
+}
+
+/** The portfolio's own words inside a Phrase, isolated in their own direction. */
+export function Own({ lang, children }: { lang: 'en' | undefined; children: ReactNode }) {
+  return lang ? <bdi>{children}</bdi> : <>{children}</>;
 }
 
 /** A word or phrase the composition adds, marked English in a portfolio in another language. */
