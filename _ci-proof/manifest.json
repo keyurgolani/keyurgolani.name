@@ -1,0 +1,37 @@
+{
+  "name": "swiss-signal-244",
+  "summary": "Swiss Signal's first Selected-work cover decodes before its raster, so the sample's whole-page shot always finds it painted; a probe shoots the sample on the variant shot's own path 30 times at the base and the head",
+  "head": "8398c2afa8aa342bdb431dad44727190f0664376",
+  "base": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the sample: the Selected work's first cover loads at once and decodes before paint, the others lazily and after"
+    ]
+  },
+  "e2e": [
+    {
+      "label": "ss-rise",
+      "specs": ["tests/e2e/swiss-signal-rise-settle.spec.ts"],
+      "tests": 2,
+      "files": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "swiss-244-cover",
+      "spec": "look/swiss-244-cover-look.spec.ts",
+      "project": "chromium",
+      "tests": 30,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3026,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
