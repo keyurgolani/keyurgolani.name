@@ -2652,6 +2652,63 @@
   }
 }
 
+/* ---------- Large text on a phone: nothing runs past the screen ---------- */
+
+/*
+ * Where the page holds under 14rem, a phone with the reader's text at 200% (10rem at 320, 12.2rem
+ * at 390), every box may narrow below its widest word, the flex rows wrap, and each grid that sets
+ * a label beside its value sets one over the other: a section head, a voice, the close and its
+ * ask, a case's parts, facts and next links, a decision, a log entry's date and length. Their
+ * words' widths held home 132 to 306 px past the screen, and a case up to 103. The masthead keeps
+ * its menu beside the name, and the close's centred head is no wider than the close. In a
+ * container query rem resolves against the root's font size, so 14rem tracks the reader's text
+ * size: at 1x a phone's page holds 20rem or more, and nothing here applies.
+ */
+[data-variant='terra-field'] .tf-root {
+  container: tf-root / inline-size;
+}
+
+@container tf-root (max-width: 14rem) {
+  [data-variant='terra-field'] .tf-root * {
+    min-inline-size: 0;
+  }
+
+  [data-variant='terra-field']
+    :is(.tf-sechead__line, .tf-fold__summary, .tf-close__acts, .tf-ledger > div, .tf-links) {
+    flex-wrap: wrap;
+  }
+
+  [data-variant='terra-field']
+    :is(
+      .tf-sechead,
+      .tf-voice,
+      .tf-close__inner,
+      .tf-close__ask,
+      .tf-casenext__all,
+      .tf-casepart,
+      .tf-factsheet,
+      .tf-factsheet > div,
+      .tf-decisions,
+      .tf-decision
+    ) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='terra-field'] .tf-decision > *,
+  [data-variant='terra-field'] .tf-factsheet > div > *,
+  [data-variant='terra-field'] :is(.tf-log__date, .tf-log__len) {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-mast__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  [data-variant='terra-field'] :is(.tf-close__inner, .tf-close__ask) > * {
+    max-inline-size: 100%;
+  }
+}
+
 /* ---------- Print: the page as it reads, the grounds dropped ---------- */
 
 @media print {
