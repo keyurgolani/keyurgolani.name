@@ -44,7 +44,10 @@ export function railDocked(entries: readonly IntersectionObserverEntry[], stick:
  * opening in view there with its top below the line: then it's the place being read.
  */
 export function openingRead(entries: readonly IntersectionObserverEntry[], line: number): boolean {
-  const [entry] = entries;
+  // A delivery holds every entry queued since the last, oldest first: the page can go into a
+  // chapter and back to the top before the observer's task runs, so the last entry is where the
+  // opening is now.
+  const entry = entries.at(-1);
   const top = entry?.rootBounds?.top ?? line;
   return entry?.isIntersecting === true && entry.boundingClientRect.top > top;
 }
