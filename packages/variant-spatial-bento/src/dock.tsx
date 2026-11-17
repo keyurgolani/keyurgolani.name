@@ -131,14 +131,22 @@ export function Dock({
       const element = document.getElementById(anchor);
       return element ? [element] : [];
     });
-    // Shown once the overview's last part is above the top fifth of the window.
+    // Shown once the overview's last part is above the top fifth of the window: out of it and
+    // above it, not merely out of it. A whole-page screenshot shrinks the window to a pixel for a
+    // moment (Chromium's capture beyond the viewport), and the observer then sees the overview, at
+    // the page's top, out of that window though no part of it is above the window; the dock showed
+    // and hid again inside the shot.
     // A delivery holds every entry queued since the last, oldest first: the overview can come into
     // view and leave it again before the observer's task runs, so the last entry is where it is
     // now.
     const away = new IntersectionObserver(
       (entries) => {
         const entry = entries.at(-1);
-        if (entry) setShown(!entry.isIntersecting);
+        if (entry)
+          setShown(
+            !entry.isIntersecting &&
+              entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0),
+          );
       },
       { rootMargin: '-20% 0px 0px 0px' },
     );
