@@ -581,7 +581,7 @@
   gap: inherit;
 }
 
-/* No script, or a plate: nothing runs, so there's nothing to pause. */
+/* No script, a plate, or high contrast: nothing runs, so there's nothing to pause. */
 [data-variant='raw-grid'] .rg-ticker[data-ticker='static'] .rg-ticker__toggle {
   display: none;
 }

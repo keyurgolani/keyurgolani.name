@@ -71,14 +71,20 @@ function contrasty(root: HTMLElement, more: MediaQueryList, forced: MediaQueryLi
   return root.dataset.displayMode === 'high-contrast' || more.matches || forced.matches;
 }
 
-/** The ticker's state for the stylesheet: running (paused or not, the runtime's), or still. */
+/**
+ * The ticker's state for the stylesheet: running (paused or not, the runtime's); still, where it
+ * can't move here but the visitor's pause still holds (no room, or reduced motion, where the pause
+ * stays to say why it's off); or, under high contrast, static as with no script: nothing on the
+ * page moves there, so there's nothing to pause, and the pause doesn't show.
+ */
 function ticker(root: HTMLElement, box: HTMLElement, state: RuntimeState): () => void {
   const short = matchMedia('(height < 32rem)');
   const more = matchMedia('(prefers-contrast: more)');
   const forced = matchMedia('(forced-colors: active)');
   const sync = () => {
-    box.dataset.ticker =
-      state === 'static' || cramped(root, short) || contrasty(root, more, forced)
+    box.dataset.ticker = contrasty(root, more, forced)
+      ? 'static'
+      : state === 'static' || cramped(root, short)
         ? 'still'
         : 'running';
   };
