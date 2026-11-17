@@ -450,6 +450,8 @@ export function platformStylesheet(): string {
           'outline-color': 'Canvas',
         }),
     ),
+    // A printed page is the record: the visitor's own controls are no part of it, whatever a
+    // composition opens before printing.
     wrap(
       '@media print',
       block([BOUNDARY], {
@@ -457,7 +459,7 @@ export function platformStylesheet(): string {
         ...STATIC,
         ...STATIC_MOTION_TOKENS,
         '--ui-texture': 'none',
-      }),
+      }) + block([APPEARANCE_CONTROL[0]!], { display: 'none' }),
     ),
   ].join('');
   return [

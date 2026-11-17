@@ -296,9 +296,10 @@ test("under prefers-contrast: more and prefers-reduced-transparency: reduce, the
     // In the accessibility layer, past every pack and composition.
     assert.ok(css.indexOf(within) > css.indexOf('@layer accessibility {'), within);
   }
-  // Two of each, those two: normal mode, forced colors, print and the rest leave it alone.
+  // Two of each, those two, and print's, which leaves it off the page (its own test): normal mode,
+  // forced colors and the rest leave it alone.
   assert.equal(css.split('[data-ui-slot="appearance-control"],\n').length - 1, 2);
-  assert.equal(css.split('[data-ui-slot="appearance-control"] {\n').length - 1, 2);
+  assert.equal(css.split('[data-ui-slot="appearance-control"] {\n').length - 1, 3);
 });
 
 test('high contrast makes the signature fill solid text-primary and drops the glow and the texture, however it is asked for', () => {
