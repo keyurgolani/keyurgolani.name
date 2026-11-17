@@ -2600,3 +2600,50 @@
     );
   }
 }
+
+/* ── Large text on a phone: nothing runs past the screen ─────────────── */
+
+/*
+ * Where the page holds under 14rem, a phone with the reader's text at 200% (10rem at 320, 12.2rem at
+ * 390), every box may narrow below its widest word, so a word wider than its line breaks inside it
+ * rather than widen the page: a citation, the quote poster, a figure, a ruled group and a work row
+ * each held its column at its widest word, and the page with it, up to 182 px past the screen. The
+ * figures set one to a row, a ruled group's row wraps its figure under its name, a citation's venue
+ * wraps, and a table's cells break a word anywhere while a number stays whole, so a table holds its
+ * frame. In a container query rem resolves against the root's font size, so 14rem tracks the
+ * reader's text size: at 1x a phone's page holds 20rem or more, and nothing here applies.
+ */
+[data-variant='swiss-signal'] .ss {
+  container: ss-root / inline-size;
+}
+
+@container ss-root (max-width: 14rem) {
+  [data-variant='swiss-signal'] .ss * {
+    min-inline-size: 0;
+  }
+
+  [data-variant='swiss-signal'] .ss-figs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='swiss-signal'] .ss-fig:nth-child(even) {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+
+  [data-variant='swiss-signal'] .ss-group .ss-ruled li {
+    flex-wrap: wrap;
+  }
+
+  [data-variant='swiss-signal'] .ss-cite__venue {
+    white-space: normal;
+  }
+
+  [data-variant='swiss-signal'] .ss-table :is(th, td) {
+    overflow-wrap: anywhere;
+  }
+
+  [data-variant='swiss-signal'] .ss-table .ss-num {
+    overflow-wrap: normal;
+  }
+}
