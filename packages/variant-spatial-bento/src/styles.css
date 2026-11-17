@@ -476,18 +476,21 @@
 }
 
 /*
- * In a tile narrower than its words, as at 200% root text on a phone, a name breaks inside one,
- * and in the full record a dated row's or a talk's facts go under the year or the date and break
- * inside one too.
+ * In a tile narrower than its words, as at 200% root text on a phone, what the tile holds breaks
+ * inside a word where it must, a tally keeps its figures and drops its strips, which only draw
+ * them, and in the full record a dated row's or a talk's facts go under the year or the date.
  */
-@container (max-width: 16rem) {
-  [data-variant='spatial-bento'] .sb-archive__name {
+@container (max-width: 12rem) {
+  [data-variant='spatial-bento'] .sb-tile > * {
     overflow-wrap: anywhere;
   }
 
   [data-variant='spatial-bento'] .sb-archive :is(.sb-ev .sb-dated, .sb-ev--talk > li) {
     grid-template-columns: minmax(0, 1fr);
-    overflow-wrap: anywhere;
+  }
+
+  [data-variant='spatial-bento'] .sb-tally__marks {
+    display: none;
   }
 
   /* A phone's dock too narrow for its three labels keeps its Menu, which holds the works and Contact. */
