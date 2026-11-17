@@ -86,7 +86,11 @@ export default defineConfig({
   // to upload. Baselines come from that job's run in the pinned image, not
   // from a local one.
   updateSnapshots: 'missing',
+  // The capture branch only: a missing baseline's two matching full-page shots of a tall page
+  // need more than the default 5 s.
+  timeout: 120_000,
   expect: {
+    timeout: 30_000,
     // Every pixel the same as its baseline: the variants job renders on one
     // platform. #11 owns the thresholds (tests/harness/screenshots.mjs).
     toHaveScreenshot: { ...SCREENSHOT_COMPARISON },
