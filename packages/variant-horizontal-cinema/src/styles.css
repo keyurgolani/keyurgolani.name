@@ -3639,6 +3639,34 @@
   padding-block: 0 var(--space-l);
 }
 
+/* In the full record each grid's one column is its box's width, so a long word breaks inside it
+   rather than widening it past the window, where the scene would clip it out of sight. */
+[data-variant='horizontal-cinema']
+  .hc-record
+  :is(.hc-section, .hc-reel__head, .hc-entry, .hc-records__what, .hc-practice__held) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* A record's rows, and a practice's, read their own list's width: where it can't hold the date or
+   the name beside a reading width of words, as with large text on a phone, the words go under it. */
+[data-variant='horizontal-cinema'] .hc-record :is(.hc-records, .hc-practice) {
+  container-type: inline-size;
+}
+
+@container (inline-size < 12em) {
+  [data-variant='horizontal-cinema'] .hc-record .hc-records > li {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-3xs);
+  }
+}
+
+@container (inline-size < 13em) {
+  [data-variant='horizontal-cinema'] .hc-record .hc-practice__row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-3xs);
+  }
+}
+
 /* A chronology in the record: its entries side by side, as many as the column fits. */
 [data-variant='horizontal-cinema'] .hc-record .hc-record__entries {
   display: grid;
