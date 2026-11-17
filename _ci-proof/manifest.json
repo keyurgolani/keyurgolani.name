@@ -1,0 +1,58 @@
+{
+  "name": "hc-v1-c",
+  "summary": "Horizontal Cinema: the List view's owner's name isn't the current page, and a reader below the strip keeps their place through a text size",
+  "head": "53761d5e751dbfc2c6b8a37fed9da6131da57b0a",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "reds": [
+    {
+      "label": "hc-list-name",
+      "at": "768d23ae1e0c26b0af9a97705f95f7e627648de7",
+      "specs": ["tests/e2e/horizontal-cinema-list-name.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "hc-below-strip",
+      "at": "d48f36f7da2864b64b0d389c1e3266a0f3f15608",
+      "specs": ["tests/e2e/horizontal-cinema-below-strip-text-size.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "hc",
+      "specs": [
+        "tests/e2e/horizontal-cinema-list-name.spec.ts",
+        "tests/e2e/horizontal-cinema-below-strip-text-size.spec.ts",
+        "tests/e2e/horizontal-cinema-text-size-wheel.spec.ts"
+      ],
+      "tests": 6,
+      "files": 3
+    },
+    {
+      "label": "hc-stack",
+      "specs": [
+        "tests/e2e/horizontal-cinema-rtl-bars.spec.ts",
+        "tests/e2e/horizontal-cinema-sideways-kept.spec.ts"
+      ],
+      "tests": 3,
+      "files": 2
+    }
+  ],
+  "cells": [],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": ["^horizontal-cinema/(rtl|mixed) > "]
+  },
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
