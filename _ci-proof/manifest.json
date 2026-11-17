@@ -1,0 +1,17 @@
+{
+  "name": "pr-shard-cap",
+  "summary": "quality-pr-plan hands out up to 160 shards, so a push that changes every first-party variant at once plans its 126",
+  "head": "9c8096f8e5b29b23618703ae9a35bb456f640651",
+  "base": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the count is the fewest shards whose estimates all hold the ceiling, whatever the plan, and more than 160 fails, naming the group",
+      "a push that changes every first-party variant at once, about 126 shards, takes the fewest that fit, and changed variants that alone need more than 160 fail, naming the group",
+      "a catalog-scale sweep, one that alone needs more than 16, takes the fewest that fit up to 160 as any plan does, and the log names it"
+    ]
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
