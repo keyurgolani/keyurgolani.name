@@ -21,6 +21,17 @@
  */
 
 [data-variant='editorial-evidence'] {
+  /*
+   * The grids' column gap: the gutter, or an eleventh of the window inside the page's margins
+   * where eleven gutters wouldn't fit there, as the root text at 200% makes them on a phone.
+   * Only above 20px of root text: at the default size the cap's floor is far above any gutter,
+   * so the gutter stands at any window size, as when the window is resized for a whole-page shot.
+   * A length, so the gap computes to one.
+   */
+  --layout-ee-gap: min(
+    var(--layout-grid-gutter),
+    max((100vw - 2 * var(--layout-grid-margin)) / 11, (20px - 1rem) * 999)
+  );
   --layout-ee-head: 1 / span 3;
   --layout-ee-main: 4 / -1;
   --layout-ee-text: 1 / span 6;
@@ -190,7 +201,7 @@
   :is(.ee-masthead, .ee-opening, .ee-chapter__open, .ee-band, .ee-colophon) {
   display: grid;
   grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
-  column-gap: var(--layout-grid-gutter);
+  column-gap: var(--layout-ee-gap);
   padding-inline: var(--layout-ee-inset);
 }
 
@@ -333,7 +344,7 @@
 [data-variant='editorial-evidence'] .ee-sheet:is(:popover-open, :target) {
   display: grid;
   grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
-  gap: var(--space-l) var(--layout-grid-gutter);
+  gap: var(--space-l) var(--layout-ee-gap);
 }
 
 [data-variant='editorial-evidence'] .ee-sheet__label {
@@ -344,7 +355,7 @@
 [data-variant='editorial-evidence'] .ee-sheet__chapters {
   grid-column: 4 / -1;
   columns: 2;
-  column-gap: var(--layout-grid-gutter);
+  column-gap: var(--layout-ee-gap);
 }
 
 [data-variant='editorial-evidence'] .ee-sheet__chapter {
@@ -864,7 +875,7 @@
 [data-variant='editorial-evidence'] .ee-byline {
   display: grid;
   grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
-  column-gap: var(--layout-grid-gutter);
+  column-gap: var(--layout-ee-gap);
   grid-column: 1 / -1;
   border-block-start: var(--ui-border-divider);
 }
@@ -888,7 +899,7 @@
 [data-variant='editorial-evidence'] .ee-byline__facts {
   display: grid;
   grid-template-columns: repeat(9, minmax(0, 1fr));
-  column-gap: var(--layout-grid-gutter);
+  column-gap: var(--layout-ee-gap);
   grid-column: 4 / -1;
   row-gap: var(--space-s);
 }
@@ -1077,7 +1088,7 @@
 [data-variant='editorial-evidence'] .ee-band__body {
   display: grid;
   grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
-  column-gap: var(--layout-grid-gutter);
+  column-gap: var(--layout-ee-gap);
   grid-column: var(--layout-ee-main);
   align-content: start;
   row-gap: var(--space-l);
@@ -1094,7 +1105,7 @@
   > :is(.ee-rows, .ee-run, .ee-quotes, .ee-github, .ee-offers, .ee-case__plates, .ee-case__quote) {
   display: grid;
   grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
-  column-gap: var(--layout-grid-gutter);
+  column-gap: var(--layout-ee-gap);
   grid-column: 1 / -1;
 }
 
@@ -1211,14 +1222,14 @@
   display: grid;
   grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
   grid-column: 1 / -1;
-  column-gap: var(--layout-grid-gutter);
+  column-gap: var(--layout-ee-gap);
   row-gap: var(--space-l);
 }
 
 [data-variant='editorial-evidence'] :is(.ee-row, .ee-fig) {
   display: grid;
   grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
-  column-gap: var(--layout-grid-gutter);
+  column-gap: var(--layout-ee-gap);
   grid-column: 1 / -1;
   align-items: start;
   row-gap: var(--space-2xs);
@@ -1362,7 +1373,7 @@
 [data-variant='editorial-evidence'] .ee-plate {
   display: grid;
   grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
-  column-gap: var(--layout-grid-gutter);
+  column-gap: var(--layout-ee-gap);
   grid-column: 1 / -1;
   align-items: start;
   row-gap: var(--space-s);
@@ -1580,7 +1591,7 @@
 [data-variant='editorial-evidence'] .ee-fig > figure {
   display: grid;
   grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
-  column-gap: var(--layout-grid-gutter);
+  column-gap: var(--layout-ee-gap);
   grid-column: 1 / -1;
   align-items: start;
   row-gap: var(--space-s);
@@ -2111,7 +2122,7 @@
 [data-variant='editorial-evidence'] .ee-case__matter {
   display: grid;
   grid-column: 1 / -1;
-  gap: var(--space-l) var(--layout-grid-gutter);
+  gap: var(--space-l) var(--layout-ee-gap);
 }
 
 @media (width >= 64rem) {
@@ -2561,6 +2572,12 @@
 /* ── One column: notes follow what they note ───────────────────────────── */
 
 @media (width < 48rem) {
+  /* A date or an address longer than its line, as at 200% root text on a phone, wraps. */
+  [data-variant='editorial-evidence'] :is(.ee-row__end, .ee-url__part) {
+    text-wrap: wrap;
+    overflow-wrap: anywhere;
+  }
+
   [data-variant='editorial-evidence'] {
     --layout-ee-text: 1 / -1;
     --layout-ee-notes: 1 / -1;
