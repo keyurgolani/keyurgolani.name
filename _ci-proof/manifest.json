@@ -1,0 +1,18 @@
+{
+  "name": "ee-mixed-masthead-read",
+  "summary": "Editorial Evidence's masthead on the mixed contract fixture at 390 by 844, mobile: its boxes, tracks, gaps, borders and fonts at F and at the grid gap's fix, before and after a whole-page shot",
+  "head": "130fdd66088a936e6b444766a2c497f954289c03",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "look": [
+    {
+      "label": "mixed",
+      "spec": "look/look-260-mixed.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
