@@ -3294,15 +3294,17 @@
 /*
  * Pause ships waiting (data-ag-waiting, ornament.tsx), never hidden: the platform's [hidden] rule sits
  * in a later cascade layer and outranks any of a variant's, so a hidden Pause can hold no place. A
- * waiting Pause has no box by default. Only where script runs (scripting: enabled), before it does,
- * and where the script shows that copy wherever the sky would move (the drift on, or the Lens shown
- * from 56.01rem: sky.ts, pauseState), it keeps its place, unseen and out of the accessibility tree and
- * the Tab order: the capsule's copy from 48rem to 75rem, the ornament's above. So the row breaks where
+ * waiting Pause has no box by default. Only where script runs (.ag holds no no-script mark,
+ * NoScriptMark in parts.tsx; never a scripting query, which the no-JavaScript rows' axe pass, with
+ * script on, would flip), before it does, and where the script shows that copy wherever the sky would
+ * move (the drift on, or the Lens shown from 56.01rem: sky.ts, pauseState), it keeps its place, unseen
+ * and out of the accessibility tree and the Tab order: the capsule's copy from 48rem to 75rem, the
+ * ornament's above. So the row breaks where
  * it does once the script has run, and nothing moves when it comes: on Accessible Reading at 768 and
  * 864 at 200% root text the script-on row took two lines where the row before it took one, and at
  * 1440 the capsule moved over when the ornament's Pause came. The script takes the mark off as it
- * decides Pause, and from then the [hidden] rule governs. Without script, and in a browser that can't
- * tell, a waiting Pause stays without a box: no empty room for a control that never comes. The rules
+ * decides Pause, and from then the [hidden] rule governs. Without script, and in a browser without
+ * :has(), a waiting Pause stays without a box: no empty room for a control that never comes. The rules
  * above count the capsule's copy too: its gap (--space-3xs), its padding (--space-s each side) and its
  * mark, then from 64rem, where its word shows, the word's gap (--space-2xs) and the word itself, at
  * most 13ch (written out: a query can't read a property). Over, a window scrolls on one line; never
@@ -3312,9 +3314,9 @@
   display: none;
 }
 
-@media screen and (scripting: enabled) and (min-width: 48rem) and (max-width: 75rem) {
+@media screen and (min-width: 48rem) and (max-width: 75rem) {
   [data-variant='aurora-glass']
-    .ag:has(.ag-sky[data-ag-drift='on'])
+    .ag:not(:has([data-ag-nojs])):has(.ag-sky[data-ag-drift='on'])
     .ag-capsule
     .ag-orn--capsule[data-ag-waiting] {
     display: inline-flex;
@@ -3322,16 +3324,19 @@
   }
 }
 
-@media screen and (scripting: enabled) and (min-width: 56.01rem) and (max-width: 75rem) {
-  [data-variant='aurora-glass'] .ag:has(.ag-lens) .ag-capsule .ag-orn--capsule[data-ag-waiting] {
+@media screen and (min-width: 56.01rem) and (max-width: 75rem) {
+  [data-variant='aurora-glass']
+    .ag:not(:has([data-ag-nojs])):has(.ag-lens)
+    .ag-capsule
+    .ag-orn--capsule[data-ag-waiting] {
     display: inline-flex;
     visibility: hidden;
   }
 }
 
-@media screen and (scripting: enabled) and (min-width: 75.01rem) {
+@media screen and (min-width: 75.01rem) {
   [data-variant='aurora-glass']
-    .ag:has(.ag-sky[data-ag-drift='on'])
+    .ag:not(:has([data-ag-nojs])):has(.ag-sky[data-ag-drift='on'])
     .ag-ornament
     .ag-orn[data-ag-waiting] {
     display: inline-flex;
@@ -3339,8 +3344,11 @@
   }
 }
 
-@media screen and (scripting: enabled) and (min-width: 75.01rem) {
-  [data-variant='aurora-glass'] .ag:has(.ag-lens) .ag-ornament .ag-orn[data-ag-waiting] {
+@media screen and (min-width: 75.01rem) {
+  [data-variant='aurora-glass']
+    .ag:not(:has([data-ag-nojs])):has(.ag-lens)
+    .ag-ornament
+    .ag-orn[data-ag-waiting] {
     display: inline-flex;
     visibility: hidden;
   }

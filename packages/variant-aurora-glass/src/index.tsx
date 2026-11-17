@@ -19,7 +19,7 @@ import {
   thesisSectionOf,
   type Band,
 } from './model';
-import { ownId, uiLang, Words } from './parts';
+import { NoScriptMark, ownId, uiLang, Words } from './parts';
 import { Footer, HorizonPhoto } from './renderers/horizon';
 import { Sky } from './sky';
 
@@ -136,6 +136,7 @@ function HomePage({ input, outline }: HomePageProps) {
   const opening = hero ? render(hero, 2) : null;
   return (
     <div className="ag">
+      <NoScriptMark />
       <Sky input={input} />
       {/* The page in a box of its own: its width, in its text's em, is what the chrome asks to stick (row 150). */}
       <div className="ag-page">
