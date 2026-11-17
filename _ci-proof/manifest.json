@@ -1,0 +1,46 @@
+{
+  "name": "schematic-278",
+  "summary": "Schematic with the reader's text at 200% on a phone, on the large-text stack: a table's date range wraps above its row and the contact sheet's links break as the sheet sets them, so no home scrolls sideways on any contract fixture",
+  "head": "afde30fba2aee3bff5c2b8a7c7fe7b26b5738c67",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "reds": [
+    {
+      "label": "r278",
+      "at": "1c25d340fb9332dfd1499813ef5959a7149d16b7",
+      "specs": ["tests/e2e/schematic-root-text-fixtures.spec.ts"],
+      "tests": 32,
+      "files": 1,
+      "failed": 12
+    }
+  ],
+  "e2e": [
+    {
+      "label": "sx-root-text",
+      "specs": [
+        "tests/e2e/schematic-root-text-fixtures.spec.ts",
+        "tests/e2e/schematic-root-text-phone.spec.ts",
+        "tests/e2e/schematic-note-ring.spec.ts"
+      ],
+      "tests": 38,
+      "files": 3
+    }
+  ],
+  "look": [
+    {
+      "label": "schematic-278",
+      "spec": "look/schematic-278-sweep-look.spec.ts",
+      "project": "chromium",
+      "tests": 16,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
