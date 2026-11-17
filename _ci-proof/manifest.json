@@ -1,0 +1,66 @@
+{
+  "name": "kc-rest",
+  "summary": "Kinetic Cosmos's opening turns and settles in 3 s, then rests, so its main thread is idle once it is over; the variants shot waits out a finite animation's time left",
+  "head": "62109b27ccc1ff7690a0e26255767b8c82a4bca5",
+  "base": "180954aff9a63c580bcf859d3d6fbbf8fcf3b04d",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the motion runs only inside no-preference, on the runtime: three transforms on the ambient cycle that come to rest in about 3 s and hold their last frame",
+      "a run of every variant lists the modes project"
+    ]
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "settle",
+      "at": "3becd2efd3729e28a22b971124530d7b6b037eb9",
+      "config": "tests/variants/playwright.config.ts",
+      "specs": ["tests/variants/modes.spec.ts"],
+      "project": "modes",
+      "grep": "the settle before the shot",
+      "tests": 8,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "kc-rest",
+      "at": "f6360b2474e72cb02f033acfcbdffa7ee4b1efa9",
+      "specs": ["tests/e2e/kinetic-motion.spec.ts", "tests/e2e/kinetic-cosmos-at-rest.spec.ts"],
+      "tests": 19,
+      "files": 2,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "kinetic",
+      "specs": ["tests/e2e/kinetic-*.spec.ts"],
+      "tests": 67,
+      "files": 12
+    },
+    {
+      "label": "studio-split",
+      "specs": ["tests/e2e/studio-split.spec.ts"],
+      "tests": 26,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": ["^kinetic-cosmos/"]
+  },
+  "look": [
+    {
+      "label": "kc-rest",
+      "spec": "look/kc-rest-look-v4.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 6
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
