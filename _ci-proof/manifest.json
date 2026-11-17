@@ -1,0 +1,70 @@
+{
+  "name": "print-appearance-control",
+  "summary": "Printed, a page leaves the visitor's Appearance controls off, in every composition",
+  "head": "e5eea63ce0ceda5da44a9d149323aef2a7a3e33d",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": ["print leaves the visitor's Appearance controls off the page"]
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "print",
+      "at": "c1211b93ab31d36eeea531f28817d93d02defa1b",
+      "config": "tests/appearance/playwright.config.ts",
+      "specs": ["tests/appearance/print.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "print",
+      "config": "tests/appearance/playwright.config.ts",
+      "specs": ["tests/appearance/print.spec.ts"],
+      "tests": 1,
+      "files": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "print-kc",
+      "spec": "look/print-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "kinetic-cosmos"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "print-tf",
+      "spec": "look/print-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "terra-field"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "print-sx",
+      "spec": "look/print-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "schematic"
+      },
+      "tests": 1,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
