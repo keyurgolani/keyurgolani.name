@@ -132,8 +132,12 @@ export function Dock({
       return element ? [element] : [];
     });
     // Shown once the overview's last part is above the top fifth of the window.
+    // A delivery holds every entry queued since the last, oldest first: the overview can come into
+    // view and leave it again before the observer's task runs, so the last entry is where it is
+    // now.
     const away = new IntersectionObserver(
-      ([entry]) => {
+      (entries) => {
+        const entry = entries.at(-1);
         if (entry) setShown(!entry.isIntersecting);
       },
       { rootMargin: '-20% 0px 0px 0px' },
