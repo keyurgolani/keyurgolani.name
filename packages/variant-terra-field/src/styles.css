@@ -2707,6 +2707,22 @@
   [data-variant='terra-field'] :is(.tf-close__inner, .tf-close__ask) > * {
     max-inline-size: 100%;
   }
+
+  /* The seal, sized by its figure and words, is no wider than the page: its label wraps a line
+     more inside it, and the opening's room above it and the band's under it follow. */
+  [data-variant='terra-field'] .tf-main {
+    --layout-seal-size: min(
+      100cqi,
+      max(
+        var(--layout-seal),
+        calc(var(--layout-seal-chars, 0) * 1ch + 2 * var(--space-m)),
+        calc(
+          var(--layout-seal-figure, 0) * 0.62 * var(--layout-seal-figure-size) + 2 * var(--space-m)
+        ),
+        calc(var(--layout-seal-figure-size) + 2.9 * var(--type-step--1) + 2 * var(--space-m))
+      )
+    );
+  }
 }
 
 /* ---------- Print: the page as it reads, the grounds dropped ---------- */
