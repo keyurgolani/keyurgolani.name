@@ -41,3 +41,31 @@ export const reach = (page: Page) =>
     }
     return { scroll: html.scrollWidth, window: html.clientWidth, furthest };
   });
+
+/**
+ * With every record section open, what in the home's full record runs past the window's edge,
+ * where its scene clips it out of sight: each such element's name and right edge, widest first.
+ */
+export async function pastTheRecord(page: Page) {
+  await page.evaluate(() => {
+    for (const details of document.querySelectorAll<HTMLDetailsElement>('details[data-record]'))
+      details.open = true;
+  });
+  await frames(page);
+  return page.evaluate(() => {
+    const edge = document.documentElement.clientWidth + 1;
+    const past: { at: string; right: number }[] = [];
+    for (const element of document.querySelectorAll('.hc-record *')) {
+      const box = element.getBoundingClientRect();
+      if (box.width === 0 || box.right <= edge) continue;
+      const name = `${element.localName}${element.id ? `#${element.id}` : ''}${[
+        ...element.classList,
+      ]
+        .slice(0, 2)
+        .map((c) => `.${c}`)
+        .join('')}`;
+      past.push({ at: name, right: Math.round(box.right) });
+    }
+    return past.sort((a, b) => b.right - a.right).slice(0, 8);
+  });
+}
