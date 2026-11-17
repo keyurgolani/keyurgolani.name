@@ -2748,3 +2748,62 @@
     grid-column: 1 / -1;
   }
 }
+
+/* ── Large text on a phone: nothing runs past the screen ── */
+
+/*
+ * Where the sheet holds under 14rem, a phone with the reader's text at 200% (10rem at 320, 12.2rem
+ * at 390), every box may narrow below its widest word and a word longer than its line breaks. The
+ * interface figure and the drawing schedule take one column; a schedule row sets its title, then
+ * its count, under its bubble and chevron; a fold's control wraps its chevron under its label; a
+ * box's tag breaks anywhere; a stamp is no wider than its box. Their widths held home 123 to 291 px
+ * past the screen, and a case up to 143. In a container query rem resolves against the root's font
+ * size, so 14rem tracks the reader's text size: at 1x a phone's sheet holds 20rem or more, and
+ * nothing here applies.
+ */
+[data-variant='schematic'] .sx {
+  container: sx-root / inline-size;
+}
+
+@container sx-root (max-width: 14rem) {
+  [data-variant='schematic'] .sx * {
+    min-inline-size: 0;
+    overflow-wrap: break-word;
+  }
+
+  [data-variant='schematic'] :is(.sx-iface, .sx-schedule) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='schematic'] .sx-schedule summary.sx-vt {
+    grid-template-columns: max-content minmax(0, 1fr);
+    row-gap: var(--space-3xs);
+  }
+
+  [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-vt__title {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-vt__count {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  [data-variant='schematic'] .sx-schedule details.sx-fold .sx-vt::after {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  [data-variant='schematic'] :is(.sx-run-on__sum, .sx-depth__sum, .sx-abstract > summary) {
+    flex-wrap: wrap;
+  }
+
+  [data-variant='schematic'] .sx-tag {
+    overflow-wrap: anywhere;
+  }
+
+  [data-variant='schematic'] .sx-stamp {
+    max-inline-size: 100%;
+  }
+}
