@@ -1202,6 +1202,12 @@
   gap: var(--space-xs);
 }
 
+/* One track as wide as the box, so a word longer than the line, as at 200% text on a phone, breaks inside it. */
+[data-variant='editorial-evidence']
+  :is(.ee-pairs > div, .ee-byline__facts > div, .ee-pull, .ee-contact) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 [data-variant='editorial-evidence'] .ee-pull__text {
   font-family: var(--type-quote-font-family);
   font-size: var(--type-step-3);
@@ -1306,6 +1312,10 @@
   flex-wrap: wrap;
   gap: 0 var(--space-s);
   color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] :is(.ee-row__sub > *, .ee-links > li) {
+  min-inline-size: 0;
 }
 
 [data-variant='editorial-evidence'] .ee-row__body {
