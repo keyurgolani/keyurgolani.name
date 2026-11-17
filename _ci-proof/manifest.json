@@ -1,0 +1,20 @@
+{
+  "name": "b9-sweep-open-4",
+  "summary": "Flux, Obsidian Atelier and Singular at 320 and 390 with 200% text and every fold open, on every contract fixture, home and first work page, read on Linux at the batch tip: what runs past either edge of the window",
+  "head": "4a91d262d74fa2362838c5fe5985ebe707d523ab",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "look": [
+    {
+      "label": "sweep-open",
+      "spec": "look/overflow-sweep-open.spec.ts",
+      "project": "chromium",
+      "tests": 48,
+      "files": 1,
+      "env": {
+        "OVERFLOW_SWEEP_SHARD": "4/4"
+      }
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
