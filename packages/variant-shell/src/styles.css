@@ -2469,6 +2469,13 @@
     color: var(--color-text-primary);
   }
 
+  /* Key and value lines stack a line apart with nothing between them, so the ring a focused
+     link draws past its box lay under the next line's text plate and over the line above's
+     underline, both in the ring's own ink here: the lines stand a ring's reach apart. */
+  [data-variant='shell'] :is(.sh-kv, .sh-kv__list) {
+    row-gap: calc(var(--ui-focus-width) + var(--ui-focus-offset));
+  }
+
   /* The bar's controls draw their own ring here. The bar is marked as the accent surface, so
      the platform's ring takes on-accent, which forced colours map to ButtonFace, the bar's own
      Canvas ground here; and that ring sits in the platform's utilities layer, above Shell's, so
