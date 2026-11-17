@@ -66,11 +66,13 @@ export const SHARD_FIXED = 95;
 export const SHARD_WORKERS = 2;
 /**
  * The most shards quality-pr-plan hands out, whatever the plan: needing more
- * fails, naming the heaviest group. #20's whole catalog in one PR is what
- * comes near it: [37] keeps every changed pack against every variant, so the
- * sweep is never cut to fit.
+ * fails, naming the heaviest group. A push that changes every first-party
+ * variant at once, beside the pack sweep, is what comes near it, at about
+ * 126: [37] keeps every changed pack against every variant and every changed
+ * variant against every stable language, so neither is cut to fit. The
+ * matrix holds 256 jobs, and PR_QUALITY_PARALLEL still runs 10 at a time.
  */
-export const CATALOG_MAX_SHARDS = 48;
+export const CATALOG_MAX_SHARDS = 160;
 /**
  * A pack sweep that alone needs more shards than this is catalog-scale, as
  * one that brings #20's whole catalog is, and quality-pr-plan's log says so.
