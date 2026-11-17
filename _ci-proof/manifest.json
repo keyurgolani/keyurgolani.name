@@ -1,0 +1,30 @@
+{
+  "name": "observer-latest-entry-ee",
+  "summary": "Editorial Evidence's rail dock watch and its opening watch each read their observer's latest entry, so a delivery that holds a box coming into view and leaving it again leaves neither stale",
+  "head": "185d70218039f889cfcf4c67930808dd43eca824",
+  "base": "6835c3d4ae620a6791a5136048c994bc413eefa7",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": [
+      "the rail's dock watch reads a delivery's latest entry: docked and then not is undocked, and the other way round docked",
+      "the opening's watch reads a delivery's latest entry: out of view and then under the line is read, and the other way round not"
+    ]
+  },
+  "e2e": [
+    {
+      "label": "ee",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 153,
+      "files": 16,
+      "skipped": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
