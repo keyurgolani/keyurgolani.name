@@ -224,6 +224,26 @@ test('the count is the fewest shards whose estimates all hold the ceiling, whate
   }
 });
 
+test('a push that changes every first-party variant at once, about 126 shards, takes the fewest that fit, and changed variants that alone need more than 160 fail, naming the group', () => {
+  const durations = { group: 5 };
+  // Two 200 s groups a shard, one a worker.
+  const varied = (count: number): ShardGroup[] =>
+    synthetic(count, 200).map((group, at) => ({
+      ...group,
+      project: `chromium variant${at}`,
+      variant: true as const,
+    }));
+  // A base of 10 shards beside the changed variants' 116: 126 in all.
+  const landing = [...synthetic(20, 200), ...varied(232)];
+  const picked = pickShardCount(landing, durations);
+  assert.deepEqual([picked.variantShards, picked.count], [116, 126]);
+  assertFewest(landing, picked, durations, 'every variant changed at once');
+  assert.throws(
+    () => pickShardCount(varied(330), durations),
+    /^Error: Even 160 shards leave one at about \d+s, over the 300s ceiling \(the directed groups alone need more than 160 shard\(s\), the pack sweep's 0 and the changed variants' more than 160\)\. Its heaviest group is chromium variant\d+ cells\.spec\.ts, at about 200s\.$/,
+  );
+});
+
 test("a PR's directed load, its pack sweep and its changed variants, counts as any other load does, and the log says what it alone needs", () => {
   const durations = { group: 5 };
   // A shard holds two 200 s groups, one a worker.
