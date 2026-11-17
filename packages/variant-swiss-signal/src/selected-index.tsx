@@ -63,7 +63,17 @@ export function SelectedIndex({ input }: { input: VariantRenderInput }) {
               </span>
               {thumb ? (
                 <span className="ss-sel__thumb">
-                  <Img placed={thumb} input={input} sizes="6rem" decorative eager={index === 0} />
+                  {/* The first loads at once and decodes before its raster: it rises in its row
+                      above the fold, and decoded after, the row re-rasters a frame without it, as
+                      a shot can catch. A 6rem thumbnail, cheap to decode on the main thread. */}
+                  <Img
+                    placed={thumb}
+                    input={input}
+                    sizes="6rem"
+                    decorative
+                    eager={index === 0}
+                    decoding={index === 0 ? 'sync' : undefined}
+                  />
                 </span>
               ) : null}
               <p className="ss-sel__title" data-type-role="body" lang={item.lang}>
