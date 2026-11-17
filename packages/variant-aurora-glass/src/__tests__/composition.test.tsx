@@ -370,7 +370,8 @@ test('the focused skip link is raised above .ag, its sky and its chrome (C1)', (
 // Pause ships waiting, never hidden: the platform's [hidden] rule outranks a variant's, so a hidden Pause could hold
 // no place before the script. A waiting Pause has no box by default; only where script runs, in the band where the
 // script shows its copy and the sky would move, it keeps its place unseen (out of the accessibility tree and the Tab
-// order). The script takes the mark off as it decides Pause.
+// order). Where script runs is the page's no-script mark's absence, never a scripting query. The script takes the
+// mark off as it decides Pause.
 test('Pause ships waiting: no box by default, its place kept unseen only where script runs and would show it', () => {
   const html = sample();
   const pauses = [...html.matchAll(/<button [^>]*data-ag-pause=""[^>]*>/g)].map((m) => m[0]);
@@ -386,7 +387,7 @@ test('Pause ships waiting: no box by default, its place kept unseen only where s
     ),
   );
   const keep = (media: string, sky: string, copy: string) =>
-    `@media screen and (scripting: enabled) and ${media} { [data-variant='aurora-glass'] .ag:has(${sky}) ${copy}[data-ag-waiting] { display: inline-flex; visibility: hidden; } }`;
+    `@media screen and ${media} { [data-variant='aurora-glass'] .ag:not(:has([data-ag-nojs])):has(${sky}) ${copy}[data-ag-waiting] { display: inline-flex; visibility: hidden; } }`;
   const drift = ".ag-sky[data-ag-drift='on']";
   const capsule = '.ag-capsule .ag-orn--capsule';
   const ornament = '.ag-ornament .ag-orn';
@@ -401,6 +402,27 @@ test('Pause ships waiting: no box by default, its place kept unseen only where s
     if (/display: (?!none)/.test(body!)) assert.match(body!, /visibility: hidden;/, selector);
   // No rule keys a held place on [hidden] any more.
   assert.ok(!flat.includes('.ag-orn--capsule[hidden] { display: inline-flex;'));
+});
+
+// The no-JavaScript rows audit a page loaded with script off, then turn script on for axe: a rule
+// keyed on a scripting query would flip under that pass. Script's absence is the page's no-script
+// mark instead, an element only where the page was read with scripting off.
+test('no rule styles by a scripting query; the page and the case study carry the no-script mark first', () => {
+  assert.doesNotMatch(CSS, /\(\s*scripting\s*:/);
+  const home = sample();
+  const work = renderInput({
+    ...sampleInput(),
+    route: { route: 'work' as const, slug: 'postmortem-template-kit' },
+  });
+  for (const [name, html] of [
+    ['home', home],
+    ['case study', work],
+  ] as const)
+    assert.match(
+      html,
+      /<div class="ag(?: ag--case)?"><noscript><i data-ag-nojs=""><\/i><\/noscript>/,
+      name,
+    );
 });
 
 test('Pause: the ornament holds it above 75rem, the capsule as its last item below; the ring sits on surface (G1, S2, C2)', () => {
