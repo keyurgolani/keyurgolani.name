@@ -1,0 +1,43 @@
+{
+  "name": "mc-320-d",
+  "summary": "Mission Control at 320 with 200% text: a work's title with a word wider than the board's head breaks within it",
+  "head": "50cc643408840e07607279c0a870d01825f2c1a6",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "reds": [
+    {
+      "label": "mc-281",
+      "at": "12e2f84d64d27540caf335666bfb7f7c2e6b7cc5",
+      "specs": ["tests/e2e/mission-control-root-text-320-design-work.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "mc",
+      "specs": [
+        "tests/e2e/mission-control-root-text-320.spec.ts",
+        "tests/e2e/mission-control-readout-figure-320.spec.ts",
+        "tests/e2e/mission-control-root-text-320-design.spec.ts",
+        "tests/e2e/mission-control-root-text-320-long-text.spec.ts",
+        "tests/e2e/mission-control-root-text-320-design-work.spec.ts"
+      ],
+      "tests": 7,
+      "files": 5
+    }
+  ],
+  "cells": [],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
