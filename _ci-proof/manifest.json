@@ -1,0 +1,52 @@
+{
+  "name": "aurora-glass-phone-probe",
+  "summary": "Aurora Glass on phones read in Linux pixels: long words in its text, and Glassmorphism's stat tiles and fold rings",
+  "head": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "look": [
+    {
+      "label": "overflow",
+      "spec": "look/overflow.spec.ts",
+      "project": "chromium",
+      "tests": 6
+    },
+    {
+      "label": "glass-system",
+      "spec": "look/glass.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_MODE": "system"
+      },
+      "tests": 4
+    },
+    {
+      "label": "glass-light",
+      "spec": "look/glass.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_MODE": "light"
+      },
+      "tests": 4
+    },
+    {
+      "label": "glass-dark",
+      "spec": "look/glass.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_MODE": "dark"
+      },
+      "tests": 4
+    },
+    {
+      "label": "glass-high-contrast",
+      "spec": "look/glass.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_MODE": "high-contrast"
+      },
+      "tests": 4
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
