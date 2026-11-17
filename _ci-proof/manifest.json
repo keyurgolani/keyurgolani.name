@@ -1,0 +1,18 @@
+{
+  "name": "ee-mixed-transient-full",
+  "summary": "Editorial Evidence on the mixed contract fixture at 390 by 844, mobile, through a whole-page shot: every change of the window, the scroll, the page and the masthead, sampled every 2 ms, with the gap cap and the wrap together (260's fix as it is) against F",
+  "head": "130fdd66088a936e6b444766a2c497f954289c03",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "look": [
+    {
+      "label": "transient",
+      "spec": "look/look-260-mixed-3.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
