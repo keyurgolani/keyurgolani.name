@@ -14,7 +14,19 @@ import { Chrome } from './chrome/capsule';
 import { IndexDialog } from './chrome/index-dialog';
 import { openingHeading } from './hero';
 import { bandsOf, caseFacts, caseHome, formatNumber, present, rangeOf, yearOf } from './model';
-import { Img, Out, ownId, Phrase, Prose, readyImage, Tracks, uiLang, When, Words } from './parts';
+import {
+  Img,
+  NoScriptMark,
+  Out,
+  ownId,
+  Phrase,
+  Prose,
+  readyImage,
+  Tracks,
+  uiLang,
+  When,
+  Words,
+} from './parts';
 import { Footer } from './renderers/horizon';
 import { Sky } from './sky';
 import { Pane } from './surfaces/pane';
@@ -150,6 +162,7 @@ function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
   const nextCover = next?.cover;
   return (
     <div className="ag ag--case">
+      <NoScriptMark />
       <Sky input={input} />
       {/* The page in a box of its own: its width, in its text's em, is what the chrome asks to stick (row 150). */}
       <div className="ag-page">
