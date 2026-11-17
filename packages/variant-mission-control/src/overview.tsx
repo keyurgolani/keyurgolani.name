@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import { formatFigure, renderContext, RichText } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { chromeIds, dateText, type Board, type HomeModel } from './model';
@@ -95,6 +95,18 @@ export function Anchor({
 }
 
 /** The square readouts: each metric's figure and the first clause of what it counts, linking to its record. */
+/**
+ * A readout's figure, its length in characters handed to the stylesheet: a figure too long for its
+ * square is set small enough to fit it, and only such a figure.
+ */
+function Figure({ text }: { text: string }) {
+  return (
+    <span className="mc-num" style={{ '--layout-figure-length': text.length } as CSSProperties}>
+      {text}
+    </span>
+  );
+}
+
 export function Readouts({
   input,
   model,
@@ -142,7 +154,7 @@ export function Readouts({
               {readout.label ? <span className="mc-readout__label">{readout.label}</span> : null}
               <span className="mc-readout__figure">
                 {readout.value !== undefined ? (
-                  <span className="mc-num">{formatFigure(readout.value, ctx)}</span>
+                  <Figure text={formatFigure(readout.value, ctx)} />
                 ) : null}
                 {readout.unit ? <span className="mc-readout__unit">{readout.unit}</span> : null}
               </span>
