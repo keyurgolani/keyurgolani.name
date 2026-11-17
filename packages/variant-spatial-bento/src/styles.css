@@ -475,6 +475,22 @@
   flex: 1;
 }
 
+/*
+ * In a tile narrower than its words, as at 200% root text on a phone, a name breaks inside one,
+ * and in the full record a dated row's or a talk's facts go under the year or the date and break
+ * inside one too.
+ */
+@container (max-width: 16rem) {
+  [data-variant='spatial-bento'] .sb-archive__name {
+    overflow-wrap: anywhere;
+  }
+
+  [data-variant='spatial-bento'] .sb-archive :is(.sb-ev .sb-dated, .sb-ev--talk > li) {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-wrap: anywhere;
+  }
+}
+
 [data-variant='spatial-bento'] .sb-archive__name::before {
   content: '+';
   margin-inline-end: var(--space-2xs);
@@ -1550,8 +1566,10 @@
   grid-column: 1 / -1;
 }
 
+/* One column as wide as the figure: a box with no image yet, its height floored, never widens it. */
 [data-variant='spatial-bento'] .sb-photos__grid figure {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3xs);
   align-content: start;
 }
