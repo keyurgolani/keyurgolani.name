@@ -1,0 +1,55 @@
+{
+  "name": "ee-root-text-phone-c",
+  "summary": "Editorial Evidence at 200% root text on a phone keeps every grid inside the page, and a long date or address wraps: no sideways scroll at 390 or 320, on home or a case, with the gap the gutter at any window size at default text",
+  "head": "ae74b70618dec82d9d0643d9a47d6075de1fb9a2",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "rt",
+      "at": "82427ca0cd06897398f65559604a6bbfc009d27d",
+      "specs": ["tests/e2e/editorial-evidence-root-text-phone.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ee",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 159,
+      "files": 18,
+      "skipped": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "mixed",
+      "spec": "look/look-260-mixed.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 2
+    },
+    {
+      "label": "transient",
+      "spec": "look/look-260-mixed-3.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
