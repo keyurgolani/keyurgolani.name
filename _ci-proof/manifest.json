@@ -1,0 +1,82 @@
+{
+  "name": "landing-scope-and-shots",
+  "summary": "The release scope's final gate and quality-pr's plan for a push that changes every variant, with observed bars that read their latest entry, forced-colours inks and rings across the compositions, Aurora Glass's focus rings, Kinetic Cosmos's resting orbits, Spatial Bento's dock through a whole-page shot, Swiss Signal's first cover painted before a shot, and Editorial Evidence's bar, plates and title links, together on the landing tip keep every check, budget, browser set and variant shot as proven",
+  "head": "6835c3d4ae620a6791a5136048c994bc413eefa7",
+  "base": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "a run of every variant lists the modes project",
+      "a push that changes every first-party variant at once, about 126 shards, takes the fewest that fit, and changed variants that alone need more than 160 fail, naming the group",
+      "the checked-in scope is 1.0.0-rc.3's final gate: the reachable scope as the inventory runs it, an empty records list, no timing reported instead of gated, and it loads",
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget"
+    ]
+  },
+  "budgets": true,
+  "e2e": [
+    {
+      "label": "singular",
+      "specs": ["tests/e2e/singular*.spec.ts"],
+      "tests": 103,
+      "files": 19,
+      "skipped": "record"
+    },
+    {
+      "label": "spatial-bento",
+      "specs": ["tests/e2e/spatial-bento*.spec.ts"],
+      "tests": 117,
+      "files": 8,
+      "skipped": "record"
+    },
+    {
+      "label": "aurora-glass",
+      "specs": ["tests/e2e/aurora-glass*.spec.ts"],
+      "tests": 175,
+      "files": 16,
+      "skipped": "record"
+    },
+    {
+      "label": "kinetic-cosmos",
+      "specs": ["tests/e2e/kinetic-cosmos*.spec.ts", "tests/e2e/kinetic-case.spec.ts"],
+      "tests": 41,
+      "files": 9,
+      "skipped": "record"
+    },
+    {
+      "label": "editorial-evidence",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 153,
+      "files": 16,
+      "skipped": "record"
+    },
+    {
+      "label": "changed",
+      "specs": [
+        "tests/e2e/flux-scrolled-strip.spec.ts",
+        "tests/e2e/forced-backplate-flux.spec.ts",
+        "tests/e2e/forced-backplate-horizontal-cinema.spec.ts",
+        "tests/e2e/forced-backplate-kinetic-cosmos.spec.ts",
+        "tests/e2e/forced-backplate-mission-control.spec.ts",
+        "tests/e2e/forced-backplate-obsidian-atelier.spec.ts",
+        "tests/e2e/forced-backplate-raw-grid-islands.spec.ts",
+        "tests/e2e/forced-backplate-raw-grid.spec.ts",
+        "tests/e2e/forced-backplate-spatial-bento.spec.ts",
+        "tests/e2e/forced-backplate-terra-field.spec.ts",
+        "tests/e2e/forced-drawings-kinetic-cosmos.spec.ts",
+        "tests/e2e/forced-drawings-spatial-bento.spec.ts",
+        "tests/e2e/kinetic-motion.spec.ts",
+        "tests/e2e/studio-split.spec.ts"
+      ],
+      "tests": 101,
+      "files": 14,
+      "skipped": "record"
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": ["^kinetic-cosmos/", "^aurora-glass/", "^editorial-evidence/"]
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
