@@ -21,6 +21,7 @@ export function Img({
   className,
   sizes,
   eager = false,
+  decoding,
   decorative = false,
 }: {
   placed: PlacedImage;
@@ -28,6 +29,8 @@ export function Img({
   className?: string;
   sizes: string;
   eager?: boolean;
+  /** The kit's decoding: `sync` only for a small cover above the fold that a shot must find painted. */
+  decoding?: 'async' | 'sync';
   decorative?: boolean;
 }) {
   const ctx = renderContext(input, { id: placed.asset, title: undefined }, 3);
@@ -48,6 +51,7 @@ export function Img({
       className={className}
       sizes={sizes}
       eager={eager}
+      decoding={decoding}
       inline
     />
   );
