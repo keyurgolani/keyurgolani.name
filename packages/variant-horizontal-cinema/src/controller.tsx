@@ -484,6 +484,8 @@ function LiveStage(props: StageProps) {
     // Whether a resize's burst is waiting for its refit, and when the reader's own input last came.
     let burst = false;
     let inputAt = Number.NEGATIVE_INFINITY;
+    // When the reader last moved the strip sideways while a move of the controller's was on its way.
+    let tookAt = Number.NEGATIVE_INFINITY;
     // The scene a move the controller started is headed for, until it settles: a second key retargets from it.
     let aligning: number | null = null;
     /**
@@ -939,6 +941,7 @@ function LiveStage(props: StageProps) {
       // Shift and the wheel, or a sideways swipe, moves the strip, which the page follows (lead):
       // right to left, a scroll to the right goes back.
       const sideways = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      if (sideways && aligning !== null) tookAt = event.timeStamp;
       tell(Math.sign(sideways ? (event.deltaX || event.deltaY) * (rtl() ? -1 : 1) : event.deltaY));
     };
     let touchAt: { x: number; y: number } | undefined;
@@ -954,7 +957,9 @@ function LiveStage(props: StageProps) {
       const dy = touchAt.y - touch.clientY;
       touchAt = { x: touch.clientX, y: touch.clientY };
       // A finger moving up moves the page on; one moving across moves the strip on the way it reads.
-      tell(Math.abs(dx) > Math.abs(dy) ? Math.sign(dx) * (rtl() ? -1 : 1) : Math.sign(dy));
+      const across = Math.abs(dx) > Math.abs(dy);
+      if (across && aligning !== null) tookAt = event.timeStamp;
+      tell(across ? Math.sign(dx) * (rtl() ? -1 : 1) : Math.sign(dy));
     };
     // The keys that scroll the page. The arrows across, and Home and End where they have a scene to
     // go to, are the controller's own steps (onKey), which take a snap over as any move does.
@@ -963,10 +968,12 @@ function LiveStage(props: StageProps) {
       if (event.target instanceof Element && event.target.closest(NATIVE_KEYS)) return;
       const space =
         event.key === ' ' && !(event.target instanceof Element && event.target.closest(PRESSABLE));
-      if (['ArrowDown', 'PageDown', 'End'].includes(event.key) || (space && !event.shiftKey))
-        tell(1);
-      else if (['ArrowUp', 'PageUp', 'Home'].includes(event.key) || (space && event.shiftKey))
-        tell(-1);
+      const on = ['ArrowDown', 'PageDown', 'End'].includes(event.key) || (space && !event.shiftKey);
+      const back = ['ArrowUp', 'PageUp', 'Home'].includes(event.key) || (space && event.shiftKey);
+      // The reader's own page scroll: the strip follows the page again at once.
+      if (on || back) tookAt = Number.NEGATIVE_INFINITY;
+      if (on) tell(1);
+      else if (back) tell(-1);
     };
 
     const settle = () => {
@@ -1110,7 +1117,10 @@ function LiveStage(props: StageProps) {
         lastY = y;
       }
       arrive();
-      follow();
+      // Just after the reader moved the strip sideways during a step, the strip is theirs: the
+      // step's glide, still on its way, doesn't write it back over their scroll, and lead() takes
+      // the page from the strip instead, which ends the glide and hands the step over.
+      if (aligning === null || performance.now() - tookAt >= OWN_MS) follow();
       onScroll();
     };
     const onStageScroll = () => {
@@ -1123,6 +1133,8 @@ function LiveStage(props: StageProps) {
       const element = elements[to];
       if (!element) return;
       kept = undefined;
+      // A move of the controller's own, after a sideways swipe: the strip follows the page again.
+      tookAt = Number.NEGATIVE_INFINITY;
       moved = true;
       overdue = false;
       if (overdueTimer !== undefined) clearTimeout(overdueTimer);
