@@ -1,0 +1,28 @@
+{
+  "name": "kc-print-title-probe",
+  "summary": "The Appearance control under print media in every composition, and Kinetic Cosmos's project titles under 200% root text",
+  "head": "302a53654ed3190db9e8b95dbaa456412b1b66cf",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "e2e": [
+    {
+      "label": "smoke",
+      "specs": ["tests/e2e/zz-probe-print-kinetic-cosmos.spec.ts"],
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "print",
+      "specs": ["tests/e2e/zz-probe-print-*.spec.ts"],
+      "tests": 15,
+      "files": 15
+    },
+    {
+      "label": "title",
+      "specs": ["tests/e2e/zz-probe-title-*.spec.ts"],
+      "tests": 8,
+      "files": 8
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
