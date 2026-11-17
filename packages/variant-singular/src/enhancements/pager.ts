@@ -252,8 +252,11 @@ function attach(root: HTMLElement) {
   if (docking && h1 && bar) {
     let first = true;
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        bar.dataset.sgName = entry?.isIntersecting ? 'docked' : 'shown';
+      (entries) => {
+        // A delivery holds every entry queued since the last, oldest first: the h1 can come into
+        // view and leave it again before the observer's task runs, so the last entry is where it
+        // is now.
+        bar.dataset.sgName = entries.at(-1)?.isIntersecting ? 'docked' : 'shown';
         if (first) {
           first = false;
           passes.delivered();
