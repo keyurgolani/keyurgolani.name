@@ -1,0 +1,170 @@
+{
+  "name": "landing-large-text-phones",
+  "summary": "Thirteen compositions keep a phone's pages inside the window at 200% text, print leaves the Appearance controls off the page, and the variants parity read keeps its page, all at once",
+  "head": "4a91d262d74fa2362838c5fe5985ebe707d523ab",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding",
+      "Pause ships waiting: no box by default, its place kept unseen only where script runs and would show it",
+      "no rule styles by a scripting query; the page and the case study carry the no-script mark first",
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "C5: folios, page numbers and durations sit on their row's baseline",
+      "C2: the measures count characters as the faces render, and tables, meta lines and dates never wrap early",
+      "the stylesheet styles its own elements, never a primitive's slots, and keys nothing on a display mode",
+      "the stylesheet reads the platform's scales: no length of its own in a padding, margin, or gap",
+      "readStructure reads the boundary and its names in one task of the page, so an element the page adds between two of its tasks can't put them out of step",
+      "torn down, the controller refits nothing and leaves none of its attributes on the shell",
+      "on a phone the title card’s tagline band keeps space under it, with no bottom bar to give it (HOR-4)",
+      "on a phone the full record’s rows have room around and between their lines, on the scenes’ inset (HOR-5)",
+      "print leaves the visitor's Appearance controls off the page",
+      "the ticker: hidden from assistive technology, every fact shown elsewhere as text, off by control"
+    ]
+  },
+  "budgets": true,
+  "e2e": [
+    {
+      "label": "aurora-glass",
+      "specs": ["tests/e2e/aurora-glass*.spec.ts"],
+      "tests": 178,
+      "files": 17,
+      "skipped": "record"
+    },
+    {
+      "label": "chapters",
+      "specs": ["tests/e2e/chapters*.spec.ts"],
+      "tests": 42,
+      "files": 8,
+      "skipped": "record"
+    },
+    {
+      "label": "editorial-evidence",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 166,
+      "files": 20,
+      "skipped": "record"
+    },
+    {
+      "label": "horizontal-cinema",
+      "specs": ["tests/e2e/horizontal-cinema*.spec.ts"],
+      "tests": 230,
+      "files": 35,
+      "skipped": "record"
+    },
+    {
+      "label": "kinetic-cosmos",
+      "specs": ["tests/e2e/kinetic-cosmos*.spec.ts", "tests/e2e/kinetic-case.spec.ts"],
+      "tests": 53,
+      "files": 15,
+      "skipped": "record"
+    },
+    {
+      "label": "mission-control",
+      "specs": ["tests/e2e/mission-control*.spec.ts"],
+      "tests": 46,
+      "files": 14,
+      "skipped": "record"
+    },
+    {
+      "label": "obsidian-atelier",
+      "specs": ["tests/e2e/obsidian-atelier*.spec.ts"],
+      "tests": 67,
+      "files": 15,
+      "skipped": "record"
+    },
+    {
+      "label": "raw-grid",
+      "specs": ["tests/e2e/raw-grid*.spec.ts"],
+      "tests": 95,
+      "files": 5,
+      "skipped": "record"
+    },
+    {
+      "label": "schematic",
+      "specs": ["tests/e2e/schematic*.spec.ts"],
+      "tests": 183,
+      "files": 21,
+      "skipped": "record"
+    },
+    {
+      "label": "shell",
+      "specs": ["tests/e2e/shell*.spec.ts"],
+      "tests": 94,
+      "files": 8,
+      "skipped": "record"
+    },
+    {
+      "label": "spatial-bento",
+      "specs": ["tests/e2e/spatial-bento*.spec.ts"],
+      "tests": 129,
+      "files": 11,
+      "skipped": "record"
+    },
+    {
+      "label": "swiss-signal",
+      "specs": ["tests/e2e/swiss-signal*.spec.ts"],
+      "tests": 110,
+      "files": 19,
+      "skipped": "record"
+    },
+    {
+      "label": "terra-field",
+      "specs": ["tests/e2e/terra-field*.spec.ts"],
+      "tests": 53,
+      "files": 7,
+      "skipped": "record"
+    },
+    {
+      "label": "print",
+      "config": "tests/appearance/playwright.config.ts",
+      "specs": ["tests/appearance/print.spec.ts"],
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "parity-client-snapshot",
+      "specs": ["tests/e2e/parity-client-snapshot.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "parity-flaked-projects",
+      "config": "tests/variants/playwright.config.ts",
+      "project": ["schematic/rtl", "aurora-glass/engineering", "singular/academic"],
+      "specs": ["tests/variants/parity.spec.ts"],
+      "tests": 3,
+      "files": 1
+    }
+  ],
+  "cells": [
+    {
+      "label": "tuple",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ no\\-javascript\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ )",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "label": "shell-forced-1440",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:shell complete / shell/(platform-neutral|carbon-inspired|primer-inspired|glassmorphism)/warm-parchment/humanist-ui/system 1440x900 forced-colors ",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": [
+      "^horizontal-cinema/(rtl|mixed) > ",
+      "^aurora-glass/long-text > fixtures\\.spec\\.ts > mobile > "
+    ]
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
