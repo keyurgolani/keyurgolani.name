@@ -1,0 +1,88 @@
+{
+  "name": "hc-v1-f",
+  "summary": "Horizontal Cinema: the List view's owner's name isn't the current page, and a reader below the strip keeps their place through a text size",
+  "head": "6d07d1014a522ee1a44aa5c15db68c393eb9b5ad",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "reds": [
+    {
+      "label": "hc-list-name",
+      "at": "41edd2e3f0e48e469bf0b98f0421c78a13113e83",
+      "specs": ["tests/e2e/horizontal-cinema-list-name.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "hc-below-strip",
+      "at": "5d6b1a1b7849a33d0dd05a0302266e567e3479bb",
+      "specs": ["tests/e2e/horizontal-cinema-below-strip-text-size.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "hc",
+      "specs": [
+        "tests/e2e/horizontal-cinema-list-name.spec.ts",
+        "tests/e2e/horizontal-cinema-below-strip-text-size.spec.ts",
+        "tests/e2e/horizontal-cinema-text-size-wheel.spec.ts"
+      ],
+      "tests": 6,
+      "files": 3
+    },
+    {
+      "label": "hc-stack",
+      "specs": [
+        "tests/e2e/horizontal-cinema-rtl-bars.spec.ts",
+        "tests/e2e/horizontal-cinema-sideways-kept.spec.ts"
+      ],
+      "tests": 3,
+      "files": 2
+    },
+    {
+      "label": "sideways-1",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-2",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-3",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-4",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-5",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    }
+  ],
+  "cells": [],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": ["^horizontal-cinema/(rtl|mixed) > "]
+  },
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
