@@ -1,0 +1,37 @@
+{
+  "name": "ee-bar-token-writes",
+  "summary": "Editorial Evidence's bar token is written only when the masthead's height changes, worked out from what the observer has laid out, never taken off to measure: no forced restyle at the font swap at load",
+  "head": "af6954fa77492979abdc4e877e1ebc3cc19a2356",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "bar",
+      "at": "69c228b362e3e2dc5b4385fe83606d77fba8f636",
+      "specs": ["tests/e2e/editorial-evidence-bar-token.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ee",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 155,
+      "files": 17,
+      "skipped": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
