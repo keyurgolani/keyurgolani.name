@@ -868,6 +868,7 @@
   grid-template-rows: auto 1fr;
   block-size: 100%;
   padding: max(0px, var(--space-xs) - var(--ui-focus-width) - var(--ui-focus-offset));
+  container-type: inline-size;
   color: var(--color-text-primary);
   text-decoration: none;
 }
@@ -891,6 +892,13 @@
   white-space: nowrap;
   font-size: var(--type-step-5);
   line-height: 1;
+}
+
+/* The figure keeps its step while it fits the square: wider, as with the text at 200% on a phone,
+   it's set small enough that one of five characters ("1,200") fits, rather than be cut at the
+   panel's edge. */
+[data-variant='mission-control'] .mc-readout__figure > .mc-num {
+  font-size: min(1em, 36cqi);
 }
 
 [data-variant='mission-control'] .mc-readout__unit {
