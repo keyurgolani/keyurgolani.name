@@ -405,6 +405,21 @@ export async function expectNothingFixed(page: Page): Promise<void> {
   expect(pinned, 'fixed or sticky in print').toEqual([]);
 }
 
+/**
+ * No part of the visitor's Appearance controls in print, the page's own or a plate's, with every
+ * disclosure open, as a composition opens them before printing: a printed page is the record.
+ */
+export async function expectNoVisitorControls(page: Page): Promise<void> {
+  const printed = await page.evaluate(() => {
+    window.dispatchEvent(new Event('beforeprint'));
+    for (const details of document.querySelectorAll('details')) details.open = true;
+    return [...document.querySelectorAll('[data-ui-slot="appearance-control"]')]
+      .filter((control) => control.getClientRects().length > 0)
+      .map((control) => (control.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 60));
+  });
+  expect(printed, "the visitor's Appearance controls in print").toEqual([]);
+}
+
 /** Nothing runs once the page has settled under reduced motion. */
 export async function expectStill(page: Page): Promise<void> {
   await page.waitForTimeout(500);
@@ -794,6 +809,7 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     // And any enhancement that mounted while those checks ran.
     if (failed) await expectEveryEnhancementFailed(page, failed, floor, { settle: false });
     if (mode === 'print') await expectNothingFixed(page);
+    if (mode === 'print') await expectNoVisitorControls(page);
     if (mode === 'reduced-motion') await expectStill(page);
   } finally {
     watch?.stop();

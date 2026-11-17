@@ -457,6 +457,16 @@ test('print is opaque and still', () => {
   assert.equal(print.get('--motion-scene'), '0s');
 });
 
+test("print leaves the visitor's Appearance controls off the page", () => {
+  // A printed page is the record: the visitor's own controls (the scheme menu, the display mode
+  // choices, Reset to site default) are no part of it, whatever a composition opens to print.
+  const control = declarations(
+    '    [data-appearance-boundary] [data-ui-slot="appearance-control"]',
+    '@media print',
+  );
+  assert.equal(control.get('display'), 'none');
+});
+
 test('the platform file is named by its content', () => {
   const file = compilePlatform();
   assert.match(file.name, /^_platform\.[0-9a-f]{12}\.css$/);
