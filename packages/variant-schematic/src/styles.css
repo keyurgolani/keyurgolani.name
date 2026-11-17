@@ -936,6 +936,14 @@
   color: var(--color-text-secondary);
 }
 
+/* The line over a note's link to Fig. 1 keeps at least a quarter of its size as leading, so the
+   link's focus ring clears its letters. A face that sets it closer gets the difference under it:
+   Paste-Up sets a title at 1.1, and the ring's top side ran over the title's letters, under 90%
+   of it at 3:1. Humanist UI and every face that sets the line at 1.25 or more keep their place. */
+[data-variant='schematic'] .sx-note > :has(+ .sx-note__ref) {
+  margin-block-end: max(0px, calc(1.25em - 1lh));
+}
+
 [data-variant='schematic'] .sx-cover__fig {
   grid-area: fig;
   min-inline-size: 0;
