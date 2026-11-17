@@ -1,0 +1,62 @@
+{
+  "name": "hc-root-text-window-3",
+  "summary": "Horizontal Cinema on a phone with the root text at 200% keeps a work page and the home inside the window",
+  "head": "439b281223c53e59354613dcea82f6864a397ff8",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "on a phone the title card’s tagline band keeps space under it, with no bottom bar to give it (HOR-4)"
+    ]
+  },
+  "reds": [
+    {
+      "label": "window",
+      "at": "e863df7fc99f91d42d6683063ff03faffe260435",
+      "specs": [
+        "tests/e2e/horizontal-cinema-root-text-window.spec.ts",
+        "tests/e2e/horizontal-cinema-root-text-window-design.spec.ts",
+        "tests/e2e/horizontal-cinema-root-text-window-complete.spec.ts"
+      ],
+      "tests": 8,
+      "files": 3,
+      "failed": 7
+    }
+  ],
+  "e2e": [
+    {
+      "label": "window",
+      "specs": [
+        "tests/e2e/horizontal-cinema-root-text-window.spec.ts",
+        "tests/e2e/horizontal-cinema-root-text-window-design.spec.ts",
+        "tests/e2e/horizontal-cinema-root-text-window-complete.spec.ts"
+      ],
+      "tests": 8,
+      "files": 3
+    },
+    {
+      "label": "hc",
+      "specs": ["tests/e2e/horizontal-cinema*.spec.ts"],
+      "tests": 215,
+      "files": 27
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "look": [
+    {
+      "label": "window",
+      "spec": "look/look-272-window.spec.ts",
+      "project": "chromium",
+      "tests": 3,
+      "files": 1,
+      "shots": 3
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
