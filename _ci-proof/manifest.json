@@ -1,0 +1,36 @@
+{
+  "name": "mc-320-read",
+  "summary": "Mission Control at 320 with 200% text, read on Linux: what still runs past the window, and the two reds at the head",
+  "head": "9ff992630fd8d79b2cf1ae8e8d76c2b60ed3def0",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "reds": [
+    {
+      "label": "mc-root-text-head",
+      "at": "9ff992630fd8d79b2cf1ae8e8d76c2b60ed3def0",
+      "specs": ["tests/e2e/mission-control-root-text-320.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "mc-overflow",
+      "spec": "look/mc-overflow-look.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "mc-figure-head",
+      "specs": ["tests/e2e/mission-control-readout-figure-320.spec.ts"],
+      "tests": 2,
+      "files": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
