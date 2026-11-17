@@ -1,0 +1,62 @@
+{
+  "name": "oa-root-text-phone",
+  "summary": "Obsidian Atelier on a phone with 200% root text breaks a column's longest runs and narrows two cards' sides, so no page scrolls sideways",
+  "head": "05b780ef3f0a916cf491909e312beb663bb2be97",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "the stylesheet styles its own elements, never a primitive's slots, and keys nothing on a display mode",
+      "the stylesheet reads the platform's scales: no length of its own in a padding, margin, or gap"
+    ]
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "root-text-phone",
+      "at": "cb953e48325bb89803f24562d47073f335558a2c",
+      "specs": ["tests/e2e/obsidian-atelier-root-text-phone.spec.ts"],
+      "tests": 16,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "root-text-phone",
+      "specs": ["tests/e2e/obsidian-atelier-root-text-phone.spec.ts"],
+      "tests": 16,
+      "files": 1
+    },
+    {
+      "label": "oa-root-text",
+      "specs": [
+        "tests/e2e/obsidian-atelier-root-text-phone.spec.ts",
+        "tests/e2e/obsidian-atelier-root-text-long-name.spec.ts",
+        "tests/e2e/obsidian-atelier-root-text-reflow.spec.ts",
+        "tests/e2e/obsidian-atelier-wall-label-root-text.spec.ts"
+      ],
+      "tests": 23,
+      "files": 4,
+      "skipped": "record"
+    }
+  ],
+  "look": [
+    {
+      "label": "oa",
+      "spec": "look/look-277-root-text.spec.ts",
+      "project": "chromium",
+      "tests": 4,
+      "files": 1,
+      "shots": 10
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
