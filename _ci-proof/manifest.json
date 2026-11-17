@@ -1,0 +1,57 @@
+{
+  "name": "chapters-root-text-phone",
+  "summary": "Chapters on a phone with 200% root text stacks a fact sheet's facts and breaks a contents line's longest word, so no page scrolls sideways",
+  "head": "5d8a7ad35982f757014e5b7147c223101734aecb",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "C5: folios, page numbers and durations sit on their row's baseline",
+      "C2: the measures count characters as the faces render, and tables, meta lines and dates never wrap early"
+    ]
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "root-text-phone",
+      "at": "3b2a725a45c4791b1bfebee876e5ffa388016557",
+      "specs": ["tests/e2e/chapters-root-text-phone.spec.ts"],
+      "tests": 16,
+      "files": 1,
+      "failed": 6
+    }
+  ],
+  "e2e": [
+    {
+      "label": "root-text-phone",
+      "specs": ["tests/e2e/chapters-root-text-phone.spec.ts"],
+      "tests": 16,
+      "files": 1
+    },
+    {
+      "label": "chapters",
+      "specs": ["tests/e2e/chapters*.spec.ts"],
+      "tests": 42,
+      "files": 8,
+      "skipped": "record"
+    }
+  ],
+  "look": [
+    {
+      "label": "rt",
+      "spec": "look/look-275-root-text.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 8
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
