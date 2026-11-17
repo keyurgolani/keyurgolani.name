@@ -1,0 +1,42 @@
+{
+  "name": "kinetic-cosmos-238",
+  "summary": "Kinetic Cosmos's dock reads the stage's latest observer entry, so it comes back once the stage has gone by however a delivery orders its entries",
+  "head": "180954aff9a63c580bcf859d3d6fbbf8fcf3b04d",
+  "base": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "gate": true,
+  "reds": [
+    {
+      "label": "r238",
+      "at": "57b5cfad61c63691d647ea5089df5708c09d839b",
+      "specs": ["tests/e2e/kinetic-cosmos-dock-stage.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "kc",
+      "specs": ["tests/e2e/kinetic*.spec.ts"],
+      "tests": 65,
+      "files": 11
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3026,
+    "changed": []
+  },
+  "budgets": true,
+  "look": [
+    {
+      "label": "kc-238-dock",
+      "spec": "look/kc-238-dock-look.spec.ts",
+      "project": "chromium",
+      "tests": 20,
+      "files": 1
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
