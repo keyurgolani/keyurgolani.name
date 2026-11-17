@@ -1,0 +1,120 @@
+name: baseline-capture
+
+# The variants baselines of one commit, captured on CI Linux, never merged. It runs on a push of a
+# baseline-capture branch alone. That branch is the commit plus one commit, which moves every
+# committed baseline aside, empties baseline-pending.json, records each shot's rendered look, and
+# adds this file and _capture/. The variants job's own steps then run twice per shard in the pinned
+# image, and each missing baseline is written there and fails its test, as ci.yml's variants job
+# writes one. collect keeps the shots whose two captures agree byte for byte, in one artifact.
+# Read-only, no secrets, and nothing it uploads is a build.
+on:
+  push:
+    branches: ['kgn-a/baseline-capture-6835c3d4a']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-capture-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  # As ci.yml's: the Node release the image ships.
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  # ci.yml's variants job, step for step, twice per shard. A shard's red is expected: every
+  # baseline it writes fails its test. The step reports its status rather than failing, so the
+  # upload always runs, and collect judges the files.
+  capture:
+    name: capture (${{ matrix.attempt }}, ${{ matrix.shard }}/4)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        attempt: [1, 2]
+        shard: [1, 2, 3, 4]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      PORTFOLIO_SCREENSHOTS: compare
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # As ci.yml's install, which keeps the ./ form: the pinned actionlint rejects `$/`.
+      - name: Install
+        uses: ./.github/actions/install # zizmor: ignore[self-repository]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      # The build job's Next cache, restored only, under ci.yml's own key.
+      - name: Restore the Next build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: "next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}"
+          restore-keys: "next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-"
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: Capture variants shard ${{ matrix.shard }}/4, attempt ${{ matrix.attempt }}
+        env:
+          SHARD: ${{ matrix.shard }}/4
+        run: |
+          mkdir -p capture-out
+          export CAPTURE_LOOKS="$PWD/capture-out/looks.jsonl"
+          status=0
+          node ci/run.mjs variants -- node ci/shards.mjs run variants "$SHARD" || status=$?
+          echo "$status" > capture-out/status.txt
+          written=$(find tests/variants/__screenshots__ -name '*.png' 2> /dev/null | wc -l || true)
+          echo "The shard ended $status with $written baselines written: collect judges the files."
+      - name: Upload the shots
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: capture-${{ matrix.attempt }}-${{ matrix.shard }}
+          path: |
+            tests/variants/__screenshots__/
+            capture-out/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Attempt 1 against attempt 2, file by file, and each shot's look the same way. One artifact
+  # holds the files both captures agree on and manifest.tsv; the job summary names the rest.
+  collect:
+    name: collect
+    needs: [capture]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Download the captures
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: capture-*
+          path: ${{ runner.temp }}/capture
+      - name: Collect
+        run: node _capture/collect.mjs "$RUNNER_TEMP/capture" "$RUNNER_TEMP/baselines"
+      - name: Upload the agreed baselines
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: baselines-6835c3d4a
+          path: ${{ runner.temp }}/baselines/
+          if-no-files-found: error
+          retention-days: 7
