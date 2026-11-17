@@ -1,0 +1,58 @@
+{
+  "name": "mc-320",
+  "summary": "Mission Control at 320 with 200% text: a title bar's count wraps and a readout's figure fits its square",
+  "head": "c61a9f6b74710dfa2bbd558ec748abb0e70f546a",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "reds": [
+    {
+      "label": "mc-root-text",
+      "at": "c576dea18538a6202a4237c2fbbca124ed70cc05",
+      "specs": ["tests/e2e/mission-control-root-text-320.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "mc-figure",
+      "at": "ab86acd2dc43511eb10825deb13a1e7f492c9790",
+      "specs": ["tests/e2e/mission-control-readout-figure-320.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "mc",
+      "specs": [
+        "tests/e2e/mission-control-root-text-320.spec.ts",
+        "tests/e2e/mission-control-readout-figure-320.spec.ts"
+      ],
+      "tests": 4,
+      "files": 2
+    }
+  ],
+  "cells": [],
+  "look": [
+    {
+      "label": "mc-latest",
+      "spec": "look/mc-latest-look.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
