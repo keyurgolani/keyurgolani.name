@@ -29,7 +29,9 @@ import { useBoundary } from '@portfolio/appearance/react';
  * down; reading rootBounds keeps a sub-pixel offset from deciding it.
  */
 export function railDocked(entries: readonly IntersectionObserverEntry[], stick: number): boolean {
-  const [entry] = entries;
+  // A delivery holds every entry queued since the last, oldest first: the rail can dock and leave
+  // its top again before the observer's task runs, so the last entry is where it is now.
+  const entry = entries.at(-1);
   return (
     entry !== undefined &&
     entry.intersectionRatio < 1 &&
