@@ -1,0 +1,45 @@
+{
+  "name": "swiss-signal-276",
+  "summary": "Swiss Signal with the reader's text at 200% on a phone: the home page fits the screen on every contract fixture, every box narrowing below its widest word where the page holds under 14rem",
+  "head": "dc3a43e964899f9209d25cac4fad3fb4992e993f",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "reds": [
+    {
+      "label": "r276",
+      "at": "851d7d66d91c297716d11ff31bc091522c9e79dd",
+      "specs": ["tests/e2e/swiss-signal-root-text-fixtures.spec.ts"],
+      "tests": 32,
+      "files": 1,
+      "failed": 9
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ss-root-text",
+      "specs": [
+        "tests/e2e/swiss-signal-root-text-fixtures.spec.ts",
+        "tests/e2e/swiss-signal-root-text-phone.spec.ts"
+      ],
+      "tests": 36,
+      "files": 2
+    }
+  ],
+  "look": [
+    {
+      "label": "swiss-276",
+      "spec": "look/swiss-276-sweep-look.spec.ts",
+      "project": "chromium",
+      "tests": 16,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
