@@ -13,7 +13,7 @@ import {
 import { Action } from '@portfolio/appearance/primitives';
 import { useBoundary } from '@portfolio/appearance/react';
 import { arrowStep, sceneAlong, snapAlong, wordSpans } from './chapters';
-import { numeralOf, SceneTitle, Words, type TitleMark } from './parts';
+import { numeralOf, Own, Phrase, SceneTitle, Words, type TitleMark } from './parts';
 import { Runtime } from './runtime';
 
 // The strip's controller (redesign), on #6's runtime: the stage, one
@@ -249,14 +249,18 @@ function Scrubber({
           // Only the live script sets the position, and a static one would be wrong wherever the
           // reader is, so the page without it, and on paper, has none: its words are script-only.
           <p className="hc-scrub__status" role="status" data-type-role="label" data-script-only="">
-            {scenes[live.status.number - 1] ? (
-              <SceneTitle mark={scenes[live.status.number - 1]!} lang={lang} />
-            ) : (
-              live.status.title
-            )}
-            {/* A title that ends a sentence takes no comma after it: "Want to work together? 27 of 27". */}
-            {/[?!.…]$/.test(live.status.title) ? ' ' : ', '}
-            <Words lang={lang}>{`${live.status.number} of ${scenes.length}`}</Words>
+            <Phrase lang={lang}>
+              <Own lang={lang}>
+                {scenes[live.status.number - 1] ? (
+                  <SceneTitle mark={scenes[live.status.number - 1]!} lang={lang} />
+                ) : (
+                  live.status.title
+                )}
+              </Own>
+              {/* A title that ends a sentence takes no comma after it: "Want to work together? 27 of 27". */}
+              {/[?!.…]$/.test(live.status.title) ? ' ' : ', '}
+              <Words lang={lang}>{`${live.status.number} of ${scenes.length}`}</Words>
+            </Phrase>
           </p>
         ) : null}
         <a className="hc-scrub__credits" href={creditsHref} data-type-role="label">
