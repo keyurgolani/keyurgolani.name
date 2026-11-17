@@ -150,11 +150,19 @@ export function ScrollSpy() {
     // token: the chapter bar docks, the Contents sheet opens and the reading line falls under
     // its real height then, so the token follows what it holds, read with the stylesheet's own
     // token in place. Without script the stylesheet's token stands.
+    // Every change to the token restyles the whole page, so the masthead is measured with the
+    // stylesheet's token, as written and read before any is set, as its own least height for the
+    // moment, which restyles the masthead alone, and the token is written only when it changes.
     const masthead = root.querySelector<HTMLElement>('.ee-masthead');
+    const own = getComputedStyle(root).getPropertyValue('--layout-ee-bar');
     const fit = new ResizeObserver(() => {
       if (!masthead) return;
-      root.style.removeProperty('--layout-ee-bar');
-      root.style.setProperty('--layout-ee-bar', `${masthead.getBoundingClientRect().height}px`);
+      masthead.style.minBlockSize = own;
+      const bar = `${masthead.getBoundingClientRect().height}px`;
+      masthead.style.minBlockSize = '';
+      if (root.style.getPropertyValue('--layout-ee-bar') !== bar) {
+        root.style.setProperty('--layout-ee-bar', bar);
+      }
     });
     for (const item of masthead?.children ?? []) fit.observe(item);
     const folio = root.querySelector<HTMLElement>('[data-ee-folio]');
