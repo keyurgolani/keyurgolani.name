@@ -513,6 +513,70 @@ test('the sample: the poster, the band, five parts in their fixed order', () => 
   }
 });
 
+/** The sample with every image derived and available, as the served sample shows it. */
+function readyInputOf(pair: ParsedPair): VariantRenderInput {
+  const media = {
+    assets: (pair.portfolio.media ?? [])
+      .filter(({ kind }) => kind === 'image')
+      .map(({ id, source }) => ({
+        assetId: id,
+        sha256: 'a'.repeat(64),
+        mime: 'image/png',
+        bytes: 4096,
+        width: 1200,
+        height: 800,
+        aspectRatio: 1.5,
+        dominantColor: '#806040',
+        renditions: [
+          {
+            name: 'w480-a1',
+            ext: 'webp',
+            mime: 'image/webp',
+            bytes: 1024,
+            width: 480,
+            height: 320,
+            sha256: 'b'.repeat(64),
+          },
+        ],
+        derivedAt: '2026-11-02T09:00:00Z',
+        algorithmVersion: 1,
+        source: { kind: 'local', path: typeof source === 'string' ? source : 'image.png' },
+        availability: { state: 'available' },
+      })),
+  };
+  return buildRenderInput({
+    view: resolvePortfolioView(
+      pair,
+      { media, snapshots: SAMPLE_SNAPSHOTS },
+      { mediaBase: '/media' },
+    ),
+    manifest: MANIFEST,
+    route: { route: 'home' },
+    basePath: '',
+    origin: 'https://rowan.test',
+    requestTime: '2026-10-26T12:00:00Z',
+  });
+}
+
+test("the sample: the Selected work's first cover loads at once and decodes before paint, the others lazily and after", () => {
+  const markup = html(readyInputOf(samplePair()));
+  const list = markup.slice(
+    markup.indexOf('class="ss-sel'),
+    markup.indexOf('</ol>', markup.indexOf('class="ss-sel')),
+  );
+  const covers = [...list.matchAll(/<span class="ss-sel__thumb">[\s\S]*?(<img [^>]*>)/g)].map(
+    ([, img]) => img!,
+  );
+  assert.ok(covers.length > 1, `the Selected work has covers: ${covers.length}`);
+  // The first sits in the rising row above the fold: decoded before its raster, as a shot takes it.
+  assert.doesNotMatch(covers[0]!, /\sloading="lazy"/, covers[0]);
+  assert.match(covers[0]!, /\sdecoding="sync"/, covers[0]);
+  for (const img of covers.slice(1)) {
+    assert.match(img, /\sloading="lazy"/, img);
+    assert.match(img, /\sdecoding="async"/, img);
+  }
+});
+
 test("the sample: every part's opener carries one word fit, the page's longest part word", () => {
   const markup = html(inputOf(samplePair(), '', SAMPLE_SNAPSHOTS));
   const fits = [...markup.matchAll(/<h2 class="ss-part__title"[^>]*>/g)].map(
