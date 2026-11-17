@@ -489,6 +489,11 @@
     grid-template-columns: minmax(0, 1fr);
     overflow-wrap: anywhere;
   }
+
+  /* A phone's dock too narrow for its three labels keeps its Menu, which holds the works and Contact. */
+  [data-variant='spatial-bento'] .sb-dock__phone > li:not(:last-child) {
+    display: none;
+  }
 }
 
 [data-variant='spatial-bento'] .sb-archive__name::before {
@@ -3214,6 +3219,7 @@
   }
 
   [data-variant='spatial-bento'] .sb-dock {
+    container-type: inline-size;
     inset-block-start: auto;
     inset-block-end: var(--layout-grid-margin);
     inset-inline: var(--layout-grid-margin);

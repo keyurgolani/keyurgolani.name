@@ -20,7 +20,7 @@
   "performanceTier": "heavy",
   "budgets": {
     "js": 8192,
-    "css": 11520,
+    "css": 11552,
     "image": 61440,
     "font": 0,
     "animation": 1,
