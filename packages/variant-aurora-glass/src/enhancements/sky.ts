@@ -555,8 +555,11 @@ function attach(root: HTMLElement, prefix: string): () => void {
   if (lens) on(lens, 'animationiteration', () => ((done ||= ++breaths >= BREATHS), sync()));
   if (opening) {
     let watched = false;
-    const watch = new IntersectionObserver(([entry]) => {
-      away = !entry?.isIntersecting;
+    // A delivery holds every entry queued since the last, oldest first: the opening can come into
+    // view and leave it again before the observer's task runs, so the last entry is where it is
+    // now.
+    const watch = new IntersectionObserver((entries) => {
+      away = !entries.at(-1)?.isIntersecting;
       sync();
       delivered(!watched);
       watched = true;
