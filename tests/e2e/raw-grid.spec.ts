@@ -1136,11 +1136,14 @@ test.describe('under high contrast', () => {
           'data-display-mode',
           mode,
         );
-        // The page has hydrated: the kit's Pause is in, as it is wherever the ticker runs.
-        await expect(
-          page.locator('.rg-ticker__toggle').getByRole('button', { name: 'Pause motion' }),
-        ).toBeVisible();
-        await expect(ticker, row).toHaveAttribute('data-ticker', 'still');
+        // The page has hydrated: the client has taken the Index over, which it does as it starts the
+        // ticker, and the ticker's state has been set two frames on.
+        await expect(page.locator('[data-rg-index][aria-expanded]').first()).toBeAttached();
+        await page.evaluate(
+          () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+        );
+        // Static as with no script: nothing on the page moves, so its Pause doesn't show.
+        await expect(ticker, row).toHaveAttribute('data-ticker', 'static');
         await expect(page.locator('.rg-ticker__run[data-copy]')).toBeHidden();
         const belt = page.locator('.rg-ticker__belt');
         const running = () =>
