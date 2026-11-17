@@ -438,6 +438,9 @@
   letter-spacing: normal;
 }
 
+/* Its count stays whole while it fits: the bar wraps it onto a line of its own first. Only a count
+   wider than the bar, as with the text at 200% on a phone, breaks between its words, and never
+   runs past the window (WCAG 1.4.10). */
 [data-variant='mission-control'] .mc-bar__meta {
   display: flex;
   flex-wrap: wrap;
@@ -524,10 +527,6 @@
 [data-variant='mission-control'] .mc-lamp[data-lamp='information']::before {
   background: var(--color-information);
   border-color: var(--color-information);
-}
-
-[data-variant='mission-control'] .mc-count {
-  white-space: nowrap;
 }
 
 /* ---------- Correlate: a record's state line, its Linked control and its popover (MC-M4, M5) ---------- */
