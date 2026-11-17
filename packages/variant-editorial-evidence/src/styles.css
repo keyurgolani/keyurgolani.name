@@ -2567,12 +2567,6 @@
 /* ── One column: notes follow what they note ───────────────────────────── */
 
 @media (width < 48rem) {
-  /* A date or an address longer than its line, as at 200% root text on a phone, wraps. */
-  [data-variant='editorial-evidence'] :is(.ee-row__end, .ee-url__part) {
-    text-wrap: wrap;
-    overflow-wrap: anywhere;
-  }
-
   [data-variant='editorial-evidence'] {
     --layout-ee-text: 1 / -1;
     --layout-ee-notes: 1 / -1;
