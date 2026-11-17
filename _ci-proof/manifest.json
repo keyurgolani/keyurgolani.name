@@ -1,0 +1,50 @@
+{
+  "name": "variants-parity-269",
+  "summary": "Render parity's createRoot half renders once more on a new page when its test page loses its document during the render, and fails naming the address when the render moves its page; a look runs the parity steps 100 times on CI Linux with every main-frame navigation and context change logged",
+  "head": "e358a487432cb7145ee70d8c3fd30b1aaad46ee7",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "reds": [
+    {
+      "label": "r269",
+      "at": "79b9e612e1cc5b936dad62bc968ccdc2985260d7",
+      "specs": ["tests/e2e/parity-client-snapshot.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "parity-client-snapshot",
+      "specs": ["tests/e2e/parity-client-snapshot.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "parity-flaked-projects",
+      "config": "tests/variants/playwright.config.ts",
+      "project": ["schematic/rtl", "aurora-glass/engineering", "singular/academic"],
+      "specs": ["tests/variants/parity.spec.ts"],
+      "tests": 3,
+      "files": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "parity-269",
+      "spec": "look/parity-269-loop-look.spec.ts",
+      "project": "chromium",
+      "tests": 100,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
