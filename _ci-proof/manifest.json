@@ -1,0 +1,18 @@
+{
+  "name": "hc-load-trace-read",
+  "summary": "Horizontal Cinema's home on the perf lab profile at 390 by 844: what each long load task does, from a Chromium trace of four cold loads",
+  "head": "6835c3d4ae620a6791a5136048c994bc413eefa7",
+  "base": "6835c3d4ae620a6791a5136048c994bc413eefa7",
+  "look": [
+    {
+      "label": "trace",
+      "spec": "look/look-246-trace.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
