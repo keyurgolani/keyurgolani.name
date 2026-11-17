@@ -482,6 +482,7 @@
 [data-variant='chapters'] .ch-facts {
   display: grid;
   border-block-start: var(--layout-line-hair);
+  container: ch-facts / inline-size;
 }
 [data-variant='chapters'] .ch-facts > div {
   display: grid;
@@ -731,9 +732,10 @@
   color: var(--color-text-secondary);
 }
 /* P2-F: the span and the roles each move to the next line whole, and wrap only when one is
-   longer than the line. */
+   longer than the line. A word longer than the line breaks there, as the book's words do. */
 [data-variant='chapters'] .toc__run {
   display: inline-block;
+  max-inline-size: 100%;
 }
 [data-variant='chapters'] .toc__in {
   color: var(--color-text-muted);
@@ -1722,6 +1724,18 @@
   [data-variant='chapters'] .ch-folio--both {
     display: flex;
     grid-row: auto;
+  }
+}
+
+/*
+ * The fact sheet's label column is in rem, so the sheet's own breakpoint is too, as the
+ * frontispiece caption's is: a container query's rem follows the root text. On a sheet under 16rem
+ * (on a phone, only past 100% root text) each fact stacks its label over its value, so a date that
+ * keeps to one line stays on the page.
+ */
+@container ch-facts (width < 16rem) {
+  [data-variant='chapters'] .ch-facts > div {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
