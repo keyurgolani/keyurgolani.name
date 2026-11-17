@@ -1,0 +1,37 @@
+{
+  "name": "sb-root-text-phone",
+  "summary": "Spatial Bento at 200% root text on a phone keeps the full record and its photographs inside the page: no sideways scroll at 320, on home or a case, folds closed or open",
+  "head": "59f6b892f53659ee1ef15fb104e1c90e74cdc6de",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "rt",
+      "at": "a956b514b65742cf8d76fa78a4bb67ede7058ca9",
+      "specs": ["tests/e2e/spatial-bento-root-text-phone.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "sb",
+      "specs": ["tests/e2e/spatial-bento*.spec.ts"],
+      "tests": 119,
+      "files": 9,
+      "skipped": 24
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
