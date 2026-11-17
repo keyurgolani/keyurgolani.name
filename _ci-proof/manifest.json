@@ -1,0 +1,43 @@
+{
+  "name": "sx-tf-root-text-phone-probe",
+  "summary": "Schematic and Terra Field with the root text at 200% on phones on CI Linux: the reds on F (home and a case at 390 and 320 must not scroll sideways), and under every stable language and every typography the scroll width and what runs past the window, at F and with the reds",
+  "head": "33aad327591b412b57a235bacdb2d0834d6d7e20",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": false,
+  "reds": [
+    {
+      "label": "r256",
+      "at": "801182b6c2883cdd85db699db0c69b7a2a546507",
+      "specs": ["tests/e2e/schematic-root-text-phone.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    },
+    {
+      "label": "r257",
+      "at": "33aad327591b412b57a235bacdb2d0834d6d7e20",
+      "specs": ["tests/e2e/terra-field-root-text-phone.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "look": [
+    {
+      "label": "sx-256",
+      "spec": "look/sx-256-overflow-probe.spec.ts",
+      "project": "chromium",
+      "tests": 26,
+      "files": 1
+    },
+    {
+      "label": "tf-257",
+      "spec": "look/tf-257-overflow-probe.spec.ts",
+      "project": "chromium",
+      "tests": 26,
+      "files": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
