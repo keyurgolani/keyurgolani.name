@@ -1,0 +1,26 @@
+{
+  "name": "tf-seal-look",
+  "summary": "Terra Field's seal at 320 with the text at 200% and at its own size, on the academic and design homes, at F and with the seal capped",
+  "head": "0be4d5904c8f07a70fe6d64b7719ae901c445481",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "look": [
+    {
+      "label": "tf-seal-academic",
+      "spec": "look/tf-seal-academic-look.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    },
+    {
+      "label": "tf-seal-design",
+      "spec": "look/tf-seal-design-look.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
