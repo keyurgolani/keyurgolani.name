@@ -23,6 +23,30 @@ import { useBoundary } from '@portfolio/appearance/react';
 // it the running head names the first chapter, and every link still
 // works. In a plate it attaches nothing.
 
+/**
+ * Whether a delivery of the rail's dock observer leaves the rail docked at its sticky top, `stick`:
+ * its box cut by the band under that top and above the band's own top, the sticky offset a pixel
+ * down; reading rootBounds keeps a sub-pixel offset from deciding it.
+ */
+export function railDocked(entries: readonly IntersectionObserverEntry[], stick: number): boolean {
+  const [entry] = entries;
+  return (
+    entry !== undefined &&
+    entry.intersectionRatio < 1 &&
+    entry.boundingClientRect.top < (entry.rootBounds?.top ?? stick + 1)
+  );
+}
+
+/**
+ * Whether a delivery of the opening's watch, in the window under the reading line `line`, has the
+ * opening in view there with its top below the line: then it's the place being read.
+ */
+export function openingRead(entries: readonly IntersectionObserverEntry[], line: number): boolean {
+  const [entry] = entries;
+  const top = entry?.rootBounds?.top ?? line;
+  return entry?.isIntersecting === true && entry.boundingClientRect.top > top;
+}
+
 export function ScrollSpy() {
   const { plate } = useBoundary();
   const mark = useRef<HTMLSpanElement>(null);
@@ -166,13 +190,8 @@ export function ScrollSpy() {
       if (!rail || !wide()) return;
       const stick = parseFloat(getComputedStyle(rail).top) || 0;
       dockWatch = new IntersectionObserver(
-        ([entry]) => {
-          // Docked, its top is above the observed band's, whose own top is the sticky offset
-          // a pixel down; reading rootBounds keeps a sub-pixel offset from deciding it.
-          const now =
-            entry !== undefined &&
-            entry.intersectionRatio < 1 &&
-            entry.boundingClientRect.top < (entry.rootBounds?.top ?? stick + 1);
+        (entries) => {
+          const now = railDocked(entries, stick);
           if (now === docked) return;
           docked = now;
           watchRail();
@@ -302,9 +321,8 @@ export function ScrollSpy() {
       const first = places[0];
       if (first?.matches('.ee-opening')) {
         before = new IntersectionObserver(
-          ([entry]) => {
-            const top = entry?.rootBounds?.top ?? line;
-            if (entry?.isIntersecting && entry.boundingClientRect.top > top) show(first);
+          (entries) => {
+            if (openingRead(entries, line)) show(first);
           },
           { rootMargin: `-${line}px 0px 0px 0px` },
         );
