@@ -1,0 +1,167 @@
+{
+  "name": "hc-sideways-kept-4",
+  "summary": "Horizontal Cinema's pinned strip keeps the reader's own sideways scroll through a resize's burst and a gliding step",
+  "head": "10f603ed58042fd0459df2d6d251e47639a33ed6",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "torn down, the controller refits nothing and leaves none of its attributes on the shell"
+    ]
+  },
+  "reds": [
+    {
+      "label": "sideways",
+      "at": "1d2721866e71a767ed0e1d1b21a74a1cbdc7f246",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "sideways-1",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-2",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-3",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-4",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-5",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-6",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-7",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-8",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-9",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-10",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-11",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-12",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-13",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-14",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-15",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-16",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-17",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-18",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-19",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "sideways-20",
+      "specs": ["tests/e2e/horizontal-cinema-sideways-kept.spec.ts"],
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "hc",
+      "specs": ["tests/e2e/horizontal-cinema*.spec.ts"],
+      "tests": 209,
+      "files": 25
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "look": [
+    {
+      "label": "burst",
+      "spec": "look/look-251-burst-diag.spec.ts",
+      "project": "chromium-interaction",
+      "tests": 20,
+      "files": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
