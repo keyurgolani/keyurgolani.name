@@ -1,0 +1,18 @@
+{
+  "name": "ee-mixed-scroll-read",
+  "summary": "Editorial Evidence on the mixed contract fixture at 390 by 844, mobile: every window scroll from the first script on and what made it, and the scroll, visual viewport and focus at rest, at F and at the grid gap's fix",
+  "head": "130fdd66088a936e6b444766a2c497f954289c03",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "look": [
+    {
+      "label": "scroll",
+      "spec": "look/look-260-mixed-2.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
