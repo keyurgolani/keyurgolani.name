@@ -1,0 +1,37 @@
+{
+  "name": "sb-dock-whole-page-shot",
+  "summary": "Spatial Bento's dock shows only once the overview is above the window, so it holds one state through a whole-page shot: at the top it stays hidden, scrolled past it stays shown",
+  "head": "55a6221577d136cd4f502916d956ddce96c1945f",
+  "base": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "shot",
+      "at": "514420ba32c4523e318f9390cad3c70b536dcfbf",
+      "specs": ["tests/e2e/spatial-bento-dock-shot.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "sb",
+      "specs": ["tests/e2e/spatial-bento*.spec.ts"],
+      "tests": 117,
+      "files": 8,
+      "skipped": 24
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3026,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
