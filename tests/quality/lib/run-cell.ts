@@ -25,6 +25,7 @@ import { QUERY_KEYS } from '../../../packages/appearance/src/axes';
 import { COLOR_ROLES, TOKEN_PROPERTIES } from '../../../packages/appearance/src/roles';
 import { cellAnnotations, framedNote, type Cell } from '../cells';
 import { AXE_TAGS, axeFor } from './axe';
+import { axeClock, dumpAxeIncomplete } from './axe-dump';
 import {
   CHECKS_ANNOTATION,
   NOTICE_CHECK,
@@ -510,7 +511,12 @@ export async function audit(
     const builder = axeFor(page).options(
       axeRunOptions({ swept: sweptRules, forced, highContrast }),
     );
+    // Evidence only: every animation's time and the clock just before axe runs, for the dump.
+    const clock = process.env.QUALITY_AXE_DUMP ? await axeClock(page) : null;
     const results: AxeResults = await highContrastViolations(page, await builder.analyze());
+    // Evidence only: the page each incomplete color-contrast node sat in, the moment axe returned.
+    if (process.env.QUALITY_AXE_DUMP)
+      await dumpAxeIncomplete(page, results, process.env.QUALITY_AXE_DUMP, row.id, clock);
     const inventory = baseline ? await inPage<string[]>(page, { kind: 'inventory' }) : [];
     const contrast = forced ? [] : await incompleteContrastFindings(page, results, framed);
     // What the sampler left out, which the cell's report says.

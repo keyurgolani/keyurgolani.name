@@ -1,0 +1,80 @@
+# Evidence only, never merged: whether Raw Grid's home cell at 1024 by 768, default row, comes back
+# with a ticker item's color contrast incomplete, and what axe saw when it did. Two jobs, each on its
+# own hosted runner in the pinned Playwright image: the cell in neobrutalist (warm parchment,
+# humanist UI, system) and in the default language, ten times each, retries 0, as the full plan
+# runs them. QUALITY_AXE_DUMP has each audit write what the page held for every incomplete
+# color-contrast node, the moment axe returned (tests/quality/lib/axe-dump.ts), into reports/.
+# Runs on a push of its evidence branch alone, holds contents: read and no secret, and reads no
+# cache.
+name: rg-axe-read
+
+on:
+  push:
+    branches: [kgn-a/rg-axe-read-5c05b4ab7]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rg-axe-read-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+
+jobs:
+  cell:
+    name: cell (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - language: neobrutalist
+            grep: 'composition:raw-grid complete / raw-grid/neobrutalist/warm-parchment/humanist-ui/system 1024x768 default '
+          - language: platform-neutral
+            grep: 'composition:raw-grid complete / raw-grid/platform-neutral/warm-parchment/humanist-ui/system 1024x768 default '
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: The cell ten times, retries 0
+        env:
+          GREP: ${{ matrix.grep }}
+          LANGUAGE: ${{ matrix.language }}
+          QUALITY_AXE_DUMP: reports/axe-dump
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+        run: |
+          status=0
+          pnpm ci:quality-full "--grep=$GREP" --repeat-each=10 --retries=0 || status=$?
+          echo "the cell ended $status in $LANGUAGE"
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-rg-axe-read-${{ matrix.language }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 7
