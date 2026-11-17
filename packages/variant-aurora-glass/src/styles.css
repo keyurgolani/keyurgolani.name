@@ -141,8 +141,15 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+/*
+ * Its one column is never wider than the text's box: an auto track takes its items' min-content,
+ * which a word with no break in it, such as a long address, sets past the card, where .ag's clip
+ * cuts every line. Held to the box, the word breaks where it must instead (overflow-wrap). Where
+ * no word is that long the column is the box's width either way.
+ */
 [data-variant='aurora-glass'] div.pf-rich-text {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-xs);
   max-inline-size: var(--type-measure-body);
 }
@@ -1343,9 +1350,11 @@
   color: var(--color-text-secondary);
 }
 
+/* Its one column is held to its box, as the rich text's is, so a long word inside never widens it. */
 [data-variant='aurora-glass'] .ag-sec__body {
   grid-column: 4 / -1;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: var(--space-m);
   min-inline-size: 0;
