@@ -1,0 +1,37 @@
+{
+  "name": "sb-dock-text",
+  "summary": "Spatial Bento's phone dock too narrow for its three labels keeps its Menu, which holds the works and Contact: at 200% root text at 320 no label runs past its cell",
+  "head": "defe50e367b725117dc69ada58f6371f08f234f5",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "dock",
+      "at": "85974d3cfb329acb53d0fc09d8073bb31ffd1d28",
+      "specs": ["tests/e2e/spatial-bento-dock-text.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "sb",
+      "specs": ["tests/e2e/spatial-bento*.spec.ts"],
+      "tests": 124,
+      "files": 10,
+      "skipped": 24
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
