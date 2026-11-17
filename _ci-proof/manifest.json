@@ -1,0 +1,54 @@
+{
+  "name": "hc-rtl-bars",
+  "summary": "Horizontal Cinema right to left: the bars' English reads left to right round the portfolio's own names",
+  "head": "99ca8964257a917d4ea2a7742d8fe8868ca1fe9c",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "torn down, the controller refits nothing and leaves none of its attributes on the shell"
+    ]
+  },
+  "reds": [
+    {
+      "label": "bars",
+      "at": "4bfced662e3b4702d251ada947ac686f57049634",
+      "specs": ["tests/e2e/horizontal-cinema-rtl-bars.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "bars",
+      "specs": ["tests/e2e/horizontal-cinema-rtl-bars.spec.ts"],
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "hc",
+      "specs": ["tests/e2e/horizontal-cinema*.spec.ts"],
+      "tests": 208,
+      "files": 25
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": ["^horizontal-cinema-(rtl|mixed)-"]
+  },
+  "budgets": true,
+  "look": [
+    {
+      "label": "bars",
+      "spec": "look/look-250-bars.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
