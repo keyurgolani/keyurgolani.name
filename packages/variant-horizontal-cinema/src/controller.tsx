@@ -471,6 +471,8 @@ function LiveStage(props: StageProps) {
       readonly inside: boolean;
       readonly held: number;
       readonly top: number;
+      /** Below the strip: the part of the page the reader is at, and its top. */
+      readonly after?: { readonly element: Element; readonly top: number };
     }
     /**
      * The reading a resize found, kept for the refit its settle runs: a resize's own paint reads the
@@ -1127,6 +1129,7 @@ function LiveStage(props: StageProps) {
       // end brings the two back together.
       const moving = aligning !== null;
       if (moving ? event.timeStamp - tookAt >= OWN_MS : !burst) follow();
+      note();
       onScroll();
     };
     const onStageScroll = (event: Event) => {
@@ -1325,14 +1328,47 @@ function LiveStage(props: StageProps) {
         ? elements.findIndex((element) => element !== null && element.contains(active))
         : -1;
       const held = holding >= 0 ? holding : position;
+      const inside = holding >= 0 || readsScene();
       return {
-        inside: holding >= 0 || readsScene(),
+        inside,
         held,
         top: elements[held]?.getBoundingClientRect().top ?? 0,
+        // Once a new text size is laid out, where the reader was is the reading taken before it.
+        after: inside ? undefined : em() === fitted ? below() : noted,
       };
     };
     // The reading a resize found (`kept`, declared with the position): the refit that ends the burst
     // takes it.
+    /**
+     * Where a reader below the strip is: in the full record or the credits, the part on screen whose
+     * top is nearest the reading line, an entry of the record's list the finest. With the strip's
+     * foot still under the line, none.
+     */
+    const below = (): Reading['after'] => {
+      const line = window.innerHeight * 0.3;
+      if (rootElement.getBoundingClientRect().bottom > line) return undefined;
+      let found: Reading['after'];
+      for (const element of rootElement
+        .closest('.hc')
+        ?.querySelectorAll(
+          ':scope > .hc-main > :not(.hc-shell), :scope > .hc-main > :not(.hc-shell) > *, :scope > .hc-main .hc-record__list > li, :scope > .hc-credits, :scope > .hc-credits > *',
+        ) ?? []) {
+        const box = element.getBoundingClientRect();
+        if (box.bottom <= 0 || box.top >= window.innerHeight) continue;
+        if (!found || Math.abs(box.top - line) < Math.abs(found.top - line))
+          found = { element, top: box.top };
+      }
+      return found;
+    };
+    // A change of text size is told (textSize, below) only once the new size is laid out, too late
+    // to read where a reader below the strip was. So that's read as the page moves, under the text
+    // size the strip was last fitted to (the 1rem sentinel's width then).
+    const em = () => emRef.current?.getBoundingClientRect().width ?? 0;
+    let fitted = 0;
+    let noted: Reading['after'];
+    const note = () => {
+      if (em() === fitted) noted = below();
+    };
     /**
      * That scene brought back on the layout now in force: pinned, the page at its share of the
      * strip; top to bottom, where the reader had it, its top as far from the window's as before. Not
@@ -1342,8 +1378,14 @@ function LiveStage(props: StageProps) {
      * What has focus comes with it: focus left on the bar, which top to bottom isn't shown, goes to
      * the scene, and focus in a scene is brought into view.
      */
-    const hold = ({ inside, held, top }: Reading) => {
-      if (!inside) return;
+    const hold = ({ inside, held, top, after }: Reading) => {
+      if (!inside) {
+        // Below the strip, the pin's new length moves the page under the reader: the part they were
+        // at goes back to where it was.
+        const moved = after ? after.element.getBoundingClientRect().top - after.top : 0;
+        if (Math.abs(moved) >= 0.5) window.scrollBy({ top: moved, behavior: 'instant' });
+        return;
+      }
       if (pinned) window.scrollTo({ top: pinStart() + offsetOf(held), behavior: 'instant' });
       else if (!strip()) {
         const moved = (elements[held]?.getBoundingClientRect().top ?? top) - top;
@@ -1379,7 +1421,12 @@ function LiveStage(props: StageProps) {
       else if (at.inside && pinned)
         window.scrollTo({ top: pinStart() + offsetOf(at.held), behavior: 'instant' });
       follow();
+      // The new layout can pull the strip back to its new end, which the browser tells as a scroll
+      // of the strip a frame later: taken as the controller's own, the page isn't led up to it.
+      wrote.along = along();
       paint();
+      fitted = em();
+      noted = below();
     };
     refit.current = refitNow;
     const onResize = () => {
@@ -1455,6 +1502,7 @@ function LiveStage(props: StageProps) {
     fitName();
     fit();
     pin();
+    fitted = em();
     const relayout = () => {
       // The faces or a late picture can stack the strip or unstack it too: the reader keeps their
       // scene then. Short of that, the page stays where the reader has it.
@@ -1470,6 +1518,7 @@ function LiveStage(props: StageProps) {
       }
       // The faces or a late picture moved the scenes with no scroll: read where the page is again.
       if (frame === undefined) frame = requestAnimationFrame(paint);
+      noted = below();
     };
     // Faces already in as the controller starts were fitted on just now. Faces still loading are
     // fitted on in the frame after they're in, not the task they came ready in: a read of the layout
