@@ -7,6 +7,7 @@ import {
 } from '../../packages/variant-contract/src/node/parity';
 import { expect, test } from '../harness/fixtures';
 import { parityBundles } from './parity/bundles';
+import { clientSnapshot } from './parity/client-snapshot';
 import { FIXED_TIME, projectTarget, READ_ONLY } from './target';
 
 // Render parity (#5, Slice 6): for a registered composition and a contract
@@ -53,19 +54,7 @@ test(
     const server = await snapshotHtml(page, await bundles.renderBoundary(args));
     expect(compareSnapshots(host, server), 'react-dom/server').toEqual([]);
 
-    await page.setContent(
-      '<!doctype html><html lang="en"><body><div id="root"></div></body></html>',
-    );
-    await page.addScriptTag({ content: bundles.client });
-    // client-entry.tsx puts renderBoundary() on window, which snapshots the
-    // render's commit before an enhancement can load into it.
-    const client = await page.evaluate(
-      (input) =>
-        (
-          window as unknown as { renderBoundary(i: unknown): Promise<ParityNode | null> }
-        ).renderBoundary(input),
-      args,
-    );
+    const client = await clientSnapshot(page, bundles, args);
     expect(compareSnapshots(host, client), 'createRoot').toEqual([]);
   },
 );
