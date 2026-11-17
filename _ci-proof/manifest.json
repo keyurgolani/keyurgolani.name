@@ -1,0 +1,18 @@
+{
+  "name": "ee-load-trace-read",
+  "summary": "Editorial Evidence's home on the perf lab profile at 390 by 844: what each long load task does, from a Chromium trace of four cold loads, with and without the bar token's ResizeObserver",
+  "head": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "base": "c708ecd063a2acd7986fb46995c17f68b06d2bf8",
+  "look": [
+    {
+      "label": "trace",
+      "spec": "look/look-247-trace.spec.ts",
+      "project": "chromium",
+      "tests": 1,
+      "files": 1,
+      "shots": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
