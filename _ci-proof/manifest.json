@@ -1,0 +1,51 @@
+{
+  "name": "sb-root-text-fixtures",
+  "summary": "Spatial Bento at 200% root text on a phone: a narrow tile breaks its words where it must and a tally drops its strips, so the home page doesn't scroll sideways on the music, writing, engineering and photography fixtures",
+  "head": "80a81d47fc0a50f0a26f31efd4bcb5f20ae4bbc0",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "fx",
+      "at": "b65139e610bf83623e51d1d6b37a179e53802d14",
+      "specs": ["tests/e2e/spatial-bento-root-text-fixtures.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "failed": 5
+    }
+  ],
+  "e2e": [
+    {
+      "label": "sb",
+      "specs": ["tests/e2e/spatial-bento*.spec.ts"],
+      "tests": 129,
+      "files": 11,
+      "skipped": 24
+    },
+    {
+      "label": "rt259",
+      "specs": ["tests/e2e/spatial-bento-root-text-phone.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "skipped": 0
+    },
+    {
+      "label": "dock268",
+      "specs": ["tests/e2e/spatial-bento-dock-text.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "skipped": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
