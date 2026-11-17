@@ -1,0 +1,55 @@
+{
+  "name": "aurora-glass-nojs-mark",
+  "summary": "Aurora Glass keys Pause's held place on the page's no-script mark, never a scripting query, so the no-JavaScript rows' axe pass flips nothing",
+  "head": "554dd3301fe778ec3883df563b11948648accbde",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": {
+    "package": "aurora-glass"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding",
+      "Pause ships waiting: no box by default, its place kept unseen only where script runs and would show it",
+      "no rule styles by a scripting query; the page and the case study carry the no-script mark first"
+    ]
+  },
+  "reds": [
+    {
+      "label": "nojs-cell",
+      "kind": "cells",
+      "at": "2feed3af95a33e7feba945f472f485c6d1acf671",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ no\\-javascript\\ )",
+      "shards": ["find"],
+      "tests": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ag-header-ar",
+      "specs": ["tests/e2e/aurora-glass-header-fit-accessible-reading.spec.ts"],
+      "tests": 9,
+      "files": 1
+    }
+  ],
+  "cells": [
+    {
+      "label": "tuple",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ no\\-javascript\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ )",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
