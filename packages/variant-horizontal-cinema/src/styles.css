@@ -2284,8 +2284,10 @@
   margin-inline: auto;
 }
 
+/* One column the head's own width: a word too long for a line breaks, rather than widening it. */
 [data-variant='horizontal-cinema'] .hc-credits__head {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-xs);
 }
 
@@ -2344,6 +2346,7 @@
 
 [data-variant='horizontal-cinema'] .hc-board__main {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-xl);
   padding-block: var(--layout-inset) 0;
   padding-inline: var(--layout-inset);
@@ -2782,15 +2785,17 @@
   text-underline-offset: 0.18em;
 }
 
-/* The storyboard's minimap, on the bottom edge. */
+/* The storyboard's minimap, on the bottom edge. Where the scene's name and place don't fit beside
+   the blocks, as with large text on a phone, they take a line of their own under them. */
 [data-variant='horizontal-cinema'] .hc-board__map {
   position: sticky;
   inset-block-end: 0;
   z-index: 2;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-l);
+  gap: var(--space-3xs) var(--space-l);
   min-block-size: var(--layout-chrome);
   margin-inline: calc(var(--layout-inset) * -1);
   padding-inline: var(--layout-grid-margin);
@@ -2845,7 +2850,6 @@
 [data-variant='horizontal-cinema'] .hc-board__where {
   margin: 0;
   color: var(--color-text-secondary);
-  white-space: nowrap;
 }
 
 [data-variant='horizontal-cinema'] .hc-credits__back {
