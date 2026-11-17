@@ -1,0 +1,252 @@
+{
+  "name": "kc-230",
+  "summary": "Under forced colours the words and the drawings a dark ground holds read on it, in both system palettes",
+  "head": "251f157beb1a2dac57cf16d35cfafc0cad0381aa",
+  "base": "2a65ded5c3cb3eced3b4948dbb8d27a48bdc09f1",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "under forced colors no ink maps to the backplate's color, and a ring on a dark ground keeps a color off it",
+      "the surface hook: inside a region marked data-ui-surface, the focus color and a selection are that ground's pair (K-2)"
+    ]
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "backplate",
+      "at": "5b0bfa0719d847e9ace0c74f6615a49acfb75145",
+      "specs": [
+        "tests/e2e/forced-backplate-flux.spec.ts",
+        "tests/e2e/forced-backplate-horizontal-cinema.spec.ts",
+        "tests/e2e/forced-backplate-kinetic-cosmos.spec.ts",
+        "tests/e2e/forced-backplate-mission-control.spec.ts",
+        "tests/e2e/forced-backplate-obsidian-atelier.spec.ts",
+        "tests/e2e/forced-backplate-raw-grid.spec.ts",
+        "tests/e2e/forced-backplate-spatial-bento.spec.ts",
+        "tests/e2e/forced-backplate-terra-field.spec.ts"
+      ],
+      "tests": 44,
+      "files": 8,
+      "failed": 44
+    },
+    {
+      "label": "islands",
+      "at": "1c23202c0284e67a33cdb51c4e91d3cb0d48759d",
+      "specs": ["tests/e2e/forced-backplate-raw-grid-islands.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    },
+    {
+      "label": "drawings",
+      "at": "2789f2762e8f73f031741b30a768c1691f92fde2",
+      "specs": [
+        "tests/e2e/forced-drawings-kinetic-cosmos.spec.ts",
+        "tests/e2e/forced-drawings-spatial-bento.spec.ts"
+      ],
+      "tests": 8,
+      "files": 2,
+      "failed": 8
+    }
+  ],
+  "e2e": [
+    {
+      "label": "backplate",
+      "specs": ["tests/e2e/forced-backplate-*.spec.ts"],
+      "tests": 48,
+      "files": 9
+    },
+    {
+      "label": "drawings",
+      "specs": ["tests/e2e/forced-drawings-*.spec.ts"],
+      "tests": 8,
+      "files": 2
+    },
+    {
+      "label": "forced",
+      "specs": [
+        "tests/e2e/aurora-glass-p2.spec.ts",
+        "tests/e2e/editorial-evidence.spec.ts",
+        "tests/e2e/flux-crumb-lines.spec.ts",
+        "tests/e2e/focus-perimeter-painted-offset.spec.ts",
+        "tests/e2e/horizontal-cinema-credits-ring.spec.ts",
+        "tests/e2e/horizontal-cinema-scrubber.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-accessible-reading.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-book-serif.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-editorial-serif.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-field-serif.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-paste-up.spec.ts",
+        "tests/e2e/kinetic-cosmos-reading-shell-mono.spec.ts",
+        "tests/e2e/mission-control-dock-ring.spec.ts",
+        "tests/e2e/mission-control-fold-ring.spec.ts",
+        "tests/e2e/native-ui-scheme.spec.ts",
+        "tests/e2e/obsidian-atelier-forced.spec.ts",
+        "tests/e2e/raw-grid-next-ring.spec.ts",
+        "tests/e2e/raw-grid-sample.spec.ts",
+        "tests/e2e/raw-grid.spec.ts",
+        "tests/e2e/schematic-forced-colors-ring.spec.ts",
+        "tests/e2e/shell-bar.spec.ts",
+        "tests/e2e/shell-cta-ring.spec.ts",
+        "tests/e2e/singular-focus-perimeter-blueprint-lavender-dusk.spec.ts",
+        "tests/e2e/singular-focus-perimeter-claymorphic.spec.ts",
+        "tests/e2e/singular-focus-perimeter-letterpress.spec.ts",
+        "tests/e2e/spatial-stage.spec.ts",
+        "tests/e2e/swiss-signal-forced-colors-ring.spec.ts",
+        "tests/e2e/terra-field-case-next-ring.spec.ts",
+        "tests/e2e/terra-field-focus-perimeter-accessible-reading.spec.ts",
+        "tests/e2e/terra-field-focus-perimeter-humanist-light.spec.ts"
+      ],
+      "tests": 284,
+      "files": 26
+    },
+    {
+      "label": "appearance",
+      "config": "tests/appearance/playwright.config.ts",
+      "specs": ["tests/appearance/*.spec.ts"],
+      "tests": 31,
+      "files": 4
+    },
+    {
+      "label": "hc-corners",
+      "specs": ["tests/e2e/horizontal-cinema-scene-corners.spec.ts"],
+      "tests": 14,
+      "files": 1
+    },
+    {
+      "label": "rg-occlusion",
+      "specs": ["tests/e2e/raw-grid-index-occlusion.spec.ts"],
+      "tests": 1,
+      "files": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "forced-fx",
+      "spec": "look/forced-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "flux"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "forced-hc",
+      "spec": "look/forced-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "horizontal-cinema"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "forced-kc",
+      "spec": "look/forced-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "kinetic-cosmos"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "forced-mc",
+      "spec": "look/forced-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "mission-control"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "forced-oa",
+      "spec": "look/forced-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "obsidian-atelier"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "forced-rg",
+      "spec": "look/forced-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "raw-grid"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "forced-sb",
+      "spec": "look/forced-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "spatial-bento"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "forced-tf",
+      "spec": "look/forced-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "terra-field"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "forced-sg",
+      "spec": "look/forced-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "singular"
+      },
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "forced-sc",
+      "spec": "look/forced-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_COMP": "schematic"
+      },
+      "tests": 2,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3020,
+    "changed": []
+  },
+  "cells": [
+    {
+      "label": "rg-forced",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:raw-grid complete / raw-grid/platform-neutral/warm-parchment/humanist-ui/.* forced-colors",
+      "shards": ["find"],
+      "tests": 12,
+      "passed": 12,
+      "failed": 0
+    },
+    {
+      "label": "rg-forced",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:raw-grid complete / raw-grid/platform-neutral/warm-parchment/humanist-ui/.* forced-colors",
+      "shards": ["find"],
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "at": "base"
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
