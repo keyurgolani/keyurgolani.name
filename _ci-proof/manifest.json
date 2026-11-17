@@ -1,0 +1,20 @@
+{
+  "name": "distinct-one-read",
+  "summary": "the distinct capture reads its boundary and names in one task of the page",
+  "head": "09d5fa009edb2b4deb8f1b792b335770423854bf",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "readStructure reads the boundary and its names in one task of the page, so an element the page adds between two of its tasks can't put them out of step"
+    ]
+  },
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
