@@ -21,6 +21,7 @@ import {
   normalizeGrid,
   pairs,
   pixelDistance,
+  readStructure,
   sharedFrameSelector,
   sharedMarkupFindings,
   sharedShingles,
@@ -189,6 +190,66 @@ test('names join the boundary in the order the snapshot walks it, as booleans', 
   );
   assert.throws(() => withNames(tree, [false, false]), /Fewer names/);
   assert.throws(() => withNames(tree, [false, false, false, false, false, true]), /6 names for 5/);
+});
+
+/** A tiny DOM, as parity.test.ts's: enough of Element and Text for the boundary's two walks. */
+function tinyElement(tag: string, attributes: Record<string, string>, childNodes: unknown[]) {
+  return {
+    nodeType: 1,
+    tagName: tag.toUpperCase(),
+    getAttribute: (name: string) => (name in attributes ? attributes[name] : null),
+    hasAttribute: (name: string) => name in attributes,
+    childNodes,
+    get children() {
+      return childNodes.filter((child) => (child as { nodeType: number }).nodeType === 1);
+    },
+  };
+}
+const tinyText = (value: string) => ({ nodeType: 3, textContent: value });
+
+test("readStructure reads the boundary and its names in one task of the page, so an element the page adds between two of its tasks can't put them out of step", async () => {
+  const links: unknown[] = [tinyElement('a', { href: '#one' }, [tinyText('One')])];
+  const boundary = tinyElement('div', { 'data-variant': 'x' }, [
+    tinyElement('main', {}, [
+      tinyElement('h1', {}, [tinyText('Rowan')]),
+      tinyElement('nav', { 'aria-label': 'Sections' }, links),
+    ]),
+  ]);
+  const scope = globalThis as unknown as { document?: unknown };
+  const before = scope.document;
+  scope.document = {
+    querySelector: (selector: string) => (selector === '[data-variant]' ? boundary : null),
+  };
+  // The page runs a task of its own after each evaluation, as a late hydration does: it adds a link.
+  const page = {
+    async evaluate(read: unknown) {
+      const out =
+        typeof read === 'function'
+          ? read()
+          : // tsx names functions through its __name helper, which a real page never has.
+            new Function('__name', `return ${String(read)}`)((named: unknown) => named);
+      links.push(tinyElement('a', { href: '#more' }, [tinyText('More')]));
+      return structuredClone(out);
+    },
+  };
+  try {
+    assert.deepEqual(await readStructure(page as never), {
+      tag: 'div',
+      named: false,
+      children: [
+        {
+          tag: 'main',
+          named: false,
+          children: [
+            { tag: 'h1', named: false, children: ['Rowan'] },
+            { tag: 'nav', named: true, children: [{ tag: 'a', named: false, children: ['One'] }] },
+          ],
+        },
+      ],
+    });
+  } finally {
+    scope.document = before;
+  }
 });
 
 test('generic containers are transparent: their children lift to their parent', () => {
