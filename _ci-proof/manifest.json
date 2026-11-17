@@ -1,0 +1,37 @@
+{
+  "name": "ee-rail-first-focus-c",
+  "summary": "Editorial Evidence's chapter index is no scroller while it holds focus, so the first Tab into it scrolls the page to its entry at 1440 under Field Serif and Paste-Up",
+  "head": "75bd5ec8a60286e6b1d6760d6f227123d75997f7",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "rail",
+      "at": "7213a700fd0cc6190f08930b21f142b300efef0c",
+      "specs": ["tests/e2e/editorial-evidence-rail-focus.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ee",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 161,
+      "files": 19,
+      "skipped": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
