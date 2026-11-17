@@ -426,6 +426,8 @@ function LiveStage(props: StageProps) {
   const step = useRef<(by: 1 | -1) => void>(() => {});
   /** The controller's refit, for the layout effect that runs it once the live bar is in the page. */
   const refit = useRef<((landing?: boolean) => void) | null>(null);
+  /** Whether the strip showed as the controller started: the live bar's refit fits only the strip. */
+  const stripped = useRef(false);
 
   useEffect(() => {
     animate.current = state === 'active';
@@ -1423,9 +1425,20 @@ function LiveStage(props: StageProps) {
       // The faces or a late picture moved the scenes with no scroll: read where the page is again.
       if (frame === undefined) frame = requestAnimationFrame(paint);
     };
-    void doc.fonts?.ready.then(() => {
-      if (!disposed) relayout();
-    });
+    // Faces already in as the controller starts were fitted on just now. Faces still loading are
+    // fitted on in the frame after they're in, not the task they came ready in: a read of the layout
+    // there would make the browser restyle the whole page the hydration has just marked, when the
+    // frame is about to bring it up to date anyway.
+    let facesFrame: number | undefined;
+    if (doc.fonts && doc.fonts.status !== 'loaded') {
+      void doc.fonts.ready.then(() => {
+        if (disposed) return;
+        facesFrame = requestAnimationFrame(() => {
+          facesFrame = undefined;
+          if (!disposed) relayout();
+        });
+      });
+    }
     // A late image can still grow a scene: check once more when the page has loaded.
     if (doc.readyState !== 'complete') window.addEventListener('load', relayout, { once: true });
     const start = sceneOfHash();
@@ -1439,7 +1452,8 @@ function LiveStage(props: StageProps) {
     }
     // Against the layout in force, after the fit check and the pin: top to bottom, the scene a
     // fresh load names keeps the page while it's at the top.
-    if (!strip()) land(start);
+    stripped.current = strip();
+    if (!stripped.current) land(start);
     // A tap on a link to where the URL already is fires no hashchange, but lands all the same.
     const onLink = (event: Event) => {
       if (!(event instanceof MouseEvent) || event.defaultPrevented || event.button !== 0) return;
@@ -1473,6 +1487,7 @@ function LiveStage(props: StageProps) {
       if (timer !== undefined) clearTimeout(timer);
       if (refitTimer !== undefined) clearTimeout(refitTimer);
       if (frame !== undefined) cancelAnimationFrame(frame);
+      if (facesFrame !== undefined) cancelAnimationFrame(facesFrame);
       if (snapFrame !== undefined) cancelAnimationFrame(snapFrame);
       refit.current = null;
       step.current = () => {};
@@ -1507,7 +1522,9 @@ function LiveStage(props: StageProps) {
   // visitor's: the fit measured before they render passes a rail the live bar can't hold. Once the
   // live bar is in the page, and before it paints, the strip is fitted again on it.
   useLayoutEffect(() => {
-    if (hydrated) refit.current?.(true);
+    // Only the strip measures its rail: top to bottom, the refit would only read the layout, making
+    // the browser restyle the page the hydration has just marked, and change nothing.
+    if (hydrated && stripped.current) refit.current?.(true);
   }, [hydrated]);
 
   const onStep = useCallback((by: 1 | -1) => step.current(by), []);
