@@ -1038,6 +1038,13 @@
   max-inline-size: none;
 }
 
+/* The dialog sits inside the bar, so over a dark panel it took the surface hook the pager lends the
+   bar, and its rings drew in that ground's focus colour on the dialog's own surface, where the
+   inverse one fell under 3:1. On a surface the focus colour is the text's. */
+[data-variant='singular'] .sg-bar[data-ui-surface] [data-ui-slot='dialog'] {
+  --color-focus: var(--color-text-primary);
+}
+
 [data-variant='singular'] .sg-contents {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1579,12 +1586,16 @@
      hook sets to on-accent or the inverse focus colour, and forced colours map those to the
      Canvas the grounds take here: no ring (quality's forced-colors cell on 2c708e3de and
      b8a2f8ef5). A border in the text's ink, the platform's width and offset off the control,
-     as Shell's bar draws it. Only while it has focus, so an overlay link keeps its reach. */
-  [data-variant='singular'] .sg :is(a[href], summary):focus-visible {
+     as Shell's bar draws it. Only while it has focus, so an overlay link keeps its reach. The bar's
+     buttons, and its dialog's, take it too: there the hook the pager lends the bar maps to the
+     canvas the same way. */
+  [data-variant='singular'] .sg :is(a[href], summary):focus-visible,
+  [data-variant='singular'] .sg-bar button:focus-visible {
     position: relative;
   }
 
-  [data-variant='singular'] .sg :is(a[href], summary):focus-visible::before {
+  [data-variant='singular'] .sg :is(a[href], summary):focus-visible::before,
+  [data-variant='singular'] .sg-bar button:focus-visible::before {
     content: '';
     position: absolute;
     inset: calc((var(--ui-focus-width) + var(--ui-focus-offset)) * -1);
