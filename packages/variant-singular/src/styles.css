@@ -1592,8 +1592,30 @@
     pointer-events: none;
   }
 
-  [data-variant='singular'] .sg-rail__stop[aria-current] .sg-rail__mark {
-    background-color: currentColor;
+  /* Forced colours give a background colour that isn't a system colour the canvas's, currentColor
+     too, so a fill in currentColor vanished into its ground: the current stop's mark and the folds'
+     plus take the text's ink, a system colour here, as their fill. The plus's own rule comes later
+     in this sheet, so this one names its fold to outrank it. */
+  [data-variant='singular'] .sg-rail__stop[aria-current] .sg-rail__mark,
+  [data-variant='singular'] .sg-fold .sg-fold__mark::before,
+  [data-variant='singular'] .sg-fold .sg-fold__mark::after {
+    background-color: var(--color-text-primary);
+  }
+
+  /* They drop a background image too, so the rows' and the colophon's hairline, a gradient, went:
+     each draws it here as a line of the text's ink, where it lay, between the margins. */
+  [data-variant='singular'] :is(.sg-rec, .sg-colophon__in) {
+    position: relative;
+  }
+
+  [data-variant='singular'] :is(.sg-rec, .sg-colophon__in)::before {
+    content: '';
+    position: absolute;
+    inset-inline: var(--layout-grid-margin);
+    inset-block-start: 0;
+    block-size: var(--layout-sg-hair);
+    background-color: var(--color-text-primary);
+    pointer-events: none;
   }
 
   /* A rail stop's label is a chip in the ground's ink, its text in the ground's colour. With one
