@@ -28,7 +28,6 @@ import { parseDocument } from 'yaml';
 import { expect, type Browser, type Page, type TestInfo } from '@playwright/test';
 import { createAppearanceRegistry, PLATFORM_DEFAULTS } from '../../packages/appearance/src/index';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
-import { snapshotBoundary, type ParityNode } from '../../packages/variant-contract/src/node/parity';
 import { startApp } from '../harness/app-server.mjs';
 import { optionalFaces, pinFaces } from '../harness/optional-faces';
 import { accepts, readBuildMeta, siteTextFor } from '../quality/cells';
@@ -39,9 +38,8 @@ import { RANDOM_SEED, seedRandomScript } from '../quality/lib/visual';
 import {
   BOX_SELECTOR,
   BOX_VIEWPORTS,
-  namedElements,
+  readStructure,
   sharedFrameSelector,
-  withNames,
   type Box,
   type SharedFrame,
   type StructureNode,
@@ -242,11 +240,10 @@ async function measure(
   look: string,
   viewport: ViewportId,
 ): Promise<Capture> {
-  // It runs in the page, reading the page's own document with no argument.
-  const boundary = await page.evaluate(snapshotBoundary as () => ParityNode | null);
-  expect(boundary, `${variant} renders a boundary`).not.toBeNull();
   // Whether each element has an accessible name, as booleans: never the name's text.
-  const structure = withNames(boundary!, await page.evaluate(namedElements as () => boolean[]));
+  const read = await readStructure(page);
+  expect(read, `${variant} renders a boundary`).not.toBeNull();
+  const structure = read!;
   const frames = await page.locator(sharedFrameSelector(variant)).evaluateAll((elements) =>
     elements.map((element) => ({
       tag: element.tagName.toLowerCase(),

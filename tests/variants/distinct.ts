@@ -32,7 +32,8 @@
 // the rendered side of stream E's audit.shared-markup rule, off until E's
 // PR 3 pins land.
 
-import type { ParityNode } from '../../packages/variant-contract/src/node/parity';
+import type { Page } from '@playwright/test';
+import { snapshotBoundary, type ParityNode } from '../../packages/variant-contract/src/node/parity';
 import { decodePng, type Image } from '../quality/lib/pixels';
 
 // ---------------------------------------------------------------------------
@@ -256,6 +257,18 @@ export function namedElements(root: ParentNode = document): boolean[] {
   };
   read(boundary);
   return out;
+}
+
+/**
+ * The page's boundary as the structure guard reads it, or null when it has
+ * none: snapshotBoundary()'s nodes with namedElements()'s booleans, joined by
+ * withNames().
+ */
+export async function readStructure(page: Pick<Page, 'evaluate'>): Promise<StructureNode | null> {
+  // Each runs in the page, reading the page's own document with no argument.
+  const boundary = await page.evaluate(snapshotBoundary as () => ParityNode | null);
+  if (boundary === null) return null;
+  return withNames(boundary, await page.evaluate(namedElements as () => boolean[]));
 }
 
 /** A weighted multiset of shingles. */
