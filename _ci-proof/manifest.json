@@ -1,0 +1,17 @@
+{
+  "name": "release-scope-final",
+  "summary": "the release scope is 1.0.0-rc.3's final gate: the reachable scope, an empty records list, every timing gated",
+  "head": "91e0dc51ecbe9e4dec33d2001e66736655671b91",
+  "base": "62109b27ccc1ff7690a0e26255767b8c82a4bca5",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the checked-in scope is 1.0.0-rc.3's final gate: the reachable scope as the inventory runs it, an empty records list, no timing reported instead of gated, and it loads",
+      "the checked-in scope and records list are a final's: the reachable scope, an empty list and no timing reported, so promotion's scope rule names nothing",
+      "promotion is refused while the candidate's quality scope is narrowed or its records list names a failure",
+      "the release plan fits rc-quality's timeout in the fewest shards that do, at the release's weights in its checked-in scope: the registry's own count, and 280 for"
+    ]
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
