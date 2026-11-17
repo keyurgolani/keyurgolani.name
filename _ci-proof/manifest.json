@@ -1,0 +1,37 @@
+{
+  "name": "ee-root-text-phone",
+  "summary": "Editorial Evidence at 200% root text on a phone keeps every grid inside the page, and a long date or address wraps: no sideways scroll at 390 or 320, on home or a case",
+  "head": "130fdd66088a936e6b444766a2c497f954289c03",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "rt",
+      "at": "b6f915d9d617da95ae675315a4f2a1db63f6a1cf",
+      "specs": ["tests/e2e/editorial-evidence-root-text-phone.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ee",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 157,
+      "files": 17,
+      "skipped": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
