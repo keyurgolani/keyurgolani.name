@@ -1,0 +1,17 @@
+{
+  "name": "hc-burst-diag-read",
+  "summary": "Horizontal Cinema's pinned strip: the resize-burst sideways scroll run 20 times at each side with its wheel, resize and scroll events logged",
+  "head": "c778bf600ef0d3583b5004437a0ce8df72408ebe",
+  "base": "1d2721866e71a767ed0e1d1b21a74a1cbdc7f246",
+  "look": [
+    {
+      "label": "burst",
+      "spec": "look/look-251-burst-diag.spec.ts",
+      "project": "chromium-interaction",
+      "tests": 20,
+      "files": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
