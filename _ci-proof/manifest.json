@@ -1,0 +1,98 @@
+{
+  "name": "singular-forced-rings",
+  "summary": "Singular's rules, fold marks and current stop paint under forced colours, and its bar and Contents dialog ring over the dark grounds",
+  "head": "4eb0c9c40dbb8af05632d78c2c1588912b5b948c",
+  "base": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "gate": {
+    "package": "singular"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding"
+    ]
+  },
+  "reds": [
+    {
+      "label": "bar-ring",
+      "at": "702a2d4405e82c0b284054d3c73217e56df4cc11",
+      "specs": ["tests/e2e/singular-bar-ring-forced.spec.ts"],
+      "tests": 8,
+      "files": 1,
+      "failed": 6
+    },
+    {
+      "label": "drawings",
+      "at": "988964eb825c9e5152c6c02d14f047482d914936",
+      "specs": ["tests/e2e/singular-forced-drawings.spec.ts"],
+      "tests": 8,
+      "files": 1,
+      "failed": 8
+    },
+    {
+      "label": "dialog",
+      "at": "5c09a2b2c2cd4d804a3eef0fa3956817f5ed7986",
+      "specs": ["tests/e2e/singular-contents-dialog-ring.spec.ts"],
+      "tests": 16,
+      "files": 1,
+      "failed": 16
+    }
+  ],
+  "e2e": [
+    {
+      "label": "singular",
+      "specs": ["tests/e2e/singular*.spec.ts", "tests/e2e/focus-perimeter-painted-offset.spec.ts"],
+      "tests": 103,
+      "files": 19
+    }
+  ],
+  "look": [
+    {
+      "label": "home-f",
+      "spec": "look/fixes.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/",
+        "L1_LOOK_ROW": "forced-colors"
+      },
+      "tests": 1
+    },
+    {
+      "label": "home-d",
+      "spec": "look/fixes.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1
+    },
+    {
+      "label": "case-f",
+      "spec": "look/fixes.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/work/project-name",
+        "L1_LOOK_ROW": "forced-colors"
+      },
+      "tests": 1
+    },
+    {
+      "label": "case-d",
+      "spec": "look/fixes.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_ROUTE": "/work/project-name",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3026,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
