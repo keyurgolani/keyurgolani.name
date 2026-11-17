@@ -1,0 +1,46 @@
+{
+  "name": "singular-forced-reds",
+  "summary": "Singular's bar ring and its background-drawn parts read under forced colours, and its Contents dialog over the dark grounds",
+  "head": "acc11f53bdda69555cea1f408c86c3d95eca7d82",
+  "base": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "reds": [
+    {
+      "label": "bar-ring",
+      "at": "acc11f53bdda69555cea1f408c86c3d95eca7d82",
+      "specs": ["tests/e2e/singular-bar-ring-forced.spec.ts"],
+      "tests": 8,
+      "files": 1,
+      "failed": 8
+    },
+    {
+      "label": "drawings",
+      "at": "acc11f53bdda69555cea1f408c86c3d95eca7d82",
+      "specs": ["tests/e2e/singular-forced-drawings.spec.ts"],
+      "tests": 8,
+      "files": 1,
+      "failed": 8
+    }
+  ],
+  "look": [
+    {
+      "label": "dialog-d",
+      "spec": "look/contents-dialog.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_ROW": "default"
+      },
+      "tests": 8
+    },
+    {
+      "label": "dialog-f",
+      "spec": "look/contents-dialog.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_ROW": "forced-colors"
+      },
+      "tests": 8
+    }
+  ],
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
