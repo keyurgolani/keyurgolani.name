@@ -26,7 +26,7 @@
    * where eleven gutters wouldn't fit there, as the root text at 200% makes them on a phone.
    * Wider, the gutter is the smaller. A length, so the gap computes to one.
    */
-  --layout-ee-gap: min(var(--layout-grid-gutter), (100vw - 2 * var(--layout-grid-margin)) / 11);
+  --layout-ee-gap: var(--layout-grid-gutter);
   --layout-ee-head: 1 / span 3;
   --layout-ee-main: 4 / -1;
   --layout-ee-text: 1 / span 6;
