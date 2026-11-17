@@ -1,0 +1,58 @@
+{
+  "name": "mc-320-b",
+  "summary": "Mission Control at 320 with 200% text: a bar's count and a board's name stay inside the window, and a readout's figure fits its square",
+  "head": "3f4ba58a3201a9abc01cb74fb011d42e62e8ebaa",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "reds": [
+    {
+      "label": "mc-root-text",
+      "at": "75f03927b33246f8f89a1c8b0b4a978ac49f69d1",
+      "specs": ["tests/e2e/mission-control-root-text-320.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "mc-figure",
+      "at": "140e0eb397cab97b6d76b22b128bf44c71df2514",
+      "specs": ["tests/e2e/mission-control-readout-figure-320.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "mc",
+      "specs": [
+        "tests/e2e/mission-control-root-text-320.spec.ts",
+        "tests/e2e/mission-control-readout-figure-320.spec.ts"
+      ],
+      "tests": 4,
+      "files": 2
+    }
+  ],
+  "cells": [],
+  "look": [
+    {
+      "label": "mc-latest",
+      "spec": "look/mc-latest-look.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 4
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
