@@ -115,10 +115,7 @@ function consoleErrors(
       .map(({ text, url }) => (url ? `${text} (${url})` : text));
 }
 
-/**
- * The longest the readable check waits for an entrance animation to finish,
- * and settle() for every finite one.
- */
+/** The longest the readable check waits for an entrance animation to finish. */
 const ENTRANCE_WAIT_MS = 3_000;
 /** How often each looks again while one runs. */
 const ENTRANCE_POLL_MS = 100;
@@ -161,9 +158,11 @@ function finiteRunning(): { readonly name: string; readonly left: number }[] {
  * with JavaScript, no finite animation running, then two frames more. A
  * shot taken while an entrance runs gets it finished by Playwright's
  * `animations: 'disabled'`, a raster the page draws once it ends on its own
- * doesn't match (Terra Field's hero, 2026-11-04). The wait is bounded by
- * ENTRANCE_WAIT_MS, and fails closed: one still running at the bound fails
- * the test, naming it, before any shot.
+ * doesn't match (Terra Field's hero, 2026-11-04). It waits out the time each
+ * one has left, as an opening run a runtime starts as the page settles has
+ * about all of its own (Kinetic Cosmos's orbits), up to SHOT_WAIT_MS in all,
+ * and fails closed at once, naming each one and its time left, on one with
+ * more left than that (waitOutAnimations()).
  */
 export async function settle(page: Page, javaScript: boolean): Promise<void> {
   await page.waitForLoadState('load');
@@ -172,28 +171,7 @@ export async function settle(page: Page, javaScript: boolean): Promise<void> {
     await document.fonts.ready;
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
-  await finishAnimations(page, 'after settle');
-}
-
-/**
- * Every finite animation ended, waiting up to ENTRANCE_WAIT_MS, then two
- * frames more. It fails closed, naming each one still running at the bound,
- * `when` saying at which step.
- */
-async function finishAnimations(page: Page, when: string): Promise<void> {
-  const until = Date.now() + ENTRANCE_WAIT_MS;
-  let running = await page.evaluate(finiteRunning);
-  while (running.length > 0 && Date.now() < until) {
-    await page.waitForTimeout(ENTRANCE_POLL_MS);
-    running = await page.evaluate(finiteRunning);
-  }
-  expect(
-    running.map(({ name }) => name),
-    `finite animations still running ${ENTRANCE_WAIT_MS} ms ${when}`,
-  ).toEqual([]);
-  await page.evaluate(
-    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-  );
+  await waitOutAnimations(page, 'after settle');
 }
 
 /** Links already checked, by URL, so each mode doesn't fetch them again. */
@@ -593,8 +571,9 @@ export async function expectEnhancementsSettled(watch: EnhancementWatch): Promis
 export const SHOOTING = '__portfolioShooting';
 
 /**
- * The longest the shot waits, in all, for the finite animations running once
- * the page has settled to end on their own (waitOutAnimations()).
+ * The longest a step waits, in all, for the finite animations running to end
+ * on their own (waitOutAnimations()): settle(), and the shot once the page has
+ * settled.
  */
 const SHOT_WAIT_MS = 8_000;
 
