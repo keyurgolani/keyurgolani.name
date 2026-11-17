@@ -1,0 +1,70 @@
+{
+  "name": "hc-record-reflow-c",
+  "summary": "Horizontal Cinema on a phone with the root text at 200% keeps the home's full record inside the window",
+  "head": "7f0bafbcd2ff58b41b292dd4b97b3a4e6b597b8b",
+  "base": "439b281223c53e59354613dcea82f6864a397ff8",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "on a phone the full record’s rows have room around and between their lines, on the scenes’ inset (HOR-5)"
+    ]
+  },
+  "reds": [
+    {
+      "label": "record",
+      "at": "6360b32e21742370efd3c65a43c25a3c999c2781",
+      "specs": [
+        "tests/e2e/horizontal-cinema-record-reflow-academic.spec.ts",
+        "tests/e2e/horizontal-cinema-record-reflow-engineering.spec.ts",
+        "tests/e2e/horizontal-cinema-record-reflow-consulting.spec.ts"
+      ],
+      "tests": 6,
+      "files": 3,
+      "failed": 6
+    }
+  ],
+  "e2e": [
+    {
+      "label": "record",
+      "specs": [
+        "tests/e2e/horizontal-cinema-record-reflow-academic.spec.ts",
+        "tests/e2e/horizontal-cinema-record-reflow-engineering.spec.ts",
+        "tests/e2e/horizontal-cinema-record-reflow-consulting.spec.ts"
+      ],
+      "tests": 6,
+      "files": 3
+    },
+    {
+      "label": "hc",
+      "specs": ["tests/e2e/horizontal-cinema*.spec.ts"],
+      "tests": 221,
+      "files": 30
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "look": [
+    {
+      "label": "records",
+      "spec": "look/look-274-records.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    },
+    {
+      "label": "practice",
+      "spec": "look/look-274-practice.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
