@@ -1,0 +1,60 @@
+{
+  "name": "shell-262-b",
+  "summary": "Under forced colours Shell's key and value lines stand a ring's reach apart, so a focused link's ring is whole, Paste-Up's proof links too",
+  "head": "8a872aa2039a8e5c5c63dc4a7ab31b3e6d932e9d",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "reds": [
+    {
+      "label": "shell-kv",
+      "at": "8e5c745f8d7d2ef95573a538664d437864505965",
+      "specs": ["tests/e2e/shell-focus-perimeter-kv*.spec.ts"],
+      "tests": 14,
+      "files": 1,
+      "failed": 10
+    }
+  ],
+  "e2e": [
+    {
+      "label": "shell-kv",
+      "specs": ["tests/e2e/shell-focus-perimeter-kv*.spec.ts"],
+      "tests": 14,
+      "files": 1
+    }
+  ],
+  "cells": [
+    {
+      "label": "shell-forced-1440",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:shell complete / shell/(platform-neutral|carbon-inspired|primer-inspired|glassmorphism)/warm-parchment/humanist-ui/system 1440x900 forced-colors ",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "shell-kv-dpr1",
+      "spec": "look/shell-kv-ring-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_DPR": "1"
+      },
+      "tests": 8,
+      "files": 1,
+      "shots": 8
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
