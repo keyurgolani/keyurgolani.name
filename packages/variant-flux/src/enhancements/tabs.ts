@@ -647,9 +647,12 @@ function attach(root: HTMLElement): () => void {
   // 5. Scrolled: the page's first pixel out of view.
   const top = root.querySelector<HTMLElement>('.fx-top');
   if (top) {
-    const watch = new IntersectionObserver(([entry]) =>
-      root.toggleAttribute('data-fx-scrolled', entry ? !entry.isIntersecting : false),
-    );
+    // A delivery holds every entry queued since the last, oldest first: the top can leave view and
+    // come back before the observer's task runs, so the last entry is where it is now.
+    const watch = new IntersectionObserver((entries) => {
+      const entry = entries.at(-1);
+      root.toggleAttribute('data-fx-scrolled', entry ? !entry.isIntersecting : false);
+    });
     watch.observe(top);
     off.push(() => {
       watch.disconnect();
