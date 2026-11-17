@@ -1,0 +1,66 @@
+{
+  "name": "l7-v1-read",
+  "summary": "Four v1.0.0 rows read on Linux before their fixes: Mission Control at 320 with 200% text, Horizontal Cinema's List view name and a reader below the strip through a text size, and Shell's opening links' focus rings under forced colours",
+  "head": "d1211dbab3d8820e98e414792ac34d8d3c0ef73a",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "reds": [
+    {
+      "label": "mc-320",
+      "at": "d1211dbab3d8820e98e414792ac34d8d3c0ef73a",
+      "specs": ["tests/e2e/mission-control-root-text-320.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "hc-list-name",
+      "at": "d1211dbab3d8820e98e414792ac34d8d3c0ef73a",
+      "specs": ["tests/e2e/horizontal-cinema-list-name.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "hc-below-strip",
+      "at": "d1211dbab3d8820e98e414792ac34d8d3c0ef73a",
+      "specs": ["tests/e2e/horizontal-cinema-below-strip-text-size.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "shell-kv",
+      "at": "d1211dbab3d8820e98e414792ac34d8d3c0ef73a",
+      "specs": ["tests/e2e/shell-focus-perimeter-kv.spec.ts"],
+      "tests": 6,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "look": [
+    {
+      "label": "shell-kv-dpr1",
+      "spec": "look/shell-kv-ring-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_DPR": "1"
+      },
+      "tests": 8,
+      "files": 1,
+      "shots": 8
+    },
+    {
+      "label": "shell-kv-dpr2",
+      "spec": "look/shell-kv-ring-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_DPR": "2"
+      },
+      "tests": 8,
+      "files": 1,
+      "shots": 8
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
