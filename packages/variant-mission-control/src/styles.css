@@ -33,6 +33,15 @@
   overflow-wrap: break-word;
 }
 
+/* A flex item never shrinks past its longest word on its own, so the rule above couldn't break a
+   word wider than the item's room: the owner's name, a cell, its title and a manifest's entry
+   shrink to the room they have, and only a word wider than that breaks, as with the text at 200%
+   on a phone. Where every word fits, nothing moves. */
+[data-variant='mission-control']
+  :is(.mc-name, .mc-cells > li, .mc-cell__body, .mc-cell__title, .mc-manifest__items > li) {
+  min-inline-size: 0;
+}
+
 [data-variant='mission-control']
   :where(h1, h2, h3, h4, h5, h6, p, ul, ol, dl, dd, figure, blockquote) {
   margin: 0;
@@ -1353,6 +1362,14 @@
   gap: var(--space-s);
   padding-block: var(--space-xs);
   padding-inline: var(--space-s);
+}
+
+/* In a panel too narrow to keep the figure's column and room for the text beside it, as with the
+   text at 200% on a phone, the text goes under the figure. */
+@container (width < 19.5em) {
+  [data-variant='mission-control'] .mc-ledger__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 [data-variant='mission-control'] .mc-ledger__row + .mc-ledger__row {
