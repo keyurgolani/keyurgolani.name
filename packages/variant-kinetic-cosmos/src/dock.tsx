@@ -51,8 +51,11 @@ function useStageInView(stageId: string, plate: boolean): boolean {
     if (plate || typeof IntersectionObserver === 'undefined') return;
     const stage = document.getElementById(stageId);
     if (!stage) return;
-    const observer = new IntersectionObserver(([entry]) =>
-      setInView(entry?.isIntersecting ?? false),
+    // A delivery holds every entry queued since the last, oldest first: the stage can come into
+    // view and leave it again before the observer's task runs (a busy main thread, or Shift+Tab
+    // into the stage and Tab out of it), so the last entry is where the stage is now.
+    const observer = new IntersectionObserver((entries) =>
+      setInView(entries.at(-1)?.isIntersecting ?? false),
     );
     observer.observe(stage);
     return () => observer.disconnect();
