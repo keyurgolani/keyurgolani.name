@@ -1,0 +1,21 @@
+{
+  "name": "overflow-sweep-v2-schematic-rtl",
+  "summary": "Schematic on its rtl, mixed and complete fixtures at 320 and 390 with 200% text, read on Linux: what runs past either edge of the window, and how far the page scrolls each way",
+  "head": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "look": [
+    {
+      "label": "sweep",
+      "spec": "look/overflow-sweep.spec.ts",
+      "project": "chromium",
+      "tests": 3,
+      "files": 1,
+      "env": {
+        "OVERFLOW_SWEEP_COMPOSITIONS": "schematic",
+        "OVERFLOW_SWEEP_FIXTURES": "rtl,mixed,complete"
+      }
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
