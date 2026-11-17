@@ -306,7 +306,11 @@ export function ScrollSpy() {
       const first = places[0];
       if (first?.matches('.ee-opening')) {
         before = new IntersectionObserver(
-          ([entry]) => {
+          (entries) => {
+            // A delivery holds every entry queued since the last, oldest first: the page can go
+            // into a chapter and back to the top before the observer's task runs, so the last
+            // entry is where the opening is now.
+            const entry = entries.at(-1);
             const top = entry?.rootBounds?.top ?? line;
             if (entry?.isIntersecting && entry.boundingClientRect.top > top) show(first);
           },
