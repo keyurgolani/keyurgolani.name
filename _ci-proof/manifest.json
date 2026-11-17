@@ -1,0 +1,44 @@
+{
+  "name": "tf-320-seal-b",
+  "summary": "Terra Field with the reader's text at 200% on a phone: the seal is no wider than the page",
+  "head": "0f53ec60f6cd80dc2877cb966310c777fe5ee6e2",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "reds": [
+    {
+      "label": "tf-280",
+      "at": "1c4cc5b4f269280887690744713d4d88701f350f",
+      "specs": [
+        "tests/e2e/terra-field-root-text-320-academic.spec.ts",
+        "tests/e2e/terra-field-root-text-320-design.spec.ts"
+      ],
+      "tests": 2,
+      "files": 2,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "tf",
+      "specs": [
+        "tests/e2e/terra-field-root-text-phone.spec.ts",
+        "tests/e2e/terra-field-root-text-320-academic.spec.ts",
+        "tests/e2e/terra-field-root-text-320-design.spec.ts"
+      ],
+      "tests": 6,
+      "files": 3
+    }
+  ],
+  "cells": [],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
