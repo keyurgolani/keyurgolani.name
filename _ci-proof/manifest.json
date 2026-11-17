@@ -1,0 +1,30 @@
+{
+  "name": "skipped-record",
+  "summary": "An e2e set records its skipped tests instead of pinning a count",
+  "head": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "base": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "e2e": [
+    {
+      "label": "rec",
+      "specs": ["tests/e2e/flux-wipe.spec.ts", "tests/e2e/spatial-bento-fixtures.spec.ts"],
+      "tests": 85,
+      "files": 2,
+      "skipped": "record"
+    },
+    {
+      "label": "pin26",
+      "specs": ["tests/e2e/flux-wipe.spec.ts", "tests/e2e/spatial-bento-fixtures.spec.ts"],
+      "tests": 85,
+      "files": 2,
+      "skipped": 26
+    },
+    {
+      "label": "pin0",
+      "specs": ["tests/e2e/flux-wipe.spec.ts", "tests/e2e/spatial-bento-fixtures.spec.ts"],
+      "tests": 85,
+      "files": 2
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
