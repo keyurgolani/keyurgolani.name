@@ -414,7 +414,8 @@
  */
 [data-variant='terra-field'] .tf-root {
   --layout-seal-figure-size: var(--type-step-4);
-  --layout-seal-size: max(
+  --layout-seal-size: var(--layout-seal-fit);
+  --layout-seal-fit: max(
     var(--layout-seal),
     calc(var(--layout-seal-chars, 0) * 1ch + 2 * var(--space-m)),
     calc(var(--layout-seal-figure, 0) * 0.62 * var(--layout-seal-figure-size) + 2 * var(--space-m)),
@@ -2706,6 +2707,12 @@
 
   [data-variant='terra-field'] :is(.tf-close__inner, .tf-close__ask) > * {
     max-inline-size: 100%;
+  }
+
+  /* The seal, sized by its figure and words, is no wider than the page: its label wraps a line
+     more inside it, and the opening's room above it and the band's under it follow. */
+  [data-variant='terra-field'] .tf-main {
+    --layout-seal-size: min(100cqi, var(--layout-seal-fit));
   }
 }
 
