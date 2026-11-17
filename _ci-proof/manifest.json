@@ -1,0 +1,54 @@
+{
+  "name": "rg-ticker-pause",
+  "summary": "Raw Grid under high contrast: the still ticker shows no Pause motion, since nothing on the page moves",
+  "head": "9eb42b7592022ad74a81d185686f1a85bb6bfbe4",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the ticker: hidden from assistive technology, every fact shown elsewhere as text, off by control"
+    ]
+  },
+  "reds": [
+    {
+      "label": "ticker",
+      "at": "e070bc7ab980eecef792cc08dd28656a70bf633c",
+      "specs": ["tests/e2e/raw-grid-ticker-pause.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 3
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ticker",
+      "specs": ["tests/e2e/raw-grid-ticker-pause.spec.ts"],
+      "tests": 4,
+      "files": 1
+    },
+    {
+      "label": "rg",
+      "specs": ["tests/e2e/raw-grid*.spec.ts"],
+      "tests": 95,
+      "files": 5
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "look": [
+    {
+      "label": "ticker",
+      "spec": "look/look-255-ticker.spec.ts",
+      "project": "chromium",
+      "tests": 2,
+      "files": 1,
+      "shots": 2
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
