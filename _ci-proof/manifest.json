@@ -1,0 +1,45 @@
+{
+  "name": "mc-320-c",
+  "summary": "Mission Control at 320 with 200% text: long names, words and a ledger's text stay inside the window on the design and long-text homes",
+  "head": "2667e9000d44930a5eaf13f4fd37c8aed087c43b",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "reds": [
+    {
+      "label": "mc-271",
+      "at": "b860a34bbd69bc1dec46ee6b6e8e4526e1d9450e",
+      "specs": [
+        "tests/e2e/mission-control-root-text-320-design.spec.ts",
+        "tests/e2e/mission-control-root-text-320-long-text.spec.ts"
+      ],
+      "tests": 2,
+      "files": 2,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "mc",
+      "specs": [
+        "tests/e2e/mission-control-root-text-320.spec.ts",
+        "tests/e2e/mission-control-readout-figure-320.spec.ts",
+        "tests/e2e/mission-control-root-text-320-design.spec.ts",
+        "tests/e2e/mission-control-root-text-320-long-text.spec.ts"
+      ],
+      "tests": 6,
+      "files": 4
+    }
+  ],
+  "cells": [],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
