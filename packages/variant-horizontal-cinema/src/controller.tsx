@@ -53,6 +53,9 @@ const ALIGN_LIMIT_MS = 4000;
 /** How long a move that has scrolled may rest short of its scene before it's taken as handed over, in ms. */
 const STILL_MS = 300;
 
+/** How long after the reader's own wheel or moving touch a scroll of the strip is taken as theirs, in ms. */
+const OWN_MS = 300;
+
 /** What the arrow keys never step from: a form or media control, or anything editable. */
 const NATIVE_KEYS = [
   'input',
@@ -474,6 +477,9 @@ function LiveStage(props: StageProps) {
      * refit reads the page as that move left it.
      */
     let kept: Reading | undefined;
+    // Whether a resize's burst is waiting for its refit, and when the reader's own input last came.
+    let burst = false;
+    let inputAt = Number.NEGATIVE_INFINITY;
     // The scene a move the controller started is headed for, until it settles: a second key retargets from it.
     let aligning: number | null = null;
     /**
@@ -642,9 +648,22 @@ function LiveStage(props: StageProps) {
 
     /** The page, from the strip: a sideways swipe or Shift and the wheel move the page to match. */
     const lead = () => {
-      // While the controller moves the page, the strip's scroll is its own doing, never the visitor's.
-      if (!pinned || aligning !== null) return;
+      if (!pinned) return;
       if (wrote.along !== undefined && Math.abs(along() - wrote.along) <= 1) return;
+      // A scroll of the strip just after the reader's own wheel or moving touch is theirs: a swipe.
+      const own = performance.now() - inputAt < OWN_MS;
+      if (aligning !== null) {
+        // While the controller moves the page, the strip's scroll is its own doing, unless the reader
+        // moved it: then the move is theirs, and the page goes where they took the strip.
+        if (!own) return;
+        aligning = null;
+      }
+      // Inside a resize's burst, the refit holds the scene the reader took the strip to, read now
+      // the strip has moved, not the one the burst's first resize found.
+      if (own && burst) {
+        paint();
+        kept = reading();
+      }
       const top = pinStart() + along();
       if (Math.abs(window.scrollY - top) > 1) {
         wrote.top = top;
@@ -912,6 +931,7 @@ function LiveStage(props: StageProps) {
       if (snapTo && way !== 0) told = way;
     };
     const onWheel = (event: WheelEvent) => {
+      inputAt = event.timeStamp;
       // Shift and the wheel, or a sideways swipe, moves the strip, which the page follows (lead):
       // right to left, a scroll to the right goes back.
       const sideways = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
@@ -923,6 +943,7 @@ function LiveStage(props: StageProps) {
       touchAt = touch ? { x: touch.clientX, y: touch.clientY } : undefined;
     };
     const onTouchMove = (event: TouchEvent) => {
+      inputAt = event.timeStamp;
       const touch = event.touches[0];
       if (!touch || !touchAt) return;
       const dx = touchAt.x - touch.clientX;
@@ -1340,9 +1361,11 @@ function LiveStage(props: StageProps) {
     refit.current = refitNow;
     const onResize = () => {
       kept ??= reading();
+      burst = true;
       if (refitTimer !== undefined) clearTimeout(refitTimer);
       refitTimer = setTimeout(() => {
         refitTimer = undefined;
+        burst = false;
         requestAnimationFrame(() => refitNow());
       }, SETTLE_MS);
       if (frame === undefined) frame = requestAnimationFrame(paint);
