@@ -242,10 +242,14 @@
  * inside the box no shadow falls. Set as the platform's inset ring (the focus width, negated) and a
  * focus colour the platform allows. Nothing changes at rest. Forced colours drop the shadow and give
  * the button an outline of its text's colour at its edge, where an inset ring would lie, so there it
- * keeps the platform's ring outside it.
+ * keeps the platform's ring outside it. So does more contrast: on-accent is the canvas's white there,
+ * and a focused pill takes the control radius, so the corners an inset ring lies in showed the canvas
+ * at rest and the ring changed nothing there; outside, the focus colour is the text's, off the
+ * canvas and the shadow both.
  */
-@media (forced-colors: none) {
-  [data-variant='aurora-glass'] .ag-btn:focus-visible {
+@media (forced-colors: none) and (not (prefers-contrast: more)) {
+  [data-variant='aurora-glass']:not([data-display-mode='high-contrast'], [data-contrast='more'])
+    .ag-btn:focus-visible {
     --ui-focus-offset: calc(var(--ui-focus-width) * -1);
     --color-focus: var(--color-on-accent);
   }
