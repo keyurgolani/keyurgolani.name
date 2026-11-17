@@ -495,21 +495,42 @@ test.describe('the settle before the shot', () => {
     expect(Date.now() - started).toBeLessThan(1_000);
   });
 
-  test('fails closed, naming it, when a finite animation still runs at the bound', async ({
+  test('waits out a finite animation running at load with more than 3 s left, as an opening run its runtime starts as the page settles', async ({
+    page,
+  }) => {
+    // Kinetic Cosmos's orbits in miniature: one 3.5 s run, held at its stop, that the page
+    // starts as it settles, so settle() finds it with about all of it left.
+    await open(
+      page,
+      `<style>
+  @keyframes turn { 5% { transform: rotate(18deg); } }
+  .plane { width: 40px; height: 40px; background: #345; }
+  .plane.run { animation: turn 70s cubic-bezier(0.16, 1, 0.3, 1) 0.05 forwards; }
+</style>
+<main><h1>Name</h1><div class="plane"></div></main>
+<script>addEventListener('load', () => document.querySelector('.plane').classList.add('run'));</script>`,
+    );
+    const started = Date.now();
+    await settle(page, true);
+    expect(await runningFinite(page), 'finite animations running at the shot').toBe(0);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(2_500);
+  });
+
+  test('fails closed at once, naming it and its time left, on a finite animation with more left than the shot waits in all', async ({
     page,
   }) => {
     await open(
       page,
       `<style>
   @keyframes rise { from { opacity: 0; } }
-  h1 { animation: rise 10s; }
+  h1 { animation: rise 20s; }
 </style>
 <main><h1 class="name">Stand-in</h1></main>`,
     );
     const started = Date.now();
-    expect(await failure(settle(page, true))).toContain('"rise on h1.name"');
-    expect(Date.now() - started).toBeGreaterThanOrEqual(2_900);
-    expect(Date.now() - started).toBeLessThan(6_000);
+    const message = await failure(settle(page, true));
+    expect(message).toMatch(/rise on h1\.name: [0-9]+ ms left/);
+    expect(Date.now() - started).toBeLessThan(3_000);
   });
 
   /**
