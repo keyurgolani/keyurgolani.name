@@ -1,0 +1,60 @@
+{
+  "name": "kc-title-words",
+  "summary": "With the root text at 200%, a Kinetic Cosmos project page's title breaks only between words",
+  "head": "b71839a02fe6316842b29a034019f341ae279336",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "title",
+      "at": "204b299ce96a725137da01a0c5ab2f0aec64569d",
+      "specs": ["tests/e2e/kinetic-cosmos-title-words-*.spec.ts"],
+      "tests": 12,
+      "files": 6,
+      "failed": 9
+    }
+  ],
+  "e2e": [
+    {
+      "label": "title",
+      "specs": ["tests/e2e/kinetic-cosmos-title-words-*.spec.ts"],
+      "tests": 12,
+      "files": 6
+    }
+  ],
+  "look": [
+    {
+      "label": "title-complete",
+      "spec": "look/title-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_FIXTURE": "complete",
+        "PROOF_LOOK_ROUTE": "/work/project-name"
+      },
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "title-design",
+      "spec": "look/title-look.spec.ts",
+      "project": "chromium",
+      "env": {
+        "PROOF_LOOK_FIXTURE": "design",
+        "PROOF_LOOK_ROUTE": "/work/the-water-beneath-the-dashboard"
+      },
+      "tests": 1,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
