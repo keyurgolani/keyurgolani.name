@@ -166,7 +166,11 @@ export function ScrollSpy() {
       if (!rail || !wide()) return;
       const stick = parseFloat(getComputedStyle(rail).top) || 0;
       dockWatch = new IntersectionObserver(
-        ([entry]) => {
+        (entries) => {
+          // A delivery holds every entry queued since the last, oldest first: the rail can dock
+          // and leave its top again before the observer's task runs, so the last entry is where
+          // it is now.
+          const entry = entries.at(-1);
           // Docked, its top is above the observed band's, whose own top is the sticky offset
           // a pixel down; reading rootBounds keeps a sub-pixel offset from deciding it.
           const now =
