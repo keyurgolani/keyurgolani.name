@@ -260,15 +260,22 @@ export function namedElements(root: ParentNode = document): boolean[] {
 }
 
 /**
+ * snapshotBoundary() and namedElements() as one expression, each reading the
+ * page's own document with no argument, so the page runs both walks in one
+ * task. Two evaluations left room for a task of the page's own between them:
+ * an element a late hydration added there was in the names and not in the
+ * snapshot.
+ */
+const STRUCTURE_READ = `[(${snapshotBoundary.toString()})(), (${namedElements.toString()})()]`;
+
+/**
  * The page's boundary as the structure guard reads it, or null when it has
  * none: snapshotBoundary()'s nodes with namedElements()'s booleans, joined by
- * withNames().
+ * withNames(), both read in one task of the page.
  */
 export async function readStructure(page: Pick<Page, 'evaluate'>): Promise<StructureNode | null> {
-  // Each runs in the page, reading the page's own document with no argument.
-  const boundary = await page.evaluate(snapshotBoundary as () => ParityNode | null);
-  if (boundary === null) return null;
-  return withNames(boundary, await page.evaluate(namedElements as () => boolean[]));
+  const [boundary, named] = await page.evaluate<[ParityNode | null, boolean[]]>(STRUCTURE_READ);
+  return boundary === null ? null : withNames(boundary, named);
 }
 
 /** A weighted multiset of shingles. */
