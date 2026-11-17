@@ -1,0 +1,345 @@
+{
+  "name": "aurora-glass-focus-rings",
+  "summary": "Aurora Glass's capsule contact action, primary actions, record band's last fold and closing address ring whole when focused, in default, more contrast and forced colours",
+  "head": "362227bc8330ff353be0e0bec7dc67ecaecef793",
+  "base": "dde207a9b0b70ece6a8872dd99a2da8b501fa0b4",
+  "gate": {
+    "package": "aurora-glass"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding"
+    ]
+  },
+  "reds": [
+    {
+      "label": "capsule",
+      "at": "eec286741f8dcb7497b71a263685a140fc9385c0",
+      "specs": [
+        "tests/e2e/aurora-glass-focus-perimeter-coral-lagoon-light.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-coral-lagoon-system.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-pastel-sorbet-light.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-pastel-sorbet-system.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-signal-paper-light.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-signal-paper-system.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-sunset-ember-light.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-sunset-ember-system.spec.ts"
+      ],
+      "tests": 8,
+      "files": 1,
+      "failed": 8
+    },
+    {
+      "label": "primary",
+      "at": "72ae5177654b708b2a75d1a47e3834091e9d2a34",
+      "specs": ["tests/e2e/aurora-glass-focus-perimeter-fluent-2-inspired.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "failed": 5
+    },
+    {
+      "label": "address",
+      "at": "a3069442aeb34c4368bdb453562894891ffc2d3d",
+      "specs": ["tests/e2e/aurora-glass-focus-perimeter-letterpress.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    },
+    {
+      "label": "address-cells",
+      "kind": "cells",
+      "at": "a3069442aeb34c4368bdb453562894891ffc2d3d",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/ocean\\-abyss/editorial\\-serif/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/ocean\\-abyss/editorial\\-serif/dark\\ 390x844\\ contrast\\-more\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/ocean\\-abyss/editorial\\-serif/dark\\ 390x844\\ forced\\-colors\\ )",
+      "shards": ["find"],
+      "tests": 3,
+      "failed": 3
+    },
+    {
+      "label": "forced-primary",
+      "at": "7ce98f775658b2aa644b678ed94102070d667426",
+      "specs": ["tests/e2e/aurora-glass-focus-perimeter-letterpress.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "failed": 5
+    },
+    {
+      "label": "fold",
+      "at": "06fe50aea23dbfd28434329d49c9a88ded92e2a0",
+      "specs": ["tests/e2e/aurora-glass-focus-perimeter-glassmorphism.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "contrast",
+      "at": "5908985dbe02712d6fd1d1ad8a7a087bdaf34ae1",
+      "specs": ["tests/e2e/aurora-glass-focus-perimeter-platform-neutral.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ag",
+      "specs": ["tests/e2e/aurora-glass-*.spec.ts"],
+      "tests": 153,
+      "files": 14
+    }
+  ],
+  "cells": [
+    {
+      "label": "records",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/fluent\\-2\\-inspired/warm\\-parchment/humanist\\-ui/system\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/fluent\\-2\\-inspired/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/fluent\\-2\\-inspired/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/ocean\\-abyss/editorial\\-serif/dark\\ 390x844\\ contrast\\-more\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/ocean\\-abyss/editorial\\-serif/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/ocean\\-abyss/editorial\\-serif/dark\\ 390x844\\ forced\\-colors\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/memphis/paper\\-ink/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/memphis/paper\\-ink/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/memphis/paper\\-ink/accessible\\-reading/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neumorphic/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/coral\\-lagoon/humanist\\-ui/light\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/coral\\-lagoon/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/pastel\\-sorbet/humanist\\-ui/light\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/pastel\\-sorbet/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/signal\\-paper/humanist\\-ui/light\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/signal\\-paper/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/sunset\\-ember/humanist\\-ui/light\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/sunset\\-ember/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/editorial\\-serif/system\\ 390x844\\ contrast\\-more\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/editorial\\-serif/system\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/editorial\\-serif/system\\ 390x844\\ forced\\-colors\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/spectrum\\-2\\-inspired/jewel\\-twilight/accessible\\-reading/dark\\ 1024x768\\ default\\ )",
+      "shards": ["find"],
+      "tests": 23,
+      "passed": 23,
+      "failed": 0
+    },
+    {
+      "label": "btn-forced",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/fluent\\-2\\-inspired/warm\\-parchment/humanist\\-ui/system\\ 1024x768\\ forced\\-colors\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/fluent\\-2\\-inspired/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ forced\\-colors\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/fluent\\-2\\-inspired/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ forced\\-colors\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/memphis/paper\\-ink/accessible\\-reading/dark\\ 1024x768\\ forced\\-colors\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/memphis/paper\\-ink/accessible\\-reading/dark\\ 1440x900\\ forced\\-colors\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/memphis/paper\\-ink/accessible\\-reading/dark\\ 390x844\\ forced\\-colors\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neumorphic/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ forced\\-colors\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/spectrum\\-2\\-inspired/jewel\\-twilight/accessible\\-reading/dark\\ 1024x768\\ forced\\-colors\\ )",
+      "shards": ["find"],
+      "tests": 8,
+      "passed": 8,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "lp-hero-d",
+      "spec": "look/control.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "letterpress/ocean-abyss/editorial-serif/dark",
+        "L1_LOOK_NAME": "hero",
+        "L1_LOOK_SELECTOR": "#top .ag-id__acts > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1,
+      "shots": 2
+    },
+    {
+      "label": "lp-cta-d",
+      "spec": "look/control.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "letterpress/ocean-abyss/editorial-serif/dark",
+        "L1_LOOK_NAME": "cta",
+        "L1_LOOK_SELECTOR": "#cta .ag-offer__acts > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1,
+      "shots": 2
+    },
+    {
+      "label": "fl-hero-d",
+      "spec": "look/control.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "fluent-2-inspired/warm-parchment/humanist-ui/system",
+        "L1_LOOK_NAME": "hero",
+        "L1_LOOK_SELECTOR": "#top .ag-id__acts > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "1440,390",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1,
+      "shots": 4
+    },
+    {
+      "label": "lp-address-d",
+      "spec": "look/control.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "letterpress/ocean-abyss/editorial-serif/dark",
+        "L1_LOOK_NAME": "address",
+        "L1_LOOK_SELECTOR": "#contact .ag-call__mail > a",
+        "L1_LOOK_WIDTHS": "390,414,430,480,600",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1,
+      "shots": 10
+    },
+    {
+      "label": "pn-address-d",
+      "spec": "look/control.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "platform-neutral/warm-parchment/editorial-serif/system",
+        "L1_LOOK_NAME": "address",
+        "L1_LOOK_SELECTOR": "#contact .ag-call__mail > a",
+        "L1_LOOK_WIDTHS": "390,414,430,480,600",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1,
+      "shots": 10
+    },
+    {
+      "label": "gl-fold-d",
+      "spec": "look/fold.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "glassmorphism/warm-parchment/humanist-ui/system",
+        "L1_LOOK_NAME": "fold15",
+        "L1_LOOK_SELECTOR": "#ag--band-record > div:nth-child(1) > details:nth-child(15) > summary:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390,1440",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1,
+      "shots": 6
+    },
+    {
+      "label": "pn-fold-d",
+      "spec": "look/fold.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "platform-neutral/coral-lagoon/humanist-ui/light",
+        "L1_LOOK_NAME": "fold15",
+        "L1_LOOK_SELECTOR": "#ag--band-record > div:nth-child(1) > details:nth-child(15) > summary:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390,1440",
+        "L1_LOOK_ROW": "default"
+      },
+      "tests": 1,
+      "shots": 6
+    },
+    {
+      "label": "lp-hero-f",
+      "spec": "look/control.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "letterpress/ocean-abyss/editorial-serif/dark",
+        "L1_LOOK_NAME": "hero",
+        "L1_LOOK_SELECTOR": "#top .ag-id__acts > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390",
+        "L1_LOOK_ROW": "forced-colors"
+      },
+      "tests": 1,
+      "shots": 2
+    },
+    {
+      "label": "lp-cta-f",
+      "spec": "look/control.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "letterpress/ocean-abyss/editorial-serif/dark",
+        "L1_LOOK_NAME": "cta",
+        "L1_LOOK_SELECTOR": "#cta .ag-offer__acts > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390",
+        "L1_LOOK_ROW": "forced-colors"
+      },
+      "tests": 1,
+      "shots": 2
+    },
+    {
+      "label": "fl-hero-f",
+      "spec": "look/control.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "fluent-2-inspired/warm-parchment/humanist-ui/system",
+        "L1_LOOK_NAME": "hero",
+        "L1_LOOK_SELECTOR": "#top .ag-id__acts > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "1440,390",
+        "L1_LOOK_ROW": "forced-colors"
+      },
+      "tests": 1,
+      "shots": 4
+    },
+    {
+      "label": "lp-address-f",
+      "spec": "look/control.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "letterpress/ocean-abyss/editorial-serif/dark",
+        "L1_LOOK_NAME": "address",
+        "L1_LOOK_SELECTOR": "#contact .ag-call__mail > a",
+        "L1_LOOK_WIDTHS": "390,414,430,480,600",
+        "L1_LOOK_ROW": "forced-colors"
+      },
+      "tests": 1,
+      "shots": 10
+    },
+    {
+      "label": "pn-address-f",
+      "spec": "look/control.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "platform-neutral/warm-parchment/editorial-serif/system",
+        "L1_LOOK_NAME": "address",
+        "L1_LOOK_SELECTOR": "#contact .ag-call__mail > a",
+        "L1_LOOK_WIDTHS": "390,414,430,480,600",
+        "L1_LOOK_ROW": "forced-colors"
+      },
+      "tests": 1,
+      "shots": 10
+    },
+    {
+      "label": "gl-fold-f",
+      "spec": "look/fold.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "glassmorphism/warm-parchment/humanist-ui/system",
+        "L1_LOOK_NAME": "fold15",
+        "L1_LOOK_SELECTOR": "#ag--band-record > div:nth-child(1) > details:nth-child(15) > summary:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390,1440",
+        "L1_LOOK_ROW": "forced-colors"
+      },
+      "tests": 1,
+      "shots": 6
+    },
+    {
+      "label": "pn-fold-f",
+      "spec": "look/fold.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "platform-neutral/coral-lagoon/humanist-ui/light",
+        "L1_LOOK_NAME": "fold15",
+        "L1_LOOK_SELECTOR": "#ag--band-record > div:nth-child(1) > details:nth-child(15) > summary:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390,1440",
+        "L1_LOOK_ROW": "forced-colors"
+      },
+      "tests": 1,
+      "shots": 6
+    },
+    {
+      "label": "pn-hero-cm",
+      "spec": "look/cm.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "platform-neutral/warm-parchment/editorial-serif/system",
+        "L1_LOOK_NAME": "hero",
+        "L1_LOOK_SELECTOR": "#top .ag-id__acts > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390",
+        "L1_LOOK_ROW": "contrast-more"
+      },
+      "tests": 1,
+      "shots": 2
+    },
+    {
+      "label": "pn-cta-cm",
+      "spec": "look/cm.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_LOOK_TUPLE": "platform-neutral/warm-parchment/editorial-serif/system",
+        "L1_LOOK_NAME": "cta",
+        "L1_LOOK_SELECTOR": "#cta .ag-offer__acts > a:nth-child(1)",
+        "L1_LOOK_WIDTHS": "390",
+        "L1_LOOK_ROW": "contrast-more"
+      },
+      "tests": 1,
+      "shots": 2
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3026,
+    "changed": ["^aurora-glass/", "^distinct > distinct\\.spec\\.ts > aurora-glass: "]
+  },
+  "budgets": true,
+  "kit": "af3664259bdc",
+  "kitScripts": "eedaa11324bf"
+}
