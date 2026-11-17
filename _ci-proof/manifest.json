@@ -1,0 +1,85 @@
+{
+  "name": "aurora-glass-long-words",
+  "summary": "Aurora Glass keeps a long word or address in its text inside the card on phones, and its stat tiles read above the contrast minimum",
+  "head": "184f317bb0584888ccc0cb067a77ceb6953cebbf",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": {
+    "package": "aurora-glass"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding"
+    ]
+  },
+  "reds": [
+    {
+      "label": "long-text",
+      "at": "0f435a04bc4d6e5ba3d73b3bf814b6edb667c4c6",
+      "specs": ["tests/e2e/aurora-glass-long-text.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ag",
+      "specs": ["tests/e2e/aurora-glass*.spec.ts"],
+      "tests": 178,
+      "files": 17,
+      "skipped": "record"
+    }
+  ],
+  "look": [
+    {
+      "label": "overflow",
+      "spec": "look/overflow.spec.ts",
+      "project": "chromium",
+      "tests": 6
+    },
+    {
+      "label": "tiles-system",
+      "spec": "look/tiles.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_MODE": "system"
+      },
+      "tests": 4
+    },
+    {
+      "label": "tiles-light",
+      "spec": "look/tiles.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_MODE": "light"
+      },
+      "tests": 4
+    },
+    {
+      "label": "tiles-dark",
+      "spec": "look/tiles.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_MODE": "dark"
+      },
+      "tests": 4
+    },
+    {
+      "label": "tiles-high-contrast",
+      "spec": "look/tiles.spec.ts",
+      "project": "chromium",
+      "env": {
+        "L1_PROBE_MODE": "high-contrast"
+      },
+      "tests": 4
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
