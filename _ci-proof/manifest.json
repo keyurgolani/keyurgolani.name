@@ -1,0 +1,34 @@
+{
+  "name": "observer-latest-ee-read",
+  "summary": "Editorial Evidence's two observer reds, each holding its own observer's delivery: they fail at the reds and pass at the head on CI Linux",
+  "gate": false,
+  "reds": [
+    {
+      "label": "latest",
+      "at": "7c3d68d7853300b87ca77e27833261a279ec5b0d",
+      "specs": [
+        "tests/e2e/editorial-evidence-rail-dock.spec.ts",
+        "tests/e2e/editorial-evidence-opening-read.spec.ts"
+      ],
+      "tests": 2,
+      "files": 2,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "reds-at-head",
+      "specs": [
+        "tests/e2e/editorial-evidence-rail-dock.spec.ts",
+        "tests/e2e/editorial-evidence-opening-read.spec.ts"
+      ],
+      "tests": 2,
+      "files": 2,
+      "skipped": 0
+    }
+  ],
+  "head": "032ce1ef47baf3246bc5161a4d00924f16bf87c6",
+  "base": "6835c3d4ae620a6791a5136048c994bc413eefa7",
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
