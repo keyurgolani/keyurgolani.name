@@ -2312,6 +2312,27 @@
   border-block-start: 1px solid color-mix(in oklab, var(--color-on-scrim) 24%, var(--layout-matte));
 }
 
+/* The credits' and the storyboard's one-column grids are each their box's width: with large text on
+   a phone a word too long for its line breaks inside its box rather than widening the page. */
+[data-variant='horizontal-cinema']
+  :is(
+    .hc-credits__head,
+    .hc-credits__credit,
+    .hc-board__main,
+    .hc-board__film,
+    .hc-board__titles,
+    .hc-board__body,
+    .hc-board__why,
+    .hc-board__citations,
+    .hc-board__text,
+    .hc-board__figure,
+    .hc-board__end,
+    .hc-board__next
+  ),
+[data-variant='horizontal-cinema'] .hc-board__change dl {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* A phone's own Contact credit, the ways the film's scene doesn't list; wider, the full one reads. */
 [data-variant='horizontal-cinema'] .hc-credits__credit[data-phone-only] {
   display: none;
@@ -2782,15 +2803,17 @@
   text-underline-offset: 0.18em;
 }
 
-/* The storyboard's minimap, on the bottom edge. */
+/* The storyboard's minimap, on the bottom edge. Where the scene's name and place don't fit beside
+   the blocks, as with large text on a phone, they take a line of their own under them. */
 [data-variant='horizontal-cinema'] .hc-board__map {
   position: sticky;
   inset-block-end: 0;
   z-index: 2;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-l);
+  gap: var(--space-3xs) var(--space-l);
   min-block-size: var(--layout-chrome);
   margin-inline: calc(var(--layout-inset) * -1);
   padding-inline: var(--layout-grid-margin);
@@ -2845,7 +2868,6 @@
 [data-variant='horizontal-cinema'] .hc-board__where {
   margin: 0;
   color: var(--color-text-secondary);
-  white-space: nowrap;
 }
 
 [data-variant='horizontal-cinema'] .hc-credits__back {
