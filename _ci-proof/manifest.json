@@ -1,0 +1,37 @@
+{
+  "name": "ee-bar-token-writes-2",
+  "summary": "Editorial Evidence's bar token is measured with the masthead's own least height, never taken off the page, and written only when it changes: no forced whole-page restyle at the font swap at load",
+  "head": "9ca121c4f2ae2802bf9694749487eb45570f845f",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "bar",
+      "at": "69c228b362e3e2dc5b4385fe83606d77fba8f636",
+      "specs": ["tests/e2e/editorial-evidence-bar-token.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ee",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 155,
+      "files": 17,
+      "skipped": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
