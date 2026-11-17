@@ -2774,9 +2774,11 @@
 }
 
 @container sx-root (max-width: 14rem) {
+  /* A word longer than its line breaks as the sheet's own overflow-wrap has it: break-word from
+     the root, anywhere where a block sets it, as the contact sheet does for an address or a long
+     link (an overflow-wrap here on every box held those at their whole length, past the screen). */
   [data-variant='schematic'] .sx * {
     min-inline-size: 0;
-    overflow-wrap: break-word;
   }
 
   [data-variant='schematic'] :is(.sx-iface, .sx-schedule) {
@@ -2813,5 +2815,17 @@
 
   [data-variant='schematic'] .sx-stamp {
     max-inline-size: 100%;
+  }
+
+  /* A table's date or revision sets above its row, as a talk's date does on a phone, and a date
+     range may wrap: held on one line beside its row, a range from December 6, 2024 to the present
+     ran 210 px past its cell and the page, to the left of a right-to-left sheet. */
+  [data-variant='schematic'] .sx .sx-table tr > :is(th, td):nth-child(n) {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  [data-variant='schematic'] .sx-table .sx-nowrap {
+    white-space: normal;
   }
 }
