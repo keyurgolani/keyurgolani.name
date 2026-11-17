@@ -1,0 +1,42 @@
+{
+  "name": "schematic-256",
+  "summary": "Schematic with the reader's text at 200% on a phone: home and a case fit the screen, every box narrowing below its widest word and the interface figure, the drawing schedule and the fold controls taking one column, where the sheet holds under 14rem",
+  "head": "403943c1939f6450342a5a9ca5ad917dfe7c02a1",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "reds": [
+    {
+      "label": "r256",
+      "at": "801182b6c2883cdd85db699db0c69b7a2a546507",
+      "specs": ["tests/e2e/schematic-root-text-phone.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "sx-root-text-phone",
+      "specs": ["tests/e2e/schematic-root-text-phone.spec.ts"],
+      "tests": 4,
+      "files": 1
+    }
+  ],
+  "look": [
+    {
+      "label": "sx-256",
+      "spec": "look/sx-256-overflow-probe.spec.ts",
+      "project": "chromium",
+      "tests": 26,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
