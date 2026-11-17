@@ -196,18 +196,18 @@ function assertFewest(
   }
 }
 
-test('the count is the fewest shards whose estimates all hold the ceiling, whatever the plan, and more than 48 fails, naming the group', () => {
+test('the count is the fewest shards whose estimates all hold the ceiling, whatever the plan, and more than 160 fails, naming the group', () => {
   const durations = { group: 5 };
   // 95 s fixed and two workers a shard: two 100 s groups fit one shard, and two 200 s groups a shard.
   assert.equal(pickShardCount(synthetic(2, 100), durations).count, 1);
   assert.equal(pickShardCount(synthetic(8, 200), durations).count, 4);
-  // No base cap: a plan that needs 12, 14, or 48 gets them.
+  // No base cap: a plan that needs 12, 14, or 160 gets them.
   assert.equal(pickShardCount(synthetic(24, 200), durations).count, 12);
   assert.equal(pickShardCount(synthetic(28, 200), durations).count, 14);
-  assert.equal(CATALOG_MAX_SHARDS, 48);
-  assert.equal(pickShardCount(synthetic(96, 200), durations).count, CATALOG_MAX_SHARDS);
+  assert.equal(CATALOG_MAX_SHARDS, 160);
+  assert.equal(pickShardCount(synthetic(320, 200), durations).count, CATALOG_MAX_SHARDS);
   assert.throws(
-    () => pickShardCount(synthetic(97, 200), durations),
+    () => pickShardCount(synthetic(321, 200), durations),
     new RegExp(
       `^Error: Even ${CATALOG_MAX_SHARDS} shards leave one at about 495s, over the ${SHARD_CEILING}s ceiling\\. Its heaviest group is chromium s\\d+ ${CELL_SPEC}, at about 200s\\.$`,
     ),
@@ -218,7 +218,7 @@ test('the count is the fewest shards whose estimates all hold the ceiling, whate
     synthetic(8, 200),
     synthetic(24, 200),
     synthetic(28, 200),
-    synthetic(96, 200),
+    synthetic(320, 200),
   ]) {
     assertFewest(groups, pickShardCount(groups, durations), durations, `${groups.length} groups`);
   }
@@ -300,18 +300,18 @@ test("a PR's directed load, its pack sweep and its changed variants, counts as a
     const groups = [...synthetic(26, 200), ...load];
     assertFewest(groups, pickShardCount(groups, durations), durations, `${load.length} directed`);
   }
-  // A changed variant's load takes what it needs, past the old 16, and fails only past 48.
+  // A changed variant's load takes what it needs, past the old 16, and fails only past 160.
   const many = pickShardCount(varied(40, 200), durations);
   assert.deepEqual([many.variantShards, many.count], [20, 20]);
   assert.throws(
-    () => pickShardCount(varied(120, 200), durations),
-    /^Error: Even 48 shards leave one at about \d+s, over the 300s ceiling \(the directed groups alone need more than 48 shard\(s\), the pack sweep's 0 and the changed variants' more than 48\)\. Its heaviest group is chromium variant\d+ cells\.spec\.ts, at about 200s\.$/,
+    () => pickShardCount(varied(330, 200), durations),
+    /^Error: Even 160 shards leave one at about \d+s, over the 300s ceiling \(the directed groups alone need more than 160 shard\(s\), the pack sweep's 0 and the changed variants' more than 160\)\. Its heaviest group is chromium variant\d+ cells\.spec\.ts, at about 200s\.$/,
   );
 });
 
-test('a catalog-scale sweep, one that alone needs more than 16, takes the fewest that fit up to 48 as any plan does, and the log names it', () => {
+test('a catalog-scale sweep, one that alone needs more than 16, takes the fewest that fit up to 160 as any plan does, and the log names it', () => {
   const durations = { group: 5 };
-  assert.equal(CATALOG_MAX_SHARDS, 48);
+  assert.equal(CATALOG_MAX_SHARDS, 160);
   assert.equal(CATALOG_SCALE_SHARDS, 16);
   // Each pack one 195 s test on a variant's sweep server: two packs a shard, one a worker.
   const packs = (count: number, from = 0): ShardGroup[] =>
@@ -372,14 +372,14 @@ test('a catalog-scale sweep, one that alone needs more than 16, takes the fewest
     [shared.catalogScale, shared.variantShards, shared.directedShards, shared.count],
     [true, 2, 35, 41],
   );
-  // Past 48 it fails, naming the heaviest group and its changed pack.
+  // Past 160 it fails, naming the heaviest group and its changed pack.
   assert.throws(
-    () => pickShardCount(packs(97), durations),
-    /^Error: Even 48 shards leave one at about \d+s, over the 300s ceiling \(the directed groups alone need more than 48 shard\(s\), the pack sweep's more than 48 and the changed variants' 0, a catalog-scale sweep\)\. Its heaviest group is chromium sweep\d+ cells\.spec\.ts, at about 200s, its heaviest changed pack language: pack-\d+\.$/,
+    () => pickShardCount(packs(321), durations),
+    /^Error: Even 160 shards leave one at about \d+s, over the 300s ceiling \(the directed groups alone need more than 160 shard\(s\), the pack sweep's more than 160 and the changed variants' 0, a catalog-scale sweep\)\. Its heaviest group is chromium sweep\d+ cells\.spec\.ts, at about 200s, its heaviest changed pack language: pack-\d+\.$/,
   );
   // As the real sweep is: one group per variant, each test a changed pack, split into parts. A part
   // still names its heaviest pack.
-  const perVariant = Array.from({ length: 20 }, (_, variant): ShardGroup => {
+  const perVariant = Array.from({ length: 70 }, (_, variant): ShardGroup => {
     const ids = Array.from({ length: 20 }, (_, pack) => pack);
     return {
       project: `chromium sweep-v${variant}`,
@@ -400,7 +400,7 @@ test('a catalog-scale sweep, one that alone needs more than 16, takes the fewest
     };
   });
   const parts = splitGroups(perVariant, GROUP_BUDGET, durations);
-  assert.equal(parts.length, 100);
+  assert.equal(parts.length, 350);
   for (const part of parts) {
     assert.ok(part.part !== undefined && part.tests.length === 4, groupKey(part));
     assert.deepEqual(
@@ -410,19 +410,19 @@ test('a catalog-scale sweep, one that alone needs more than 16, takes the fewest
   }
   assert.throws(
     () => pickShardCount(perVariant, durations),
-    /^Error: Even 48 shards leave one at about \d+s, over the 300s ceiling \(the directed groups alone need more than 48 shard\(s\), the pack sweep's more than 48 and the changed variants' 0, a catalog-scale sweep\)\. Its heaviest group is chromium sweep-v\d+ cells\.spec\.ts #\d, at about 190s, its heaviest changed pack language: lang-(1|5|9|13|17)\.$/,
+    /^Error: Even 160 shards leave one at about \d+s, over the 300s ceiling \(the directed groups alone need more than 160 shard\(s\), the pack sweep's more than 160 and the changed variants' 0, a catalog-scale sweep\)\. Its heaviest group is chromium sweep-v\d+ cells\.spec\.ts #\d, at about 190s, its heaviest changed pack language: lang-(1|5|9|13|17)\.$/,
   );
-  // A base of 13 beside the whole catalog fits 48 with no room of its own.
+  // A base of 13 beside the whole catalog takes 46, with no room of its own.
   const wideGroups = [...synthetic(26, 200), ...packs(66)];
   const wide = pickShardCount(wideGroups, durations);
   assert.deepEqual([wide.catalogScale, wide.count], [true, 46]);
   assertFewest(wideGroups, wide, durations, 'a base of 13 and the whole catalog');
   // Only the sweep's own load is catalog-scale: a changed variant's, however large, isn't, and
-  // takes the fewest that fit up to 48 like any other.
+  // takes the fewest that fit up to 160 like any other.
   const variants = pickShardCount([...packs(8), ...varied(80)], durations);
   assert.deepEqual([variants.catalogScale, variants.count], [false, 44]);
   assert.equal(directedLoad(varied(120), durations).catalogScale, false);
-  assert.throws(() => pickShardCount(varied(120), durations), /^Error: Even 48 shards leave one/);
+  assert.throws(() => pickShardCount(varied(330), durations), /^Error: Even 160 shards leave one/);
 });
 
 test("every CI PR set's count is the fewest its shards hold the ceiling at, with or without directed cells, and its directed load is what the log says", (t) => {
