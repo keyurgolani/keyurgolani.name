@@ -4429,8 +4429,12 @@
     justify-self: end;
   }
 
+  /* Enlarged text keeps every word of the title on one line: the size stops at 8vw, and the
+     hanging indent gives way once the root's text outgrows the stage (50vw - 20rem). */
   [data-variant='kinetic-cosmos'] .kc-case-stage__title {
-    font-size: var(--type-step-6);
+    --layout-step: clamp(0px, 50vw - 20rem, var(--space-3xl));
+
+    font-size: min(var(--type-step-6), 8vw);
   }
 
   [data-variant='kinetic-cosmos']
