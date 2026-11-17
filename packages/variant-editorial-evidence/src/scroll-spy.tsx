@@ -150,11 +150,49 @@ export function ScrollSpy() {
     // token: the chapter bar docks, the Contents sheet opens and the reading line falls under
     // its real height then, so the token follows what it holds, read with the stylesheet's own
     // token in place. Without script the stylesheet's token stands.
+    // Every change to the token restyles the whole page, so it's written only when that height
+    // changes, and worked out from what the observer has just laid out, never by taking the token
+    // off to measure: the masthead's least height is the token, so past it the masthead's own
+    // height says it, and within it its tallest item, its border and padding, with the
+    // stylesheet's token, read while none is set. That's read again the old way only once the
+    // window's width or the root text size has changed, which can change the stylesheet's token.
     const masthead = root.querySelector<HTMLElement>('.ee-masthead');
+    const px = (value: string) => Number.parseFloat(value) || 0;
+    let own: { readonly token: number; readonly key: string } | null = null;
     const fit = new ResizeObserver(() => {
       if (!masthead) return;
-      root.style.removeProperty('--layout-ee-bar');
-      root.style.setProperty('--layout-ee-bar', `${masthead.getBoundingClientRect().height}px`);
+      const text = getComputedStyle(root.ownerDocument.documentElement).fontSize;
+      const key = `${view.innerWidth} ${text}`;
+      const set = root.style.getPropertyValue('--layout-ee-bar');
+      if (own?.key !== key) {
+        if (set) root.style.removeProperty('--layout-ee-bar');
+        own = { token: px(getComputedStyle(masthead).minBlockSize), key };
+        root.style.setProperty('--layout-ee-bar', `${masthead.getBoundingClientRect().height}px`);
+        return;
+      }
+      const token = px(set);
+      const style = getComputedStyle(masthead);
+      const edges =
+        px(style.paddingBlockStart) +
+        px(style.paddingBlockEnd) +
+        px(style.borderBlockStartWidth) +
+        px(style.borderBlockEndWidth);
+      const height = masthead.getBoundingClientRect().height;
+      let next = height;
+      if (height <= token + edges + 0.5) {
+        let tallest = 0;
+        for (const item of masthead.children) {
+          const box = getComputedStyle(item);
+          if (box.display === 'none' || box.position === 'fixed' || box.position === 'absolute')
+            continue;
+          tallest = Math.max(
+            tallest,
+            item.getBoundingClientRect().height + px(box.marginBlockStart) + px(box.marginBlockEnd),
+          );
+        }
+        next = Math.max(own.token, tallest) + edges;
+      }
+      if (Math.abs(next - token) > 0.5) root.style.setProperty('--layout-ee-bar', `${next}px`);
     });
     for (const item of masthead?.children ?? []) fit.observe(item);
     const folio = root.querySelector<HTMLElement>('[data-ee-folio]');
