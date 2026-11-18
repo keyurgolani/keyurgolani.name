@@ -1204,7 +1204,7 @@
 
 /* One track as wide as the box, so a word longer than the line, as at 200% text on a phone, breaks inside it. */
 [data-variant='editorial-evidence']
-  :is(.ee-pairs > div, .ee-byline__facts > div, .ee-pull, .ee-contact) {
+  :is(.ee-pairs > div, .ee-pairs dd, .ee-byline__facts > div, .ee-pull, .ee-contact) {
   grid-template-columns: minmax(0, 1fr);
 }
 
