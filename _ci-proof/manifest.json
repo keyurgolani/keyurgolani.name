@@ -1,0 +1,41 @@
+{
+  "name": "oa-plan-print-appearance",
+  "summary": "in print the visitor's Appearance control is no part of Obsidian Atelier's page, as the platform lays it out",
+  "head": "d8221d59349952102cf9673e3574743b84cb8415",
+  "base": "4a91d262d74fa2362838c5fe5985ebe707d523ab",
+  "gate": true,
+  "unit": {
+    "titles": ["print is opaque and still"]
+  },
+  "budgets": true,
+  "e2e": [
+    {
+      "label": "obsidian-atelier",
+      "specs": ["tests/e2e/obsidian-atelier*.spec.ts"],
+      "tests": 67,
+      "files": 15,
+      "skipped": "record"
+    },
+    {
+      "label": "flux",
+      "specs": ["tests/e2e/flux*.spec.ts"],
+      "tests": 82,
+      "files": 15,
+      "skipped": "record"
+    },
+    {
+      "label": "singular",
+      "specs": ["tests/e2e/singular*.spec.ts"],
+      "tests": 103,
+      "files": 19,
+      "skipped": "record"
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
