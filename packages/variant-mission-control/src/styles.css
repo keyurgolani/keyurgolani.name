@@ -2443,6 +2443,12 @@
     min-block-size: auto;
     padding-block: var(--space-2xs);
   }
+
+  /* Open, the visitor control's panel is as wide as its widest choice: past the line's width, as
+     with the text at 200% on a phone, the end gives way to the line and the panel's form wraps in it. */
+  [data-variant='mission-control'] .mc-status__end {
+    flex-shrink: 1;
+  }
 }
 
 @media (width < 47.5rem) {
