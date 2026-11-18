@@ -197,6 +197,14 @@
   text-decoration-color: currentColor;
 }
 
+/*
+ * Whatever has keyboard focus scrolls in whole, its ring with it: a stop that rests on the window's
+ * edge, as the seal can at the fold, comes in by the ring's reach and a little more.
+ */
+[data-variant='terra-field'] :focus-visible {
+  scroll-margin: calc(var(--ui-focus-width) + var(--ui-focus-offset) + var(--space-3xs));
+}
+
 [data-variant='terra-field'] .tf-act {
   display: inline-flex;
   align-items: center;
