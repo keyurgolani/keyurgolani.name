@@ -1,0 +1,79 @@
+{
+  "name": "aurora-glass-rings-and-mark",
+  "summary": "Aurora Glass's focused actions ring whole on every language, and its no-script mark is parsed before the parts it styles",
+  "head": "4c081c8d9aaf588ac2921dc6a8dea7fe0c31b915",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "gate": {
+    "package": "aurora-glass"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding",
+      "with script off the parser reaches the no-script mark before every part its rules style",
+      "no rule styles by a scripting query; the page and the case study carry the no-script mark last in the sky"
+    ]
+  },
+  "reds": [
+    {
+      "label": "button-ring",
+      "at": "ab90c152110de0cef96d4ddfaa7eb82f05d7a4ef",
+      "specs": [
+        "tests/e2e/aurora-glass-focus-perimeter-night-terminal-light.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-sunset-ember-dark.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-neumorphic.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-glassmorphism-sunset-ember.spec.ts"
+      ],
+      "tests": 24,
+      "files": 1,
+      "failed": 24
+    },
+    {
+      "label": "contact-band",
+      "at": "6657902c8f36ef7b574f639e8a43e292b779e157",
+      "specs": ["tests/e2e/aurora-glass-focus-perimeter-bauhaus-console-mono.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    }
+  ],
+  "e2e": [
+    {
+      "label": "aurora-glass",
+      "specs": ["tests/e2e/aurora-glass*.spec.ts"],
+      "tests": 205,
+      "files": 17,
+      "skipped": "record"
+    }
+  ],
+  "cells": [
+    {
+      "label": "bauhaus-console-mono",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/bauhaus\\-geometric/blue\\-orange\\-color\\-safe/console\\-mono/light\\ )",
+      "shards": ["find"],
+      "tests": 24,
+      "passed": 24,
+      "failed": 0
+    },
+    {
+      "label": "bauhaus-signal-paper",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/bauhaus\\-geometric/signal\\-paper/accessible\\-reading/dark\\ )",
+      "shards": ["find"],
+      "tests": 24,
+      "passed": 24,
+      "failed": 0
+    },
+    {
+      "label": "every-style-a",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/fluent\\-2\\-inspired/arctic\\-aurora/accessible\\-reading/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/fluent\\-2\\-inspired/arctic\\-aurora/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/fluent\\-2\\-inspired/arctic\\-aurora/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/carbon\\-inspired/paper\\-ink/accessible\\-reading/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/carbon\\-inspired/paper\\-ink/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/carbon\\-inspired/paper\\-ink/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/art\\-deco/arctic\\-aurora/accessible\\-reading/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/art\\-deco/arctic\\-aurora/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/art\\-deco/arctic\\-aurora/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/international\\-grid/aurora\\-meadow/accessible\\-reading/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/international\\-grid/aurora\\-meadow/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/international\\-grid/aurora\\-meadow/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neobrutalist/arctic\\-aurora/accessible\\-reading/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neobrutalist/arctic\\-aurora/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neobrutalist/arctic\\-aurora/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/memphis/arctic\\-aurora/accessible\\-reading/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/memphis/arctic\\-aurora/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/memphis/arctic\\-aurora/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/soft\\-organic/control\\-room/accessible\\-reading/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/soft\\-organic/control\\-room/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/soft\\-organic/control\\-room/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/industrial/arctic\\-aurora/accessible\\-reading/dark\\ 390x844\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/industrial/arctic\\-aurora/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/industrial/arctic\\-aurora/accessible\\-reading/dark\\ 1440x900\\ default\\ )",
+      "shards": ["find"],
+      "tests": 24,
+      "passed": 24,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
