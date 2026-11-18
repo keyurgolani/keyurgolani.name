@@ -1,0 +1,17 @@
+{
+  "name": "mc-appear-look",
+  "summary": "Mission Control with only the status line's Appearance disclosure open, at 320, 390 and 1440 with 200% and 100% text, on every contract fixture, home and first work page, read on Linux under four candidate rules for the line's end box",
+  "head": "c675c14f1b674217e1e3505260962fd6388ca8d5",
+  "base": "4a91d262d74fa2362838c5fe5985ebe707d523ab",
+  "look": [
+    {
+      "label": "mc-appear",
+      "spec": "look/mc-appearance-open.spec.ts",
+      "project": "chromium",
+      "tests": 16,
+      "files": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
