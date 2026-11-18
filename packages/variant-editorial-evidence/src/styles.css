@@ -317,6 +317,8 @@
   max-block-size: var(--layout-ee-sheet-max);
   margin: 0;
   overflow: auto;
+  /* Scrolled to its end, a wheel turn or a swipe stays in it rather than move the page behind. */
+  overscroll-behavior: contain;
   padding-block: var(--space-l) var(--space-xl);
   padding-inline: var(--layout-ee-inset);
   border: 0;

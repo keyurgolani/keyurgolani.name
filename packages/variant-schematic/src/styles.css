@@ -1463,6 +1463,8 @@
 [data-variant='schematic'] .sx-dialog {
   inline-size: min(64rem, 100% - var(--space-l) * 2);
   max-block-size: calc(100svh - var(--space-l) * 2);
+  /* Scrolled to its end, a wheel turn or a swipe stays in it rather than move the page behind. */
+  overscroll-behavior: contain;
   padding: var(--space-m);
   border: var(--layout-line-heavy);
   border-radius: 0;

@@ -137,7 +137,8 @@ test('the client modules are the scroll-spy and the sheet control, and nothing r
 test('motion is state feedback on the motion tokens, and the one animation is scroll-linked, all only under full motion', () => {
   const text = css();
   assert.doesNotMatch(text, /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|\boklch\(/i);
-  assert.doesNotMatch(text, /\binfinite\b|transition\s*:\s*all|scroll-behavior/);
+  // Smooth scrolling is motion; overscroll-behavior, which only keeps a scroll in its box, isn't.
+  assert.doesNotMatch(text, /\binfinite\b|transition\s*:\s*all|\bscroll-behavior/);
   for (const [, value] of text.matchAll(/\btransition:\s*([^;]+);/g)) {
     assert.match(value!, /var\(--motion-feedback\) var\(--motion-curve\)/, value);
     assert.doesNotMatch(value!, /\d+m?s\b/, value);

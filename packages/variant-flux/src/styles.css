@@ -2344,6 +2344,8 @@
   max-inline-size: 48rem;
   max-block-size: calc(100% - 2 * var(--space-s));
   overflow: auto;
+  /* Scrolled to its end, a wheel turn or a swipe stays in it rather than move the page behind. */
+  overscroll-behavior: contain;
   border: var(--ui-border-card) var(--color-border-subtle);
   border-radius: var(--ui-radius-overlay);
   box-shadow: var(--ui-shadow-overlay);
