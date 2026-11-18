@@ -32,13 +32,14 @@ export function Words({ lang, children }: { lang: 'en' | undefined; children: Re
 }
 
 /**
- * .ag's last child: an empty mark inside <noscript>. The parser makes it an element only when it
- * reads the page with scripting off; with scripting on it's the noscript's text. Rules for a page
+ * The sky's last child: an empty mark inside <noscript>. The parser makes it an element only when
+ * it reads the page with scripting off; with scripting on it's the noscript's text. Rules for a page
  * with no script key on it, never on a scripting query: the quality runner's no-JavaScript rows
  * audit with script on for axe, which such a query would flip (Kinetic Cosmos's NoScriptMark).
- * Last, so every part before it keeps its place, the sky first and then the page box, as the
- * quality records' paths name them. .ag lays out as a block, so the empty inline is never a box:
- * its line has no height.
+ * In the sky, .ag's first child, the parser reaches it before the chrome, so a rule keyed on its
+ * absence never holds for a first paint and then lets go (Pause's kept place). .ag's own parts keep
+ * their places, the sky, the page box and the Index, as the quality records' paths name them. The
+ * sky is a fixed block, so the empty inline is never a box: its line has no height.
  */
 export function NoScriptMark() {
   return (

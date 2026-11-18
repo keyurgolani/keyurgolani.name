@@ -14,19 +14,7 @@ import { Chrome } from './chrome/capsule';
 import { IndexDialog } from './chrome/index-dialog';
 import { openingHeading } from './hero';
 import { bandsOf, caseFacts, caseHome, formatNumber, present, rangeOf, yearOf } from './model';
-import {
-  Img,
-  NoScriptMark,
-  Out,
-  ownId,
-  Phrase,
-  Prose,
-  readyImage,
-  Tracks,
-  uiLang,
-  When,
-  Words,
-} from './parts';
+import { Img, Out, ownId, Phrase, Prose, readyImage, Tracks, uiLang, When, Words } from './parts';
 import { Footer } from './renderers/horizon';
 import { Sky } from './sky';
 import { Pane } from './surfaces/pane';
@@ -637,8 +625,6 @@ function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
       </div>
       {bands.length > 0 ? <IndexDialog input={input} bands={bands} /> : null}
       <Enhancement input={input} id="sky" />
-      {/* Last, so every part before it keeps its place (parts.tsx). */}
-      <NoScriptMark />
     </div>
   );
 }

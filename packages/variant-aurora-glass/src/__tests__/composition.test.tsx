@@ -406,10 +406,10 @@ test('Pause ships waiting: no box by default, its place kept unseen only where s
 
 // The no-JavaScript rows audit a page loaded with script off, then turn script on for axe: a rule
 // keyed on a scripting query would flip under that pass. Script's absence is the page's no-script
-// mark instead, an element only where the page was read with scripting off. It's .ag's last child,
-// so every part before it keeps its place: the sky first, then the page box, as the quality
+// mark instead, an element only where the page was read with scripting off. It's the sky's last
+// child, so .ag's own parts keep their places: the sky first, then the page box, as the quality
 // records' paths name them.
-test('no rule styles by a scripting query; the page and the case study carry the no-script mark last', () => {
+test('no rule styles by a scripting query; the page and the case study carry the no-script mark last in the sky', () => {
   assert.doesNotMatch(CSS, /\(\s*scripting\s*:/);
   const home = sample();
   const work = renderInput({
@@ -421,8 +421,13 @@ test('no rule styles by a scripting query; the page and the case study carry the
     ['case study', work],
   ] as const) {
     assert.match(html, /^<div class="ag(?: ag--case)?">/, name);
-    assert.doesNotMatch(html, /<div class="ag(?: ag--case)?"><noscript>/, name);
-    assert.match(html, /<noscript><i data-ag-nojs=""><\/i><\/noscript><\/div>$/, name);
+    assert.match(html, /^<div class="ag(?: ag--case)?"><div class="ag-sky"/, name);
+    assert.match(
+      html,
+      /<noscript><i data-ag-nojs=""><\/i><\/noscript><\/div><div class="ag-page">/,
+      name,
+    );
+    assert.doesNotMatch(html, /<\/noscript><\/div>$/, name);
     assert.equal(html.match(/data-ag-nojs/g)?.length, 1, name);
   }
 });
@@ -551,7 +556,10 @@ test('the glass ruling: no pane painted translucent by the composition', () => {
 
 test('no text on the sky: the sky and the Lens are aria-hidden and hold no text', () => {
   const html = sample();
-  const sky = /<div class="ag-sky" aria-hidden="true"[\s\S]*?<\/svg><\/div>/.exec(html)?.[0] ?? '';
+  const sky =
+    /<div class="ag-sky" aria-hidden="true"[\s\S]*?<\/svg>(?:<noscript>[\s\S]*?<\/noscript>)?<\/div>/.exec(
+      html,
+    )?.[0] ?? '';
   assert.ok(sky.length > 0);
   assert.equal(sky.replace(/<[^>]+>/g, '').trim(), '');
   assert.match(html, /<div class="ag-lens" aria-hidden="true">/);
@@ -561,7 +569,7 @@ test('the backdrop is one named, opaque layer: one [data-ag-backdrop] root holds
   const html = sample();
   assert.equal(count(html, /data-ag-backdrop/g), 1);
   const sky =
-    /<div class="ag-sky" aria-hidden="true" data-ag-backdrop=""[\s\S]*?<\/svg><\/div>/.exec(
+    /<div class="ag-sky" aria-hidden="true" data-ag-backdrop=""[\s\S]*?<\/svg>(?:<noscript>[\s\S]*?<\/noscript>)?<\/div>/.exec(
       html,
     )?.[0];
   assert.ok(sky, 'the backdrop root is the sky');

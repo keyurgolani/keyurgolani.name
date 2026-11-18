@@ -19,7 +19,7 @@ import {
   thesisSectionOf,
   type Band,
 } from './model';
-import { NoScriptMark, ownId, uiLang, Words } from './parts';
+import { ownId, uiLang, Words } from './parts';
 import { Footer, HorizonPhoto } from './renderers/horizon';
 import { Sky } from './sky';
 
@@ -157,8 +157,6 @@ function HomePage({ input, outline }: HomePageProps) {
           list there's no Index at all (row 62). */}
       {bands.length > 0 ? <IndexDialog input={input} bands={bands} /> : null}
       <Enhancement input={input} id="sky" />
-      {/* Last, so every part before it keeps its place (parts.tsx). */}
-      <NoScriptMark />
     </div>
   );
 }

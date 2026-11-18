@@ -2,7 +2,7 @@ import { MediaBackdrop } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { enhancementPending } from '@portfolio/variant-contract/settle';
 import { backdropOf, controlsOf, ownerSkyOf } from './model';
-import { Img, readyImage } from './parts';
+import { Img, NoScriptMark, readyImage } from './parts';
 
 // The sky (brief §5.2, step 2; S9): one fixed, aria-hidden layer behind the
 // page, built from the scheme's roles alone, so it turns clay and peach
@@ -78,6 +78,8 @@ export function Sky({ input }: { input: VariantRenderInput }) {
           d="M0 240C260 190 520 200 760 228S1200 262 1420 222 1560 206 1600 212V300H0Z"
         />
       </svg>
+      {/* Last in the sky, which the parser reaches before the page (parts.tsx). */}
+      <NoScriptMark />
     </div>
   );
 }
