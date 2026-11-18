@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { ENHANCEMENT_PENDING } from '@portfolio/variant-contract/settle';
 import { useBoundary } from '@portfolio/appearance/react';
 
 // The running head (N2, N4), one of the composition's two client islands:
@@ -319,6 +320,11 @@ export function ScrollSpy() {
     // height and a step under 81.25rem, the chapter bar's too, as the sentinel's padding gives
     // it. A fragment link lands its target just there, so the running head and the rail name
     // what the jump brought into view.
+    // The index's fold and the running head come with this observer's first delivery, so as the
+    // script starts to observe, its mark carries the settle signal, which shots and quality reads
+    // wait on, and drops it once that delivery has run. The mark is the scroll-spy's own and holds
+    // nothing else. The script sets it, never the server, so with no script nothing waits.
+    if (places.length > 0) sentinel.setAttribute(ENHANCEMENT_PENDING, 'scroll-spy');
     let observer: IntersectionObserver | null = null;
     let before: IntersectionObserver | null = null;
     const observe = () => {
@@ -331,6 +337,7 @@ export function ScrollSpy() {
           for (const entry of entries) {
             if (entry.isIntersecting) show(entry.target as HTMLElement);
           }
+          sentinel.removeAttribute(ENHANCEMENT_PENDING);
         },
         { rootMargin: `-${line}px 0px -${below}px 0px` },
       );
@@ -360,6 +367,7 @@ export function ScrollSpy() {
     paper.addEventListener('change', unpaper);
     return () => {
       off();
+      sentinel.removeAttribute(ENHANCEMENT_PENDING);
       paper.removeEventListener('change', unpaper);
       sized.disconnect();
       fit.disconnect();
