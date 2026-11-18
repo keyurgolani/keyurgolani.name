@@ -855,6 +855,16 @@ export async function keyboardFindings(
   await page.evaluate(() => {
     (document.activeElement as HTMLElement | null)?.blur();
     window.scrollTo(0, 0);
+    // The sequential focus navigation starting point outlasts a blur and a scroll: Chromium keeps
+    // it where focus last was, so a check that focused a control deep in the page would start the
+    // walk past it. Focusing an element at the body's top sets it there; it stays where the
+    // element was once the element is gone, so the first Tab is the page's first stop.
+    const start = document.createElement('span');
+    start.tabIndex = -1;
+    document.body.prepend(start);
+    start.focus({ preventScroll: true });
+    start.blur();
+    start.remove();
   });
   // Occluders count even with pointer-events: none: the probe walks the
   // paint stack, which forced pointer events put them in.
