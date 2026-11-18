@@ -1,0 +1,29 @@
+{
+  "name": "ee-pl2-look",
+  "summary": "Editorial Evidence's Pl. 2 link at 390 on a touch phone, in the release cell's tuple, read on Linux: the focus check, its ring and what is near it, and the release cells that failed",
+  "head": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "base": "a558b84d73a5bbbbb44dee81d6890d6baf5f63d8",
+  "cells": [
+    {
+      "label": "ee-471",
+      "scope": "quality/release/scope.json",
+      "grep": "editorial-evidence/platform-neutral/warm-parchment/accessible-reading/system 390x844 (default|contrast-more|forced-colors) ",
+      "shards": ["find"],
+      "tests": 3,
+      "passed": 1,
+      "failed": 2
+    }
+  ],
+  "look": [
+    {
+      "label": "ee-pl2",
+      "spec": "look/ee-pl2-look.spec.ts",
+      "project": "chromium",
+      "tests": 3,
+      "files": 1,
+      "shots": 12
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
