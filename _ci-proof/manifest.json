@@ -1,0 +1,16 @@
+{
+  "name": "aurora-glass-nojs-mark-height",
+  "summary": "Aurora Glass's no-script mark has no height with script off, first in the page or last, as parsed and as the no-JavaScript rows reveal it",
+  "head": "61f7a3c2cec102da94fe4aee06d53524d20bda25",
+  "base": "4a91d262d74fa2362838c5fe5985ebe707d523ab",
+  "look": [
+    {
+      "label": "nojs-mark",
+      "spec": "look/nojs-mark.spec.ts",
+      "project": "chromium",
+      "tests": 2
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
