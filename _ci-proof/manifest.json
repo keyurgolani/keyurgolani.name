@@ -1,0 +1,54 @@
+{
+  "name": "aurora-glass-nojs-mark-last",
+  "summary": "Aurora Glass's no-script mark comes last in the page, so every path to its parts stays where the quality records name it",
+  "head": "61f7a3c2cec102da94fe4aee06d53524d20bda25",
+  "base": "4a91d262d74fa2362838c5fe5985ebe707d523ab",
+  "gate": {
+    "package": "aurora-glass"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding",
+      "Pause ships waiting: no box by default, its place kept unseen only where script runs and would show it",
+      "no rule styles by a scripting query; the page and the case study carry the no-script mark last"
+    ]
+  },
+  "reds": [
+    {
+      "label": "root-text",
+      "at": "b67dbacd49f678d8a5c0089a3c0e981b05434c3a",
+      "specs": ["tests/e2e/aurora-glass-reading-root-text.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    }
+  ],
+  "e2e": [
+    {
+      "label": "aurora-glass",
+      "specs": ["tests/e2e/aurora-glass*.spec.ts"],
+      "tests": 178,
+      "files": 17,
+      "skipped": "record"
+    }
+  ],
+  "cells": [
+    {
+      "label": "nojs-tuple",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ no\\-javascript\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ )",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
