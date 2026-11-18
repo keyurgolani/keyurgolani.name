@@ -9,7 +9,8 @@ import type { VariantRenderInput } from '@portfolio/variant-contract';
 // 1. The place being read: the tab bar marks it (aria-current) by
 //    IntersectionObserver alone, and the drop moves to it. A move from
 //    scrolling stretches the drop over both tabs, then snaps it in to the
-//    new one; a keyboard move or reduced motion lands it at once (S4). The
+//    new one; a keyboard move, reduced motion, or a move that begins while
+//    the last is still going, lands it at once (S4). The
 //    drop lies under the row, and each tab it lies under takes the inverse
 //    ink (data-fx-under), so every word paints itself. The drop refits when
 //    the tabs change size (FX-S49).
@@ -302,7 +303,12 @@ function attach(root: HTMLElement): () => void {
     drop.dataset.fxOn = '';
     const was = from ? edgesOf(from) : undefined;
     clearTimeout(snap);
-    if (!was || keyboard || still()) {
+    // A move that begins while the last is still going (its stretch held, or its clip still
+    // moving) lands too: its clip would set off from wherever the last left it, while each word's
+    // turn is timed from the last place's edges, so a word the drop reached first would keep the
+    // drop's own ink until its turn came.
+    const going = drop.dataset.fxMove === 'stretch' || drop.getAnimations().length > 0;
+    if (!was || keyboard || going || still()) {
       drop.dataset.fxMove = 'land';
       setDrop(to);
       return;
