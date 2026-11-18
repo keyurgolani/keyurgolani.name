@@ -76,16 +76,18 @@ for (const [name, widths] of PAGES) {
                 return false;
               };
               // An element reaches as far as its box or what it holds: text in an anonymous box,
-              // which no query finds, shows as its element's scroll width. Only the innermost such
-              // elements are named, not every ancestor they widen.
+              // which no query finds, shows as its element's scroll width. One that scrolls or clips
+              // what it holds reaches only as far as its box. Only the innermost such elements are
+              // named, not every ancestor they widen.
               const reaching = [...document.body.querySelectorAll<HTMLElement>('*')]
                 .filter((el) => el.getClientRects().length > 0)
                 .map((el) => {
                   const r = el.getBoundingClientRect();
+                  const spills = getComputedStyle(el).overflowX === 'visible';
                   return {
                     el,
                     left: r.left,
-                    right: Math.max(r.right, r.left + (el.scrollWidth || 0)),
+                    right: spills ? Math.max(r.right, r.left + (el.scrollWidth || 0)) : r.right,
                   };
                 })
                 .filter(({ el, right }) => right > room && !held(el));
