@@ -2691,9 +2691,14 @@
 
   /* Clear of the whole dock (--layout-fx-bar-box): at --layout-bar alone a control Tab brought up
      from below stopped its last few pixels under the dock, and its ring's foot with them
-     (quality-pr, 390: a stats fold, 5.8px under). */
+     (quality-pr, 390: a stats fold, 5.8px under). And clear of it by the ring's reach and 1px:
+     under more contrast the dock stands 12px taller than its token, which the space-s took up,
+     so Copy email's ring ran its foot under it. */
   [data-variant='flux'] :is(a, button, summary) {
-    scroll-margin-block-end: calc(var(--layout-fx-bar-box) + var(--space-s));
+    scroll-margin-block-end: calc(
+      var(--layout-fx-bar-box) + var(--space-s) + var(--ui-focus-offset) + var(--ui-focus-width) +
+        1px
+    );
   }
 
   [data-variant='flux'] .fx-opening-frame {

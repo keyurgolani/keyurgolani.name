@@ -99,7 +99,7 @@
     "crossDocument": true,
     "names": ["flux-wipe"]
   },
-  "scrollReserve": { "blockEnd": "5rem", "media": "(max-width: 39.99rem)" },
+  "scrollReserve": { "blockEnd": "5.75rem", "media": "(max-width: 39.99rem)" },
   "visitorControl": {
     "placement": "header"
   },
