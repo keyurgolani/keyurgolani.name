@@ -2546,10 +2546,10 @@
   }
 
   /*
-   * Its aside the same way, from its own longest word (asideFit, its parentheses counted), at its step or
-   * under, at 0.5em a letter, an italic lowercase's measure rather than the capitals': a short word keeps near
-   * its step, and "(software," keeps room on a fallback face. A block of its own, on its own pitch, so its lines
-   * aren't a display line apart.
+   * Its aside the same way, from its own longest word (asideFit, its parentheses counted, an m or a w as two),
+   * at its step or under, at 0.5em a letter, an italic lowercase's measure rather than the capitals': a short
+   * word keeps near its step, and "(software," and "somewhere" keep room on a fallback face. A block of its
+   * own, on its own pitch, so its lines aren't a display line apart.
    */
   [data-variant='swiss-signal'] .ss-poster__line .ss-poster__aside {
     display: block;
@@ -2645,12 +2645,5 @@
 
   [data-variant='swiss-signal'] .ss-table .ss-num {
     overflow-wrap: normal;
-  }
-
-  /* Home's aside sizes its longest word at 0.62em a letter, not the italic lowercase's 0.5: a word
-     with wide letters runs wider, and "somewhere", at 0.59em a letter on the face Linux sets it in,
-     ran 12 px past its column and the page at 320. A case's aside keeps its own measure. */
-  [data-variant='swiss-signal'] .ss-poster__aside {
-    --layout-ss-aside-em: 0.62;
   }
 }
