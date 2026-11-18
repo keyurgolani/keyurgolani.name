@@ -321,6 +321,24 @@ test("the contents names the owner's chronology sections its chapters are made f
   );
 });
 
+test("the contents carries its titles' longest word, which sizes them where the list is narrow", () => {
+  // In code points, across the chapters', the preface's and the back matter's titles; a word ends at
+  // a space or after its hyphen, where a line may break.
+  for (const [name, word] of [
+    ['academic', 13], // Environmental
+    ['complete', 12], // organization
+    ['photography', 10], // Göteborgs-
+    ['long-text', 10], // the preface's portfolio,
+    ['music', 6], // matter
+  ] as const) {
+    assert.match(
+      renderInput(fixtureInput(name)),
+      new RegExp(`<ol class="toc" role="list" style="--layout-ch-toc-word:${word}">`),
+      name,
+    );
+  }
+});
+
 test('P1-10: a metric hangs its number alone; a unit its statement does not open opens the words', () => {
   const input = inputFor(
     pairOf({
