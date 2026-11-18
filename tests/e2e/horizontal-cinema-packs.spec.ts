@@ -116,6 +116,25 @@ const ringOf = (stop: Locator) =>
     };
   });
 
+/** Whether the focused stop's outline, at its offset and width, lies inside its closest `holder`. */
+const ringWithin = (stop: Locator, holder: string) =>
+  stop.evaluate((element, holder) => {
+    const style = getComputedStyle(element);
+    const reach = (parseFloat(style.outlineOffset) || 0) + (parseFloat(style.outlineWidth) || 0);
+    const box = element.getBoundingClientRect();
+    const ring = [box.left - reach, box.top - reach, box.right + reach, box.bottom + reach];
+    const b = element.closest(holder)!.getBoundingClientRect();
+    return {
+      ring: ring.map((v) => Math.round(v * 10) / 10),
+      holder: [b.left, b.top, b.right, b.bottom].map((v) => Math.round(v * 10) / 10),
+      within:
+        ring[0]! >= b.left - 0.5 &&
+        ring[1]! >= b.top - 0.5 &&
+        ring[2]! <= b.right + 0.5 &&
+        ring[3]! <= b.bottom + 0.5,
+    };
+  }, holder);
+
 /** The focus check's own verdict on the stop that has focus, the CI bar, with its centre line side by side. */
 async function expectNoFocusFinding(page: Page, stop: Locator, name: string): Promise<void> {
   const active = await inPage<Active>(page, { kind: 'active' });
@@ -393,7 +412,7 @@ for (const planted of PLANTS) {
 
 for (const language of LANGUAGES) {
   test(
-    `in ${language} at 1024 by 768, the top line's Appearance control focused from the keyboard keeps the page's focus color, not the band's ink, and passes the focus check`,
+    `in ${language} at 1024 by 768, the top line's Appearance control focused from the keyboard rings inside its own box, wholly on the band, in the band's ink, and passes the focus check`,
     { annotation, tag },
     async ({ page, app }) => {
       await page.setViewportSize({ width: 1024, height: 768 });
@@ -405,7 +424,12 @@ for (const language of LANGUAGES) {
       const scrim = await inkIn(summary, '.hc-chrome', 'on-scrim');
       expect(ring.visible).toBe(true);
       expect(ring.style).toBe('solid');
-      expect(ring.color).not.toBe(scrim);
+      // Offset outward its ring ran off the band, where the band's ink didn't hold (#213's cluster D),
+      // so the page's focus color it kept there read under 3:1 on the matte in five light schemes.
+      // Inside its own box the whole ring is on the band, in the band's ink.
+      expect(ring.color).toBe(scrim);
+      const onBand = await ringWithin(summary, '.hc-chrome');
+      expect(onBand.within, `its ring ${JSON.stringify(onBand)}`).toBe(true);
       await expectNoFocusFinding(page, summary, 'the Appearance control');
     },
   );

@@ -258,14 +258,45 @@ test('no other link in a bar sets its ring’s offset: the inset is the Next lin
   assert.deepEqual(others, []);
 });
 
-/** The top line's own links: its name and its site nav, never the band as a whole. */
-const TOP_LINE_LINKS = ':is(.hc-chrome__name, .hc-chrome__nav)';
+/** The top line's own links, its name and its site nav, and the visitor's control: never the band as a whole. */
+const TOP_LINE_LINKS =
+  ':is(.hc-chrome__name, .hc-chrome__nav, .hc-chrome > [data-visitor-control-slot])';
 
-test('on the top line only its own links ring in the band’s ink, so the visitor’s control keeps the page’s focus color', () => {
-  // The visitor's control (the Appearance summary) draws on its own surface, so the band's ink
-  // there was a regression (#213's cluster D); the name and the nav sit on the band itself.
+test('on the top line its own links and the visitor’s control ring in the band’s ink, and the Appearance summary rings inside its own box', () => {
+  // The band as a whole never sets it: a region inside it with a ground of its own keeps its pair.
   assert.doesNotMatch(declared(at('.hc-chrome'), CSS), /--color-focus/);
   assert.match(declared(at(TOP_LINE_LINKS), CSS), /--color-focus: var\(--color-on-scrim\);/);
+  // Offset outward the summary's ring ran off the band, where the band's ink didn't hold (#213's
+  // cluster D) and a 2px ring counted 282 of its 384 pixels in every row; inside its box it lies on
+  // the band. The platform's outline draws it, at the offset it reads, in every row, forced colors too.
+  const summary = declared(at('.hc-chrome summary:focus-visible'), CSS);
+  assert.match(summary, /--ui-focus-offset: calc\(var\(--ui-focus-width\) \* -1\);/);
+  assert.doesNotMatch(summary, /outline|box-shadow/);
+  // Twice the ring's width clear of the text on either side, taken back by the margin, as the bar's
+  // Next link has it: the text stays where it was, and the ring inside the box cuts neither the text
+  // nor the chevron's tip, which a quarter turn sets past its box.
+  const room = declared(at('.hc-chrome summary'), CSS);
+  assert.match(room, /padding-inline: calc\(var\(--ui-focus-width\) \* 2\);/);
+  assert.match(room, /margin-inline: calc\(var\(--ui-focus-width\) \* -2\);/);
+  // On the strip the band is one line of the module's height, and a language's control could stand
+  // taller than it; there the band takes the control's height, on the full strip and the short one,
+  // so the summary's box, and the ring inside it, lie on the band. The control keeps the language's
+  // height: a composition reads the platform's token and never sets it.
+  const strip = blocks(
+    'screen and (min-width: 64rem) and (min-height: 44rem) and (hover: hover) and (pointer: fine)',
+  ).join('\n');
+  const short = blocks(
+    'screen and (min-width: 64rem) and (min-height: 44rem) and (max-height: 56rem) and (hover: hover) and (pointer: fine)',
+  ).join('\n');
+  assert.match(
+    declared(at(".hc[data-view='strip']"), strip),
+    /--layout-chrome: max\(calc\(var\(--space-s\) \* 2\.4\), var\(--ui-control-height, 0px\)\);/,
+  );
+  assert.match(
+    declared(at(".hc[data-view='strip']:not(:has(.hc-shell[data-fit='over']))"), short),
+    /--layout-chrome: max\(calc\(var\(--space-s\) \* 2\), var\(--ui-control-height, 0px\)\);/,
+  );
+  assert.doesNotMatch(CSS, /--ui-control-height:/);
 });
 
 test('every top-line link row 90 cleared takes the band’s ink from the name and nav rule: the name, Strip, List and Get in touch', () => {
