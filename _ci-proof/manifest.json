@@ -1,0 +1,37 @@
+{
+  "name": "ee-root-text-folds",
+  "summary": "Editorial Evidence at 200% root text on a phone keeps a skills or tools description's long word inside its line, so the long-text home page with every fold open doesn't scroll sideways at 320 or 390",
+  "head": "612e99bdfccc84e5ceceb4bae2493ca38dd4545c",
+  "base": "4a91d262d74fa2362838c5fe5985ebe707d523ab",
+  "gate": true,
+  "budgets": true,
+  "unit": {
+    "titles": []
+  },
+  "reds": [
+    {
+      "label": "folds",
+      "at": "5a1658f6ed15436e8c6ac586a69213d340ead8a7",
+      "specs": ["tests/e2e/editorial-evidence-root-text-folds.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ee",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 168,
+      "files": 21,
+      "skipped": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": ["^editorial-evidence/long-text > "]
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
