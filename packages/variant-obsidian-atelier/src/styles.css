@@ -507,14 +507,19 @@
   }
 
   /*
-   * A phone's top row is in the flow, before the entrance. Above the fold it takes no room, its box
-   * its padding alone and that taken back, so it lies over the band as before; folded, it stands at
-   * its own height, whatever its lines, on the wall's ground.
+   * A phone's top row is in the flow, before the entrance, the name at its start and the corner at
+   * its end, apart by at least the room the name's ring takes. Above the fold it takes no room for
+   * its first line, its padding and one target's height taken back, so that line lies over the band
+   * as before; folded, it stands at its own height, whatever its lines, on the wall's ground.
    */
   [data-variant='obsidian-atelier'] .oa-chrome {
     position: relative;
-    max-block-size: var(--layout-folded);
-    margin-block-end: calc(-1 * min(var(--space-xs), var(--layout-unfolded)));
+    display: flex;
+    column-gap: var(--layout-ring-clear);
+    padding-inline: var(--layout-grid-margin);
+    margin-block-end: calc(
+      -1 * min(var(--space-xs) + var(--layout-target), var(--layout-unfolded))
+    );
     background: linear-gradient(var(--color-surface-prominent) 0 0) 0 / 100% var(--layout-folded);
   }
 
@@ -529,19 +534,29 @@
     overflow-wrap: anywhere;
   }
 
-  /* Folded, Index's slot keeps the first line, under its plate, and Appearance wraps below it. */
+  /*
+   * Folded, Index's slot keeps the first line, under its plate, and Appearance wraps below it. Above
+   * the fold the corner gives way to the name where a wide face sets the three past the row: Appearance
+   * wraps below Index there too, and that line takes its own room.
+   */
   [data-variant='obsidian-atelier'] .oa-chrome__corner {
+    margin-inline-start: auto;
     flex-wrap: wrap-reverse;
     justify-content: flex-end;
     row-gap: var(--space-xs);
     max-inline-size: max(var(--layout-index), var(--layout-unfolded));
   }
 
+  /* The name never gives way: half the row at most, the six columns it stood on, and folded beside Index. */
   [data-variant='obsidian-atelier'] .oa-chrome__mark {
+    flex-shrink: 0;
     align-self: start;
-    max-inline-size: max(
-      100vw - 2 * var(--layout-grid-margin) - var(--layout-index) - var(--layout-grid-gutter),
-      var(--layout-unfolded)
+    max-inline-size: min(
+      50% - var(--layout-grid-gutter) / 2,
+      max(
+        100vw - 2 * var(--layout-grid-margin) - var(--layout-index) - var(--layout-grid-gutter),
+        var(--layout-unfolded)
+      )
     );
   }
 }
