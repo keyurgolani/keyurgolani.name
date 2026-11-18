@@ -1566,6 +1566,7 @@
  * between rows.
  */
 [data-variant='obsidian-atelier'] .oa-vitrine-mat {
+  container-type: inline-size;
   padding: var(--space-m) var(--space-l) var(--space-l);
   border-block-start: var(--ui-border-divider);
   border-block-start-color: var(--color-border-strong);
@@ -2047,6 +2048,49 @@
 
   [data-variant='obsidian-atelier'] .oa-plate {
     flex-basis: 100%;
+  }
+}
+
+/*
+ * A checklist in a mat narrower than 32em of its own type reads as that stack too. At 100% every
+ * mat from 768 up is 35em or more, under every typography, and every checklist fits it; with the
+ * root text at 200% a mat is 14 to 28em and its checklist ran past it, in any window, which the
+ * window's width never tells.
+ */
+@container (width < 32em) {
+  [data-variant='obsidian-atelier'] .oa-checktable thead {
+    position: absolute;
+    inline-size: var(--layout-hairline);
+    block-size: var(--layout-hairline);
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-checktable tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-s);
+    padding-block: var(--space-xs);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-checktable tbody :is(td, th) {
+    display: block;
+    padding: 0;
+    text-align: start;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-checktable .oa-checktable__no {
+    grid-row: 1 / span 3;
+    inline-size: auto;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-checktable tbody :is(td, th):not(.oa-checktable__no) {
+    grid-column: 2;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-checktable .oa-checktable__when {
+    inline-size: auto;
+    text-align: start;
   }
 }
 
