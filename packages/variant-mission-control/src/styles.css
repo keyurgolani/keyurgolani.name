@@ -2164,6 +2164,12 @@
   line-height: var(--type-label-line-height);
 }
 
+/* A credit can be one long unbroken word, a domain say: wider than its line, as with the text at
+   200% on a phone, it breaks anywhere rather than hold its fold and the page past the window. */
+[data-variant='mission-control'] .mc-credits {
+  overflow-wrap: anywhere;
+}
+
 /* An excerpt, a writer's or an article's: their own words in the quote voice. */
 [data-variant='mission-control'] .mc-excerpt {
   max-inline-size: 60ch;
