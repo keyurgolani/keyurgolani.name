@@ -2708,10 +2708,12 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* The end goes under its title, a ring's reach below it, so a focused end link's ring stays off the
+     title's text and its link's underline. */
   [data-variant='editorial-evidence'] .ee-row__line {
     flex-direction: column;
     align-items: start;
-    gap: 0;
+    gap: var(--layout-ee-ring);
   }
 
   [data-variant='editorial-evidence'] .ee-row__leader {
