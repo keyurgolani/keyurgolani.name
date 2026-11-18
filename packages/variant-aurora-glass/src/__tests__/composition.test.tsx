@@ -427,6 +427,36 @@ test('no rule styles by a scripting query; the page and the case study carry the
   }
 });
 
+// With script off the browser can paint before the parser reaches the end of .ag. A rule keyed on
+// the mark's absence holds until the mark is parsed, so every part such a rule styles has to come
+// after the mark in document order: otherwise it's painted with the rule, then moves when the
+// mark arrives (a load shift on the ornament at 1440, with script off).
+test('with script off the parser reaches the no-script mark before every part its rules style', () => {
+  const flat = CSS.replace(/\s+/g, ' ');
+  const keyed = [...flat.matchAll(/([^{}]*\[data-ag-nojs\][^{}]*)\{/g)].map((m) => m[1]!.trim());
+  assert.ok(keyed.length > 0);
+  // Every such rule styles a waiting Pause, and nothing else.
+  for (const selector of keyed)
+    assert.match(selector, /\.ag-orn[\w-]*\[data-ag-waiting\]$/, selector);
+  const work = renderInput({
+    ...sampleInput(),
+    route: { route: 'work' as const, slug: 'postmortem-template-kit' },
+  });
+  for (const [name, html] of [
+    ['home', sample()],
+    ['case study', work],
+  ] as const) {
+    const mark = html.indexOf('data-ag-nojs');
+    const waiting = [...html.matchAll(/<button [^>]*data-ag-waiting=""[^>]*>/g)].map(
+      (m) => m.index!,
+    );
+    assert.ok(mark >= 0, name);
+    assert.ok(waiting.length > 0, name);
+    for (const at of waiting)
+      assert.ok(mark < at, `${name}: the mark at ${mark}, a waiting Pause at ${at}`);
+  }
+});
+
 test('Pause: the ornament holds it above 75rem, the capsule as its last item below; the ring sits on surface (G1, S2, C2)', () => {
   const html = sample();
   const capsule =
