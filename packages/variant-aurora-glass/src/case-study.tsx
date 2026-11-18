@@ -162,7 +162,6 @@ function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
   const nextCover = next?.cover;
   return (
     <div className="ag ag--case">
-      <NoScriptMark />
       <Sky input={input} />
       {/* The page in a box of its own: its width, in its text's em, is what the chrome asks to stick (row 150). */}
       <div className="ag-page">
@@ -638,6 +637,8 @@ function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
       </div>
       {bands.length > 0 ? <IndexDialog input={input} bands={bands} /> : null}
       <Enhancement input={input} id="sky" />
+      {/* Last, so every part before it keeps its place (parts.tsx). */}
+      <NoScriptMark />
     </div>
   );
 }
