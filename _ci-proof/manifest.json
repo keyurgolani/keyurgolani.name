@@ -1,0 +1,343 @@
+{
+  "name": "landing-large-text-phones-final",
+  "summary": "Thirteen compositions keep a phone's pages inside the window at 200% text, folds open or shut, print leaves the Appearance controls off the page, and the variants parity read keeps its page, all at once",
+  "head": "fbcca256b36759fefddecb832156113c9f115521",
+  "base": "5c05b4ab7403aa78a15875f1fe29331a2be6c3bd",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding",
+      "Pause ships waiting: no box by default, its place kept unseen only where script runs and would show it",
+      "no rule styles by a scripting query; the page and the case study carry the no-script mark last",
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "C5: folios, page numbers and durations sit on their row's baseline",
+      "C2: the measures count characters as the faces render, and tables, meta lines and dates never wrap early",
+      "the stylesheet styles its own elements, never a primitive's slots, and keys nothing on a display mode",
+      "the stylesheet reads the platform's scales: no length of its own in a padding, margin, or gap",
+      "readStructure reads the boundary and its names in one task of the page, so an element the page adds between two of its tasks can't put them out of step",
+      "torn down, the controller refits nothing and leaves none of its attributes on the shell",
+      "on a phone the title card’s tagline band keeps space under it, with no bottom bar to give it (HOR-4)",
+      "on a phone the full record’s rows have room around and between their lines, on the scenes’ inset (HOR-5)",
+      "print leaves the visitor's Appearance controls off the page",
+      "the ticker: hidden from assistive technology, every fact shown elsewhere as text, off by control",
+      "print is opaque and still",
+      "the case study: month and year, the aside, the fact sheet rows the work has"
+    ]
+  },
+  "budgets": true,
+  "e2e": [
+    {
+      "label": "aurora-glass",
+      "specs": ["tests/e2e/aurora-glass*.spec.ts"],
+      "tests": 178,
+      "files": 17,
+      "skipped": "record"
+    },
+    {
+      "label": "chapters",
+      "specs": ["tests/e2e/chapters*.spec.ts"],
+      "tests": 42,
+      "files": 8,
+      "skipped": "record"
+    },
+    {
+      "label": "editorial-evidence",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 168,
+      "files": 21,
+      "skipped": "record"
+    },
+    {
+      "label": "horizontal-cinema",
+      "specs": ["tests/e2e/horizontal-cinema*.spec.ts"],
+      "tests": 230,
+      "files": 35,
+      "skipped": "record"
+    },
+    {
+      "label": "kinetic-cosmos",
+      "specs": ["tests/e2e/kinetic-cosmos*.spec.ts", "tests/e2e/kinetic-case.spec.ts"],
+      "tests": 53,
+      "files": 15,
+      "skipped": "record"
+    },
+    {
+      "label": "mission-control",
+      "specs": ["tests/e2e/mission-control*.spec.ts"],
+      "tests": 51,
+      "files": 17,
+      "skipped": "record"
+    },
+    {
+      "label": "obsidian-atelier",
+      "specs": ["tests/e2e/obsidian-atelier*.spec.ts"],
+      "tests": 67,
+      "files": 15,
+      "skipped": "record"
+    },
+    {
+      "label": "raw-grid",
+      "specs": ["tests/e2e/raw-grid*.spec.ts"],
+      "tests": 95,
+      "files": 5,
+      "skipped": "record"
+    },
+    {
+      "label": "schematic",
+      "specs": ["tests/e2e/schematic*.spec.ts"],
+      "tests": 183,
+      "files": 21,
+      "skipped": "record"
+    },
+    {
+      "label": "shell",
+      "specs": ["tests/e2e/shell*.spec.ts"],
+      "tests": 94,
+      "files": 8,
+      "skipped": "record"
+    },
+    {
+      "label": "spatial-bento",
+      "specs": ["tests/e2e/spatial-bento*.spec.ts"],
+      "tests": 129,
+      "files": 11,
+      "skipped": "record"
+    },
+    {
+      "label": "swiss-signal",
+      "specs": ["tests/e2e/swiss-signal*.spec.ts"],
+      "tests": 110,
+      "files": 19,
+      "skipped": "record"
+    },
+    {
+      "label": "terra-field",
+      "specs": ["tests/e2e/terra-field*.spec.ts"],
+      "tests": 53,
+      "files": 7,
+      "skipped": "record"
+    },
+    {
+      "label": "print",
+      "config": "tests/appearance/playwright.config.ts",
+      "specs": ["tests/appearance/print.spec.ts"],
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "parity-client-snapshot",
+      "specs": ["tests/e2e/parity-client-snapshot.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "parity-flaked-projects",
+      "config": "tests/variants/playwright.config.ts",
+      "project": ["schematic/rtl", "aurora-glass/engineering", "singular/academic"],
+      "specs": ["tests/variants/parity.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "flux",
+      "specs": ["tests/e2e/flux*.spec.ts"],
+      "skipped": "record",
+      "tests": 82,
+      "files": 15
+    },
+    {
+      "label": "singular",
+      "specs": ["tests/e2e/singular*.spec.ts"],
+      "skipped": "record",
+      "tests": 103,
+      "files": 19
+    },
+    {
+      "label": "e2e-rest",
+      "specs": [
+        "tests/e2e/app-server.spec.ts",
+        "tests/e2e/demo-import.spec.ts",
+        "tests/e2e/demo-local-frame.spec.ts",
+        "tests/e2e/demo-origin.spec.ts",
+        "tests/e2e/demo-probes.spec.ts",
+        "tests/e2e/demo-studio-chunks.spec.ts",
+        "tests/e2e/demo-studio-compare.spec.ts",
+        "tests/e2e/demo-studio-content.spec.ts",
+        "tests/e2e/demo-studio-frame.spec.ts",
+        "tests/e2e/demo-studio-import.spec.ts",
+        "tests/e2e/demo-studio-load-failure.spec.ts",
+        "tests/e2e/demo-studio-pickers.spec.ts",
+        "tests/e2e/demo-studio-reference.spec.ts",
+        "tests/e2e/demo-studio-sandbox-wrap.spec.ts",
+        "tests/e2e/demo-studio-split.spec.ts",
+        "tests/e2e/demo-studio-twin.spec.ts",
+        "tests/e2e/demo-studio.spec.ts",
+        "tests/e2e/demo.spec.ts",
+        "tests/e2e/extensions.spec.ts",
+        "tests/e2e/fallback-navigation.spec.ts",
+        "tests/e2e/focus-perimeter-painted-offset.spec.ts",
+        "tests/e2e/focus-ring.spec.ts",
+        "tests/e2e/forced-backplate-flux.spec.ts",
+        "tests/e2e/forced-backplate-horizontal-cinema.spec.ts",
+        "tests/e2e/forced-backplate-kinetic-cosmos.spec.ts",
+        "tests/e2e/forced-backplate-mission-control.spec.ts",
+        "tests/e2e/forced-backplate-obsidian-atelier.spec.ts",
+        "tests/e2e/forced-backplate-raw-grid-islands.spec.ts",
+        "tests/e2e/forced-backplate-raw-grid.spec.ts",
+        "tests/e2e/forced-backplate-spatial-bento.spec.ts",
+        "tests/e2e/forced-backplate-terra-field.spec.ts",
+        "tests/e2e/forced-drawings-kinetic-cosmos.spec.ts",
+        "tests/e2e/forced-drawings-spatial-bento.spec.ts",
+        "tests/e2e/kinetic-motion.spec.ts",
+        "tests/e2e/kinetic-signature-label.spec.ts",
+        "tests/e2e/kinetic-wordmark-hit.spec.ts",
+        "tests/e2e/kit-parts.spec.ts",
+        "tests/e2e/media-owner.spec.ts",
+        "tests/e2e/media-preview-origin.spec.ts",
+        "tests/e2e/media.spec.ts",
+        "tests/e2e/metadata.spec.ts",
+        "tests/e2e/migrate.spec.ts",
+        "tests/e2e/motion-contract.spec.ts",
+        "tests/e2e/motion-harness.spec.ts",
+        "tests/e2e/native-ui-scheme.spec.ts",
+        "tests/e2e/owner-store.spec.ts",
+        "tests/e2e/owner-studio-chunks.spec.ts",
+        "tests/e2e/owner.spec.ts",
+        "tests/e2e/pair-rtl.spec.ts",
+        "tests/e2e/pair.spec.ts",
+        "tests/e2e/preview-agent-demo.spec.ts",
+        "tests/e2e/preview-channel.spec.ts",
+        "tests/e2e/preview-dev.spec.ts",
+        "tests/e2e/preview-scheme.spec.ts",
+        "tests/e2e/preview.spec.ts",
+        "tests/e2e/profiles.spec.ts",
+        "tests/e2e/read-only.spec.ts",
+        "tests/e2e/reference.spec.ts",
+        "tests/e2e/scales.spec.ts",
+        "tests/e2e/security.spec.ts",
+        "tests/e2e/skip-link-ink.spec.ts",
+        "tests/e2e/skip-link-on-top.spec.ts",
+        "tests/e2e/smoke.spec.ts",
+        "tests/e2e/spatial-stage-unsupported.spec.ts",
+        "tests/e2e/spatial-stage.spec.ts",
+        "tests/e2e/startup.spec.ts",
+        "tests/e2e/structured-data.spec.ts",
+        "tests/e2e/studio-appearance.spec.ts",
+        "tests/e2e/studio-drafts.spec.ts",
+        "tests/e2e/studio-fields.spec.ts",
+        "tests/e2e/studio-history.spec.ts",
+        "tests/e2e/studio-load-failure.spec.ts",
+        "tests/e2e/studio-nojs-signout.spec.ts",
+        "tests/e2e/studio-preview-origin.spec.ts",
+        "tests/e2e/studio-preview.spec.ts",
+        "tests/e2e/studio-publish.spec.ts",
+        "tests/e2e/studio-recovery.spec.ts",
+        "tests/e2e/studio-render-error.spec.ts",
+        "tests/e2e/studio-retired-alias.spec.ts",
+        "tests/e2e/studio-signout-look.spec.ts",
+        "tests/e2e/studio-signout.spec.ts",
+        "tests/e2e/studio-split-compare.spec.ts",
+        "tests/e2e/studio-split-fresh.spec.ts",
+        "tests/e2e/studio-split-races.spec.ts",
+        "tests/e2e/studio-split.spec.ts",
+        "tests/e2e/studio.spec.ts",
+        "tests/e2e/theme.spec.ts"
+      ],
+      "skipped": "record",
+      "tests": 1045,
+      "files": 89
+    },
+    {
+      "label": "appearance-browser",
+      "config": "tests/appearance/playwright.config.ts",
+      "specs": [
+        "tests/appearance/fixtures.spec.ts",
+        "tests/appearance/focus.spec.ts",
+        "tests/appearance/keyboard.spec.ts",
+        "tests/appearance/plates.spec.ts"
+      ],
+      "skipped": "record",
+      "tests": 31,
+      "files": 4
+    },
+    {
+      "label": "routes",
+      "config": "tests/routes/playwright.config.ts",
+      "specs": [
+        "tests/routes/leaks-sample.spec.ts",
+        "tests/routes/leaks.spec.ts",
+        "tests/routes/reference.spec.ts",
+        "tests/routes/sample.spec.ts",
+        "tests/routes/shortcuts.spec.ts",
+        "tests/routes/switch.spec.ts",
+        "tests/routes/unregistered.spec.ts",
+        "tests/routes/views.spec.ts"
+      ],
+      "skipped": "record",
+      "tests": 36,
+      "files": 8
+    },
+    {
+      "label": "preview-fixtures",
+      "config": "tests/preview-fixtures/playwright.config.ts",
+      "specs": ["tests/preview-fixtures/environments.spec.ts"],
+      "skipped": "record",
+      "tests": 5,
+      "files": 1
+    },
+    {
+      "label": "pack-distinct-schemes",
+      "config": "tests/variants/playwright.config.ts",
+      "project": "pack-distinct",
+      "specs": [],
+      "env": {
+        "PORTFOLIO_PACK_DISTINCT_AXIS": "colorScheme"
+      },
+      "skipped": "record",
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "pack-distinct-type",
+      "config": "tests/variants/playwright.config.ts",
+      "project": "pack-distinct",
+      "specs": [],
+      "env": {
+        "PORTFOLIO_PACK_DISTINCT_AXIS": "typography"
+      },
+      "skipped": "record",
+      "tests": 2,
+      "files": 1
+    }
+  ],
+  "cells": [
+    {
+      "label": "tuple",
+      "scope": "quality/inventory/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ no\\-javascript\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ )",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "label": "shell-forced-1440",
+      "scope": "quality/inventory/scope.json",
+      "grep": "composition:shell complete / shell/(platform-neutral|carbon-inspired|primer-inspired|glassmorphism)/warm-parchment/humanist-ui/system 1440x900 forced-colors ",
+      "shards": ["find"],
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": [
+      "^horizontal-cinema/(rtl|mixed) > ",
+      "^aurora-glass/long-text > fixtures\\.spec\\.ts > mobile > "
+    ]
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
