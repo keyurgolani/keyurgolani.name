@@ -254,16 +254,19 @@ jobs:
 
   # The browser suite in four shards, split by spec file on measured
   # durations (ci/shards.mjs). Each shard builds, then runs its files, inside
-  # the job's 20 minutes: two shards ran 18 to 20 minutes on every push and were
-  # cancelled at the limit (row 54), and of three, two ran over 15 minutes
-  # (16.1 and 15.5, #175), so the suite takes a fourth, not a longer limit.
+  # the job's 30 minutes. At a 20 minute limit, two shards ran 18 to 20 minutes
+  # on every push and were cancelled, and of three, two ran over 15 (16.1 and
+  # 15.5, #175), so the suite took a fourth. As the suite grew, the four ran 15 to 18
+  # minutes of tests plus up to a minute of build, and two were cancelled at 20
+  # on two pushes in a row, so the limit went to 30 and the count stayed four:
+  # the release checks read the shards by name, browser (k/4).
   # ci/workflows.test.mjs pins the four, the limit, and SUITES.browser.
   browser:
     name: browser (${{ matrix.shard }}/4)
     needs: [changes]
     if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'browser') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
