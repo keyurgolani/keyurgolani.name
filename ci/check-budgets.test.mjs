@@ -14,7 +14,7 @@ import {
   staticChunks,
   studioAssets,
 } from './check-budgets.mjs';
-import { OVER_BUDGET_METRICS, overBudgetProblems } from './budgets.mjs';
+import { OVER_BUDGET, OVER_BUDGET_METRICS, overBudgetProblems } from './budgets.mjs';
 import {
   BUDGET_KINDS,
   checkBudgets,
@@ -28,6 +28,7 @@ import {
   reproCommand,
 } from './lib/budgets.mjs';
 import { REPO_ROOT } from './lib/reports.mjs';
+import { parseTraceArgs } from '../tests/harness/trace/options.mjs';
 import { loadValidator } from './summarize.mjs';
 
 // pnpm check:budgets (#6, items 3 and 4). The fixtures below stand in for a
@@ -876,6 +877,99 @@ test("CI's proof of the over-budget fixture wants one record per metric, each na
     overBudgetProblems(report([...without('css'), { ...css, viewport: '' }]), validate).join(),
     /the css record isn't a valid failure record/,
   );
+});
+
+// CI's over-budget run reads fixture-over-budget's records alone, so it traces that fixture's own
+// projects alone and holds it alone; the run under the gate traces and holds every unit.
+test("CI's over-budget run traces fixture-over-budget alone, under each profile, and holds it alone; the gated run traces and holds every unit", async () => {
+  const job = await import('./budgets.mjs');
+  assert.ok(Array.isArray(job.OVER_BUDGET_TRACE), 'ci/budgets.mjs names no over-budget trace');
+  const [script, ...args] = job.OVER_BUDGET_TRACE;
+  assert.equal(script, 'test:trace');
+  const options = parseTraceArgs(args);
+  assert.deepEqual(
+    {
+      selection: options.selection,
+      profile: options.profile,
+      baseUrl: options.baseUrl,
+      playwright: options.playwright,
+    },
+    { selection: OVER_BUDGET, profile: null, baseUrl: null, playwright: ['--retries=0'] },
+  );
+  assert.deepEqual(job.OVER_BUDGET_CHECK, ['check:budgets', '--variant', OVER_BUDGET]);
+  const source = readFileSync(path.join(REPO_ROOT, 'ci', 'budgets.mjs'), 'utf8');
+  const calls = (name) =>
+    [
+      ...source.matchAll(
+        new RegExp(`run\\('${name}, BUDGET_FIXTURES=(\\w+)', 'pnpm', ([^,]+),`, 'g'),
+      ),
+    ]
+      .map(([, fixtures, list]) => `${fixtures} ${list}`)
+      .sort();
+  assert.deepEqual(calls('trace'), ["1 ['test:trace']", 'over OVER_BUDGET_TRACE']);
+  assert.deepEqual(calls('check'), ["1 ['check:budgets']", 'over OVER_BUDGET_CHECK']);
+});
+
+test('held to one variant, the check keeps its records and rows alone, and none for a variant its trace never rendered', async () => {
+  const { heldToVariant } = await import('./lib/budgets.mjs');
+  assert.equal(
+    typeof heldToVariant,
+    'function',
+    'ci/lib/budgets.mjs holds no result to one variant',
+  );
+  const over = variant(OVER_BUDGET, { budgets: { css: 512 } });
+  const other = variant('other');
+  const units = [over, other];
+  const stray = '/_portfolio/asset/stray.0123456789ab.png';
+  const result = check(units, [
+    traceCase(OVER_BUDGET, { requests: [{ url: `${ORIGIN}${stray}` }] }),
+  ]);
+  const named = (records) => records.map((record) => `${record.unit?.id} ${record.metric}`).sort();
+  // Whole, a variant the trace never rendered is a record of its own.
+  assert.deepEqual(named(result.records), [
+    `${OVER_BUDGET} css`,
+    `${OVER_BUDGET} unlisted`,
+    'other trace',
+  ]);
+  const held = heldToVariant(result, OVER_BUDGET, units);
+  // Held to the fixture: its breach, and the file its own page loaded that no unit lists.
+  assert.deepEqual(named(held.records), [`${OVER_BUDGET} css`, `${OVER_BUDGET} unlisted`]);
+  assert.ok(held.checked.length > 0, 'it keeps the rows it checked for the fixture');
+  assert.deepEqual(
+    held.checked.filter((row) => row.kind !== 'variant' || row.id !== OVER_BUDGET),
+    [],
+  );
+  assert.deepEqual(held.samples, []);
+  // A variant the build doesn't register holds nothing, so it fails rather than passing empty.
+  assert.throws(
+    () => heldToVariant(result, 'fixture-unknown', units),
+    /names no registered variant/,
+  );
+  assert.throws(
+    () => heldToVariant(result, 'pack-like', [{ ...other, kind: 'scheme', id: 'pack-like' }]),
+    /names no registered variant/,
+  );
+});
+
+test('check:budgets takes --variant outside a gate alone, and refuses it under one before it reads anything', async () => {
+  const { parseArgs } = await import('./check-budgets.mjs');
+  assert.equal(typeof parseArgs, 'function', 'ci/check-budgets.mjs exports no parseArgs');
+  assert.deepEqual(parseArgs([], {}), { trace: null, variant: null });
+  assert.equal(parseArgs(['--variant', OVER_BUDGET], {}).variant, OVER_BUDGET);
+  assert.throws(() => parseArgs(['--variant'], {}), /unknown argument --variant/);
+  assert.throws(
+    () => parseArgs(['--variant', OVER_BUDGET], { CI_GATE: 'budgets' }),
+    /--variant holds one variant, and the budgets gate holds every unit/,
+  );
+  const env = { ...process.env, CI_GATE: 'budgets' };
+  delete env.GITHUB_ACTIONS;
+  const run = spawnSync(
+    process.execPath,
+    [path.join(REPO_ROOT, 'ci', 'check-budgets.mjs'), '--variant', OVER_BUDGET],
+    { cwd: REPO_ROOT, env, encoding: 'utf8' },
+  );
+  assert.equal(run.status, 2, run.stderr);
+  assert.match(run.stderr, /--variant holds one variant, and the budgets gate holds every unit/);
 });
 
 /** A temporary directory, removed after the test. */
