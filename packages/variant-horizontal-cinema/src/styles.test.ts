@@ -299,6 +299,26 @@ test('on the top line its own links and the visitor’s control ring in the band
   assert.doesNotMatch(CSS, /--ui-control-height:/);
 });
 
+const STRIP =
+  'screen and (min-width: 64rem) and (min-height: 44rem) and (hover: hover) and (pointer: fine)';
+
+test('on the strip the open Appearance panel drops from the band’s foot on its own surface, held to the window under the band, in the canvas’s ink', () => {
+  // Centred on the band the panel grew about it and ran above the window: its selects were out of
+  // reach, and its radios lay over the scene in the band's ink.
+  const panel = declared(
+    at(".hc[data-view='strip'] .hc-chrome [data-ui-slot='disclosure.content']"),
+    blocks(STRIP).join('\n'),
+  );
+  assert.match(panel, /position: absolute;/);
+  assert.match(panel, /inset-block: 100% auto;/);
+  assert.match(panel, /max-block-size: calc\(100dvh - 100%\);/);
+  assert.match(panel, /overflow: auto;/);
+  assert.match(panel, /background-color: var\(--color-surface-default\);/);
+  assert.match(panel, /--color-focus: var\(--color-text-primary\);/);
+  // Off the strip, a phone's band grows to hold the open control, in its flow.
+  assert.doesNotMatch(declared(at("[data-ui-slot='disclosure.content']"), CSS), /position/);
+});
+
 test('every top-line link row 90 cleared takes the band’s ink from the name and nav rule: the name, Strip, List and Get in touch', () => {
   assert.match(declared(at(TOP_LINE_LINKS), CSS), /--color-focus: var\(--color-on-scrim\);/);
   const index = readFileSync(new URL('./index.tsx', import.meta.url), 'utf8');
