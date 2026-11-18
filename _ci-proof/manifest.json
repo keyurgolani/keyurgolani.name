@@ -1,0 +1,16 @@
+{
+  "name": "flux-copy-ring-host",
+  "summary": "Flux's controls stop clear of a phone's dock by the ring's reach, under more contrast too, checked whole on the host",
+  "head": "6879f577ca733047b792ed7effe63673b861dafb",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "Flux reserves its phone dock's room at the window's block end, in the query the dock docks in",
+      "a control Tab brings up from below a phone's dock stops clear of it by the dock, the ring's reach and more",
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget"
+    ]
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
