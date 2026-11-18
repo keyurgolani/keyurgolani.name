@@ -136,7 +136,6 @@ function HomePage({ input, outline }: HomePageProps) {
   const opening = hero ? render(hero, 2) : null;
   return (
     <div className="ag">
-      <NoScriptMark />
       <Sky input={input} />
       {/* The page in a box of its own: its width, in its text's em, is what the chrome asks to stick (row 150). */}
       <div className="ag-page">
@@ -158,6 +157,8 @@ function HomePage({ input, outline }: HomePageProps) {
           list there's no Index at all (row 62). */}
       {bands.length > 0 ? <IndexDialog input={input} bands={bands} /> : null}
       <Enhancement input={input} id="sky" />
+      {/* Last, so every part before it keeps its place (parts.tsx). */}
+      <NoScriptMark />
     </div>
   );
 }
