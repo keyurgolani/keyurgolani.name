@@ -273,7 +273,15 @@
   inset-block-start: 0;
   inset-inline: 0;
   display: grid;
-  grid-template-columns: var(--layout-columns);
+  /*
+   * The page's column lines, but from the sixth the room switch stands on a track of its own, as
+   * wide as its rooms and four columns at most, and the corner on what's left: so the running head,
+   * the part that gives way, never runs over the switch.
+   */
+  grid-template-columns:
+    calc(var(--layout-pin-end) - var(--layout-grid-gutter)) repeat(5, [col] var(--layout-track))
+    [col] fit-content(calc(4 * var(--layout-track) + 3 * var(--layout-grid-gutter)))
+    [corner] minmax(0, 1fr) calc(var(--layout-pin-end) - var(--layout-grid-gutter));
   column-gap: var(--layout-grid-gutter);
   align-items: center;
   padding-block-start: var(--space-xs);
@@ -300,10 +308,10 @@
   text-decoration: none;
 }
 
-/* The switch starts on the sixth column line and keeps to four columns, a column clear of the running head. */
+/* The switch starts on the sixth column line, on the chrome's track of its own, four columns at most. */
 [data-variant='obsidian-atelier'] .oa-chrome__rooms {
   display: none;
-  grid-column: col 6 / span 4;
+  grid-column: col 6;
   justify-self: start;
   min-inline-size: 0;
   max-inline-size: 100%;
@@ -347,14 +355,21 @@
  * The running head stands at the content's end line in the first view's
  * top row and scrolls away with the page, as the mark and the switch do;
  * past the top, the gallery titles on their rails, the room numbers, and
- * the floors' counters say where the visitor is.
+ * the floors' counters say where the visitor is. The corner keeps to its
+ * own track, so where its parts don't fit there, the running head narrows
+ * rather than the corner reaching back over the switch. Where Appearance
+ * and Index don't fit beside each other there, at large text, Appearance
+ * wraps below Index, as on a phone, and the row takes the room.
  */
 [data-variant='obsidian-atelier'] .oa-chrome__corner {
-  grid-column: content;
+  grid-column: corner;
   justify-self: end;
+  max-inline-size: 100%;
   display: flex;
+  flex-wrap: wrap-reverse;
+  justify-content: flex-end;
   align-items: center;
-  gap: var(--space-m);
+  gap: var(--space-xs) var(--space-m);
   min-block-size: var(--layout-target);
 }
 
@@ -405,8 +420,15 @@
   flex: 1;
 }
 
-/* From a tablet's width, the room switch joins the corners; on a phone, the name and Index alone. */
+/*
+ * From a tablet's width, the room switch joins the corners; on a phone, the name and Index alone.
+ * The name and the switch keep to the row's first line where the corner's take more than one.
+ */
 @media (min-width: 48rem) {
+  [data-variant='obsidian-atelier'] .oa-chrome {
+    align-items: start;
+  }
+
   [data-variant='obsidian-atelier'] .oa-chrome__rooms {
     display: block;
   }
@@ -424,6 +446,8 @@
 }
 
 [data-variant='obsidian-atelier'] .oa-chrome__here {
+  /* It takes the corner's room that's left, so it narrows and never wraps the corner's line itself. */
+  flex: 1 1 0;
   display: flex;
   align-items: center;
   gap: var(--space-2xs);
@@ -541,9 +565,6 @@
    */
   [data-variant='obsidian-atelier'] .oa-chrome__corner {
     margin-inline-start: auto;
-    flex-wrap: wrap-reverse;
-    justify-content: flex-end;
-    row-gap: var(--space-xs);
     max-inline-size: max(var(--layout-index), var(--layout-unfolded));
   }
 
