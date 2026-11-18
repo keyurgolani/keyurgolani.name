@@ -406,8 +406,10 @@ test('Pause ships waiting: no box by default, its place kept unseen only where s
 
 // The no-JavaScript rows audit a page loaded with script off, then turn script on for axe: a rule
 // keyed on a scripting query would flip under that pass. Script's absence is the page's no-script
-// mark instead, an element only where the page was read with scripting off.
-test('no rule styles by a scripting query; the page and the case study carry the no-script mark first', () => {
+// mark instead, an element only where the page was read with scripting off. It's .ag's last child,
+// so every part before it keeps its place: the sky first, then the page box, as the quality
+// records' paths name them.
+test('no rule styles by a scripting query; the page and the case study carry the no-script mark last', () => {
   assert.doesNotMatch(CSS, /\(\s*scripting\s*:/);
   const home = sample();
   const work = renderInput({
@@ -417,12 +419,12 @@ test('no rule styles by a scripting query; the page and the case study carry the
   for (const [name, html] of [
     ['home', home],
     ['case study', work],
-  ] as const)
-    assert.match(
-      html,
-      /<div class="ag(?: ag--case)?"><noscript><i data-ag-nojs=""><\/i><\/noscript>/,
-      name,
-    );
+  ] as const) {
+    assert.match(html, /^<div class="ag(?: ag--case)?">/, name);
+    assert.doesNotMatch(html, /<div class="ag(?: ag--case)?"><noscript>/, name);
+    assert.match(html, /<noscript><i data-ag-nojs=""><\/i><\/noscript><\/div>$/, name);
+    assert.equal(html.match(/data-ag-nojs/g)?.length, 1, name);
+  }
 });
 
 test('Pause: the ornament holds it above 75rem, the capsule as its last item below; the ring sits on surface (G1, S2, C2)', () => {
