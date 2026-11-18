@@ -141,9 +141,18 @@ export function partsFit(
   return { '--layout-ss-word': Math.max(0, ...parts.map((part) => longestWord(part.word))) };
 }
 
-/** The same for the poster line's aside, as it prints: its parentheses on its first and last words (row 127). */
+/**
+ * The same for the poster line's aside, as it prints: its parentheses on its first and last words.
+ * The aside is italic lowercase, sized at a measure per letter, and an m or a w sets nearly twice an
+ * average letter's width, so each counts as two: a word of wide letters sizes to fit where its count
+ * alone would run past.
+ */
 export function asideFit(text: string): Record<'--layout-ss-aside-word', number> {
-  return { '--layout-ss-aside-word': longestWord(`(${text})`) };
+  const measure = (word: string) =>
+    [...word].reduce((sum, c) => sum + (/[mw]/i.test(c) ? 2 : 1), 0);
+  return {
+    '--layout-ss-aside-word': Math.max(0, ...squash(`(${text})`).split(' ').map(measure)),
+  };
 }
 
 // ───────────── once per render ─────────────
