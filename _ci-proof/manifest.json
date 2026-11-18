@@ -1,0 +1,66 @@
+{
+  "name": "swiss-signal-b9",
+  "summary": "Swiss Signal with the reader's text at 200% on a phone: the masthead's Index goes under the name again, and home's aside keeps 90% of its step while every fixture's tagline fits its column",
+  "head": "860e9f91c16ec3dd93064f4ce69f3a4508e49a79",
+  "base": "4a91d262d74fa2362838c5fe5985ebe707d523ab",
+  "gate": true,
+  "reds": [
+    {
+      "label": "rb9",
+      "at": "0dd90b74a45f39ef43a168e438ea5cbb8ade4975",
+      "specs": [
+        "tests/e2e/swiss-signal-masthead-wrap.spec.ts",
+        "tests/e2e/swiss-signal-poster-aside.spec.ts"
+      ],
+      "tests": 7,
+      "files": 2,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ss-full",
+      "specs": [
+        "tests/e2e/swiss-signal-email-band.spec.ts",
+        "tests/e2e/swiss-signal-forced-colors-ring.spec.ts",
+        "tests/e2e/swiss-signal-hero-fit.spec.ts",
+        "tests/e2e/swiss-signal-hero-floor.spec.ts",
+        "tests/e2e/swiss-signal-index-focus-return-hc390.spec.ts",
+        "tests/e2e/swiss-signal-index-focus-return-system1440.spec.ts",
+        "tests/e2e/swiss-signal-index-nojs.spec.ts",
+        "tests/e2e/swiss-signal-index-targets.spec.ts",
+        "tests/e2e/swiss-signal-masthead-wrap.spec.ts",
+        "tests/e2e/swiss-signal-part-words.spec.ts",
+        "tests/e2e/swiss-signal-poster-aside.spec.ts",
+        "tests/e2e/swiss-signal-rise-settle.spec.ts",
+        "tests/e2e/swiss-signal-root-text-1024.spec.ts",
+        "tests/e2e/swiss-signal-root-text-fixtures.spec.ts",
+        "tests/e2e/swiss-signal-root-text-phone.spec.ts",
+        "tests/e2e/swiss-signal-signal-ink.spec.ts",
+        "tests/e2e/swiss-signal-table-end-column.spec.ts",
+        "tests/e2e/swiss-signal-table-units-sample.spec.ts",
+        "tests/e2e/swiss-signal-table-words.spec.ts",
+        "tests/e2e/swiss-signal.spec.ts"
+      ],
+      "tests": 110,
+      "files": 19
+    }
+  ],
+  "look": [
+    {
+      "label": "swiss-b9",
+      "spec": "look/swiss-b9-look.spec.ts",
+      "project": "chromium",
+      "tests": 16,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
