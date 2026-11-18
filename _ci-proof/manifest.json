@@ -1,0 +1,78 @@
+{
+  "name": "aurora-glass-button-ring",
+  "summary": "Aurora Glass's focused primary actions keep the platform's ring outside them, in the text's colour, read across the release scope",
+  "head": "ed58947e432b39500233c42271c45e5db47f0f3d",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "gate": {
+    "package": "aurora-glass"
+  },
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding"
+    ]
+  },
+  "reds": [
+    {
+      "label": "button-ring",
+      "at": "ab90c152110de0cef96d4ddfaa7eb82f05d7a4ef",
+      "specs": [
+        "tests/e2e/aurora-glass-focus-perimeter-night-terminal-light.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-sunset-ember-dark.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-neumorphic.spec.ts",
+        "tests/e2e/aurora-glass-focus-perimeter-glassmorphism-sunset-ember.spec.ts"
+      ],
+      "tests": 24,
+      "files": 1,
+      "failed": 24
+    }
+  ],
+  "cells": [
+    {
+      "label": "rc3-tuples",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/bauhaus\\-geometric/signal\\-paper/accessible\\-reading/dark|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/sunset\\-ember/accessible\\-reading/dark|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neumorphic/cool\\-color\\-safe/accessible\\-reading/dark|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neumorphic/warm\\-parchment/accessible\\-reading/dark|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/high\\-contrast/humanist\\-ui/dark|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/high\\-contrast/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/night\\-terminal/humanist\\-ui/light|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/sunset\\-ember/humanist\\-ui/dark)\\ (390x844|1024x768|1440x900)\\ (default|contrast\\-more|forced\\-colors)\\ ",
+      "shards": ["find"],
+      "tests": 72,
+      "passed": 72,
+      "failed": 0
+    },
+    {
+      "label": "languages-a",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/art\\-deco/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/atelier\\-luxury/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/blueprint/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/carbon\\-inspired/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/claymorphic/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/cyberpunk/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/fluent\\-2\\-inspired/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/handcrafted\\-collage/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/industrial/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/international\\-grid/warm\\-parchment/humanist\\-ui/system)\\ (390x844|1024x768|1440x900)\\ (default|contrast\\-more|forced\\-colors)\\ ",
+      "shards": ["find"],
+      "tests": 90,
+      "passed": 90,
+      "failed": 0
+    },
+    {
+      "label": "languages-b",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/letterpress/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/material\\-3\\-inspired/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/material\\-expressive\\-inspired/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/memphis/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/minimal\\-flat/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/monochrome\\-functional/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neobrutalist/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/paper\\-tactile/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/pixel\\-interface/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/poster\\-press/warm\\-parchment/humanist\\-ui/system)\\ (390x844|1024x768|1440x900)\\ (default|contrast\\-more|forced\\-colors)\\ ",
+      "shards": ["find"],
+      "tests": 90,
+      "passed": 90,
+      "failed": 0
+    },
+    {
+      "label": "languages-c",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/primer\\-inspired/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/raw\\-brutalist/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/retro\\-web/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/skeuomorphic/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/soft\\-organic/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/spectrum\\-2\\-inspired/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/synthwave/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/terminal\\-chrome/warm\\-parchment/humanist\\-ui/system|composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/utility\\-dense/warm\\-parchment/humanist\\-ui/system)\\ (390x844|1024x768|1440x900)\\ (default|contrast\\-more|forced\\-colors)\\ ",
+      "shards": ["find"],
+      "tests": 81,
+      "passed": 81,
+      "failed": 0
+    },
+    {
+      "label": "case-study",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /work/project\\-name\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/dark|composition:aurora\\-glass\\ complete\\ /work/project\\-name\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/high\\-contrast|composition:aurora\\-glass\\ complete\\ /work/project\\-name\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/light|composition:aurora\\-glass\\ complete\\ /work/project\\-name\\ aurora\\-glass/platform\\-neutral/warm\\-parchment/humanist\\-ui/system)\\ (390x844|1024x768|1440x900)\\ (default|contrast\\-more|forced\\-colors)\\ ",
+      "shards": ["find"],
+      "tests": 36,
+      "passed": 36,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
