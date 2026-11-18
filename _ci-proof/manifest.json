@@ -1,0 +1,28 @@
+{
+  "name": "aurora-glass-rings-reduced-chroma",
+  "summary": "Aurora Glass's focused actions ring whole on the reduced-chroma scheme, glass and geometric",
+  "head": "4c081c8d9aaf588ac2921dc6a8dea7fe0c31b915",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "cells": [
+    {
+      "label": "glassmorphism-reduced-chroma",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/reduced\\-chroma/accessible\\-reading/dark\\ )",
+      "shards": ["find"],
+      "tests": 24,
+      "passed": 24,
+      "failed": 0
+    },
+    {
+      "label": "bauhaus-reduced-chroma",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/bauhaus\\-geometric/reduced\\-chroma/accessible\\-reading/dark\\ )",
+      "shards": ["find"],
+      "tests": 24,
+      "passed": 24,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
