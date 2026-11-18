@@ -2646,4 +2646,13 @@
   [data-variant='swiss-signal'] .ss-table .ss-num {
     overflow-wrap: normal;
   }
+
+  /* The masthead's name keeps its longest word as its least width, as a flex item does by default, so
+     where that word and the Index don't fit side by side the Index goes under the name, not beside a
+     name broken inside a word. Held to its row, a name whose word is wider than the row still breaks
+     inside it rather than widen the page. */
+  [data-variant='swiss-signal'] .ss-masthead__name {
+    min-inline-size: auto;
+    max-inline-size: 100%;
+  }
 }
