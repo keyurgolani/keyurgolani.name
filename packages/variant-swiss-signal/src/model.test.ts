@@ -733,8 +733,12 @@ test('the case study: month and year, the aside, the fact sheet rows the work ha
   assert.equal(wordClass('Postmortem Template Kit'), 'long');
   assert.equal(wordClass('I make failure legible.'), undefined);
   assert.deepEqual(wordFit('Work Showcase'), { '--layout-ss-word': 8 });
-  // The aside's longest word as it prints, its parentheses on its first and last words (row 127).
-  assert.deepEqual(asideFit('software, 2022–now'), { '--layout-ss-aside-word': 10 });
+  // The aside's longest word as it prints, its parentheses on its first and last words, and an m or a w,
+  // the widest letters, counted as two: "somewhere" sets wider than "(Identity" at one size.
+  assert.deepEqual(asideFit('software, 2022\u2013now'), { '--layout-ss-aside-word': 11 });
+  assert.deepEqual(asideFit('The pictures are somewhere else'), { '--layout-ss-aside-word': 11 });
+  assert.deepEqual(asideFit('Identity tagline'), { '--layout-ss-aside-word': 9 });
+  assert.deepEqual(asideFit('WORK'), { '--layout-ss-aside-word': 7 });
   assert.equal(monthYear('2022-01'), 'January 2022');
   assert.equal(monthYear('2022'), '2022');
   assert.equal(monthYear(undefined), undefined);
