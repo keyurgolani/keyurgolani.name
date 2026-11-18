@@ -141,10 +141,11 @@ test(
         }),
     );
     expect(covered).toEqual([]);
-    // The visitor's Appearance control prints its summary, its panel closed: a form isn't content.
+    // The visitor's Appearance control is no part of a printed page: the platform lays it out of
+    // print, its summary with its panel.
     await expect(
       page.locator('.oa-chrome__appearance [data-ui-slot="disclosure.summary"]'),
-    ).toBeVisible();
+    ).toBeHidden();
     await expect(page.locator('.oa-chrome__appearance form')).toBeHidden();
   },
 );
