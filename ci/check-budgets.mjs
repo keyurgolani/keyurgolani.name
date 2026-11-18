@@ -19,7 +19,12 @@
 // record per breach. It exits 1 on a breach, and 2 when an input is
 // missing.
 //
-//   node ci/check-budgets.mjs [--trace <trace-report.json>]
+// --variant <id> holds that variant alone, its own records and rows, for a
+// trace of its selection alone, where every other variant has no case:
+// ci/budgets.mjs's over-budget run. A gate holds every unit, so under one
+// (CI_GATE) it exits 2.
+//
+//   node ci/check-budgets.mjs [--trace <trace-report.json>] [--variant <id>]
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +39,7 @@ import {
   checkBudgets,
   STUDIO_ASSETS,
   failureFields,
+  heldToVariant,
   label,
   reportRecord,
   reproCommand,
@@ -317,11 +323,30 @@ export function sampleLine(row) {
   );
 }
 
-function parseArgs(argv) {
-  const options = { trace: null };
+/**
+ * The check's options: --trace <file>, the trace report it reads, and
+ * --variant <id>, the one variant it holds. Throws on anything else, and on
+ * --variant under a gate, which holds every unit.
+ *
+ * @param {string[]} argv
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function parseArgs(argv, env = process.env) {
+  const options = { trace: null, variant: null };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--trace' && argv[i + 1]) options.trace = path.resolve(argv[(i += 1)]);
-    else throw new Error(`unknown argument ${argv[i]}; the one option is --trace <file>`);
+    else if (argv[i] === '--variant' && argv[i + 1]) options.variant = argv[(i += 1)];
+    else {
+      throw new Error(
+        `unknown argument ${argv[i]}; the options are --trace <file> and --variant <id>`,
+      );
+    }
+  }
+  const gate = currentGate(env);
+  if (options.variant !== null && gate) {
+    throw new Error(
+      `--variant holds one variant, and the ${gate.gate} gate holds every unit: run it outside the gate`,
+    );
   }
   return options;
 }
@@ -329,7 +354,7 @@ function parseArgs(argv) {
 function main(argv, env = process.env) {
   let options;
   try {
-    options = parseArgs(argv);
+    options = parseArgs(argv, env);
   } catch (error) {
     console.error(`[budgets] ${error.message}`);
     return 2;
@@ -354,7 +379,7 @@ function main(argv, env = process.env) {
   const report = readJson(trace);
   const entries = new Map(manifest.units.map((unit) => [unit, enhancementEntries(unit)]));
   const chunks = buildChunks([...entries.values()].flatMap((byId) => Object.values(byId)));
-  const { records, checked, samples } = checkBudgets({
+  const found = checkBudgets({
     units: manifest.units,
     platform: manifest.platform ?? null,
     ceilings,
@@ -365,6 +390,17 @@ function main(argv, env = process.env) {
     stylesheet: publicStylesheet(),
     studio: studioAssets(),
   });
+  let held;
+  try {
+    held = options.variant ? heldToVariant(found, options.variant, manifest.units) : found;
+  } catch (error) {
+    reportError(`[budgets] ${error.message}`, { title: 'budgets' });
+    return 2;
+  }
+  const { records, checked, samples } = held;
+  const units = options.variant
+    ? manifest.units.filter((unit) => unit.kind === 'variant' && unit.id === options.variant)
+    : manifest.units;
 
   const out = reportFile();
   mkdirSync(path.dirname(out), { recursive: true });
@@ -381,9 +417,10 @@ function main(argv, env = process.env) {
           traceCommand: report.command ?? null,
           traceFailures: report.failures ?? [],
           build: path.relative(REPO_ROOT, STATIC_DIR),
+          ...(options.variant ? { variant: options.variant } : {}),
         },
         kinds: BUDGET_KINDS,
-        units: manifest.units.map((unit) => ({
+        units: units.map((unit) => ({
           kind: unit.kind,
           id: unit.id,
           package: unit.packageName,
@@ -403,7 +440,7 @@ function main(argv, env = process.env) {
   for (const row of samples) console.log(sampleLine(row));
   console.log(`[budgets] report: ${path.relative(REPO_ROOT, out)}`);
   if (records.length === 0) {
-    console.log(`[budgets] ${manifest.units.length} unit(s) within their budgets`);
+    console.log(`[budgets] ${units.length} unit(s) within their budgets`);
     return 0;
   }
   const gate = currentGate(env);

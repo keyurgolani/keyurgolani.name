@@ -13,7 +13,10 @@
 //    and check have to fail, so they run outside the gate, with reports in
 //    reports/budgets/over-budget/, and the check must report exactly one
 //    record for each metric the fixture breaks, JS, CSS, and its remote
-//    @import, each naming the asset that carries it.
+//    @import, each naming the asset that carries it. Only the fixture's
+//    records count there, so the trace runs its projects alone and the
+//    check holds it alone (OVER_BUDGET_TRACE, OVER_BUDGET_CHECK); step 1
+//    traces and checks every composition the same build registers.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -36,6 +39,16 @@ export const OVER_BUDGET_METRICS = {
   css: /^\/_portfolio\/variant\/fixture-over-budget\.[0-9a-f]{12}\.css$/,
   remote: /^\/_portfolio\/variant\/fixture-over-budget\.[0-9a-f]{12}\.css$/,
 };
+
+/**
+ * The over-budget run's trace: the fixture's own projects, under read-only
+ * and owner, after the policy project, with no retries, since its cases
+ * fail on purpose.
+ */
+export const OVER_BUDGET_TRACE = ['test:trace', '--selection', OVER_BUDGET, '--retries=0'];
+
+/** Its check, holding the fixture alone, as a trace of its selection alone measures it. */
+export const OVER_BUDGET_CHECK = ['check:budgets', '--variant', OVER_BUDGET];
 
 /** Where the over-budget run's reports sit inside the uploaded artifact. */
 export const OVER_BUDGET_ARTIFACTS = [
@@ -167,8 +180,8 @@ async function main() {
       'CI_REPRO',
     ]);
     // Its remote @import fails the trace's cases, as it should; the check reads them.
-    run('trace, BUDGET_FIXTURES=over', 'pnpm', ['test:trace', '--retries=0'], env);
-    const status = run('check, BUDGET_FIXTURES=over', 'pnpm', ['check:budgets'], env);
+    run('trace, BUDGET_FIXTURES=over', 'pnpm', OVER_BUDGET_TRACE, env);
+    const status = run('check, BUDGET_FIXTURES=over', 'pnpm', OVER_BUDGET_CHECK, env);
     const file = path.join(overReports, 'budgets', 'budget-report.json');
     if (status !== 1) {
       fail(`pnpm check:budgets exited ${status} on ${OVER_BUDGET}, not 1 for its breaches`);

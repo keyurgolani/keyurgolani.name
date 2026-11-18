@@ -1135,6 +1135,30 @@ export function checkBudgets({
 }
 
 /**
+ * What checkBudgets() found, held to the variant `id` alone, for a trace of
+ * that variant's selection alone (pnpm check:budgets --variant, which
+ * ci/budgets.mjs's over-budget run passes): the variant's own records and
+ * checked rows, and none of another unit's, since a variant its trace never
+ * rendered would read as untraced. Throws when `units` registers no variant
+ * `id`, so a held check can't pass with nothing held.
+ *
+ * @param {{ records: any[], checked: any[], samples: any[] }} result
+ * @param {string} id
+ * @param {any[]} units ASSET_MANIFEST's units
+ */
+export function heldToVariant({ records, checked, samples }, id, units) {
+  if (!units.some((unit) => unit.kind === 'variant' && unit.id === id)) {
+    throw new Error(`--variant ${id} names no registered variant`);
+  }
+  const own = (kind, unitId) => kind === 'variant' && unitId === id;
+  return {
+    records: records.filter((record) => own(record.unit?.kind, record.unit?.id)),
+    checked: checked.filter((row) => own(row.kind, row.id)),
+    samples: samples.filter((row) => own(row.kind, row.id)),
+  };
+}
+
+/**
  * A breach as a CI failure record (ci/failure-record.schema.json, 1.1): its
  * unit as `variant`, or as `pack` with its `axis`, and its metric.
  */
