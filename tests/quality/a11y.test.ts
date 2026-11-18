@@ -1188,6 +1188,77 @@ test('a color that turns while its shots are taken is read once more, and one th
   }
 });
 
+test('a color that reads the same after its shots, though the page changed it or an ancestor after it was read, is read again at rest and judged there', async () => {
+  const results = {
+    incomplete: [{ id: CONTRAST_RULE, nodes: [{ target: ['main p.tab'] }] }],
+  } as unknown as Parameters<typeof incompleteContrastFindings>[1];
+  // Dark text, #222, its ink the same before and after every read's shots. The first read's
+  // shots end a dark drop's transition under it, #222 too, which the page turns it light over,
+  // and back, in the wait after them; `grounds` is each read's background.
+  const dark = png([[[34, 34, 34]]]);
+  const black = png([[[0, 0, 0]]]);
+  const white = png([[[255, 255, 255]]]);
+  const page = (grounds: readonly Buffer[]) => {
+    let shot = 0;
+    const calls: string[] = [];
+    const element = {
+      scrollIntoViewIfNeeded: async () => undefined,
+      evaluate: async (script: { name: string }) => {
+        if (script.name === stuckCoverScript.name) return null;
+        if (script.name === stillnessScript.name) return (calls.push('wait'), null);
+        if (script.name === inkScript.name) return (calls.push('ink'), 'rgb(34, 34, 34)');
+        // The sampler's watch: an attribute of it or an ancestor changed after its color was read.
+        if (script.name === 'turnedSinceScript') return (calls.push('turned'), true);
+        if (script.name !== 'sampleScript') return undefined;
+        calls.push('sample');
+        return {
+          mode: 'normal',
+          color: 'rgb(34, 34, 34)',
+          fontSize: 16,
+          fontWeight: 400,
+          box: { x: 0, y: 0, width: 10, height: 10 },
+          texts: [],
+          flat: true,
+          turned: false,
+          quad: null,
+        };
+      },
+    };
+    return {
+      calls,
+      page: {
+        evaluate: async () => undefined,
+        // Each read's three shots: its background, then its glyphs black, then white.
+        screenshot: async () => {
+          const at = shot++;
+          return at % 3 === 0 ? grounds[Math.floor(at / 3)]! : at % 3 === 1 ? black : white;
+        },
+        locator: () => ({ first: () => element }),
+      } as unknown as Parameters<typeof incompleteContrastFindings>[0],
+    };
+  };
+  // At rest the drop has gone: read again, judged from the read at rest alone, and passes, never
+  // the dark ink judged over the dark drop the first read's shots took.
+  const atRest = page([dark, white]);
+  assert.deepEqual(await incompleteContrastFindings(atRest.page, results), []);
+  assert.deepEqual(atRest.calls, [
+    'wait',
+    'sample',
+    'ink',
+    'turned',
+    'wait',
+    'sample',
+    'ink',
+    'turned',
+  ]);
+  // And still on the drop at rest: the read at rest fails it, so it masks nothing.
+  const stillDark = page([dark, dark]);
+  assert.deepEqual(
+    (await incompleteContrastFindings(stillDark.page, results)).map(({ actual }) => actual),
+    ['1.00:1 against its worst background pixel'],
+  );
+});
+
 test("the batch path splits the elements it reads so no member's marks paint within BATCH_GAP of another's box, but a neighbour both hide by fill doesn't split them", () => {
   const box = (x: number) => ({ x, y: 0, width: 40, height: 20 });
   // Each candidate's own glyph mark paints over its box and BATCH_GAP - 1 round it, at most.

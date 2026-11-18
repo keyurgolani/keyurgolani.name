@@ -1103,6 +1103,9 @@ const axeAll = async (page: Page): Promise<Finding[]> =>
   }));
 const contrast = async (page: Page) =>
   incompleteContrastFindings(page, reached(await axeFor(page).analyze()));
+/** The sampler with every element read on its own path, as one the batch path leaves to it is. */
+const contrastAlone = async (page: Page) =>
+  incompleteContrastFindings(page, reached(await axeFor(page).analyze()), false, { batch: false });
 
 /** How many changes the sampler's watch of the page may hold at once (row25-quiet-rc2-hardening). */
 const TURNS_BOUND = 1000;
@@ -3342,6 +3345,23 @@ export const A11Y_CASES: readonly MetaCase[] = [
       /^contrast text: unresolved: its ancestors' attributes were still changing \d+(?:\.\d+)? s after its shots, so its color can't be read from one state of the page$/,
     browser: true,
     run: () => onPage('contrast-restless-ancestor.html', contrast),
+  },
+  // A word the page turns and turns back after its shots, as Flux's tabs do when a stretch is cut
+  // short and the drop snaps on: its color reads the same before and after its shots, but the
+  // shots ended the drop's transition, so its background is the drop's, which it never held over
+  // that ink at rest. An attribute of it or an ancestor changed after its color was read, so it's
+  // read again at rest, where it passes, never dark ink judged over the dark drop shot.
+  goodFile('double-turn', 'contrast-double-turn.html', 'contrast', contrastAlone),
+  // And the read at rest masks nothing: a word turned and back the same way that is dark on the
+  // dark drop at rest fails there.
+  {
+    id: 'contrast/double-turn-at-rest',
+    gate: 'contrast',
+    input: 'tests/quality/fixtures/a11y/contrast-double-turn-at-rest.html',
+    expect: 'fail',
+    reason: /^contrast text: 1\.\d\d:1 against its worst background pixel$/,
+    browser: true,
+    run: () => onPage('contrast-double-turn-at-rest.html', contrastAlone),
   },
   // The sampler's own pins never count as the page's changes, and a page change pending at its own
   // write is still kept (row25-quiet-rc2-hardening, part 2a).

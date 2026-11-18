@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>
+      A word turned and back after its shots that is dark on the drop at rest, known-bad
+    </title>
+    <!--
+      contrast-double-turn.html's bar with one change: the snap turns Work's ink back to dark and
+      leaves the drop under it. At rest a visitor sees dark ink on the dark drop under Work: about
+      1:1. The page turns the word and back after its shots, as in the known-good, so it is read
+      again at rest, and fails there: the read at rest never passes a word that is wrong at rest.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem 1rem 50vh;
+      }
+      .bar {
+        position: relative;
+        display: flex;
+        align-items: center;
+        margin-top: 150vh;
+        padding: 0.25rem;
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+      }
+      .drop {
+        position: absolute;
+        inset-block: 0.25rem;
+        inset-inline-start: 0.25rem;
+        inline-size: 12rem;
+        background: #222;
+        clip-path: inset(0 100% 0 0);
+        transition: clip-path 1.8s linear;
+      }
+      .bar[data-at='work'] .drop {
+        clip-path: inset(0 50% 0 0);
+      }
+      .tab {
+        position: relative;
+        display: inline-block;
+        box-sizing: border-box;
+        inline-size: 6rem;
+        padding: 0.5rem 1rem;
+        color: #222;
+        text-decoration: none;
+      }
+      .tab[data-under] {
+        color: #fbfbfb;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Tabs</h1>
+      <nav class="bar" id="bar">
+        <span class="drop"></span>
+        <a class="tab" id="work" href="#bar"><span class="word">Work</span></a>
+      </nav>
+    </main>
+    <script>
+      const bar = document.getElementById('bar');
+      const work = document.getElementById('work');
+      let seen = false;
+      new IntersectionObserver((entries) => {
+        if (seen || !entries.some((entry) => entry.isIntersecting)) return;
+        seen = true;
+        // The stretch under Work and its turn, then a snap that turns it back under the drop.
+        bar.setAttribute('data-at', 'work');
+        setTimeout(() => work.setAttribute('data-under', ''), 1080);
+        setTimeout(() => work.removeAttribute('data-under'), 1260);
+      }).observe(bar);
+    </script>
+  </body>
+</html>
