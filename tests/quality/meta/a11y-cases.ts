@@ -282,6 +282,16 @@ function goodFile(
 const settled = async (page: Page): Promise<Finding[]> =>
   (await notBusy(page)) ? [] : [{ gate: 'runner', rule: 'settled', actual: STILL_BUSY }];
 const keyboard = (page: Page) => keyboardFindings(page);
+/**
+ * The walk after a check that left focus deep in the page: Chromium keeps its sequential focus
+ * navigation starting point where focus last was, through a blur and a scroll to the top, so a
+ * walk that doesn't set it at the top itself starts its first Tab mid-page.
+ */
+const keyboardAfterDeepFocus = async (page: Page) => {
+  await page.locator('#deep').focus();
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  return keyboardFindings(page);
+};
 /** The settle logs of the no-JavaScript walk cases, by case id, for a reader of a run (row 48). */
 export const SETTLE_LOGS = new Map<string, readonly SettleRecord[]>();
 /**
@@ -2254,6 +2264,9 @@ export const A11Y_CASES: readonly MetaCase[] = [
   // A closed fold's own summary is a stop; what it folds away, nested summaries, a closed
   // dialog's or popover's controls, and hidden and inert ones, isn't owed.
   goodFile('folded', 'keyboard-folded.html', 'keyboard', keyboard),
+  // Focus left deep in the page by an earlier check: the walk still starts at the top, so its
+  // first Tab is the skip link and every control before the deep one is reached.
+  goodFile('deep-start', 'keyboard-deep-start.html', 'keyboard', keyboardAfterDeepFocus),
   // Without script, a smooth scroll-into-view still glides after Tab: the walk reads each stop
   // where the scroll comes to rest (row 48), and one that rests out of view still fails.
   goodFile(
