@@ -1,0 +1,56 @@
+{
+  "name": "mc-320-f",
+  "summary": "Mission Control on a phone with 200% text: a long unbroken credit breaks inside its open fold, and the open Appearance panel stays in the window",
+  "head": "b3681a44ccd730f7f7695ea831d83abe4a4f477c",
+  "base": "4a91d262d74fa2362838c5fe5985ebe707d523ab",
+  "reds": [
+    {
+      "label": "mc-credits",
+      "at": "cb7b2470fce4e3850e80a63b1c4bdbfcb035e6cd",
+      "specs": ["tests/e2e/mission-control-root-text-320-writing-more.spec.ts"],
+      "tests": 1,
+      "files": 1,
+      "failed": 1
+    },
+    {
+      "label": "mc-appearance",
+      "at": "6f75a43ef7ae9dc28a28a3300c263045895bec29",
+      "specs": [
+        "tests/e2e/mission-control-root-text-appearance-open.spec.ts",
+        "tests/e2e/mission-control-root-text-appearance-open-rtl.spec.ts"
+      ],
+      "tests": 4,
+      "files": 2,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "mission-control",
+      "specs": [
+        "tests/e2e/mission-control*.spec.ts",
+        "tests/e2e/forced-backplate-mission-control.spec.ts"
+      ],
+      "tests": 55,
+      "files": 18,
+      "skipped": "record"
+    }
+  ],
+  "cells": [],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the stylesheet: no colour or family literal, motion only inside no-preference",
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding"
+    ]
+  },
+  "budgets": true,
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
