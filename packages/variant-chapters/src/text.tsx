@@ -184,6 +184,17 @@ export function Unbroken({ text }: { text: string }) {
   );
 }
 
+/**
+ * The code points in the longest word of `texts`, a word ending at a space or after its hyphen,
+ * where a line may break: what a list of titles sets to fit where its column is narrow.
+ */
+export function longestWord(texts: readonly string[]): number {
+  return Math.max(
+    0,
+    ...texts.flatMap((text) => (text.match(/[^\s-]+-*|-+/g) ?? []).map((word) => [...word].length)),
+  );
+}
+
 /** Parts of a line joined by ", ", each its own node. */
 export function joined(parts: readonly ReactNode[], separator = ', '): ReactNode[] {
   const shown = parts.filter(

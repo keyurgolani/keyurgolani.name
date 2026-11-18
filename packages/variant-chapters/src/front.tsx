@@ -5,6 +5,7 @@ import {
   present,
   type HomePageProps,
 } from '@portfolio/kit/sections';
+import type { CSSProperties } from 'react';
 import { routeHref } from '@portfolio/variant-contract';
 import { Book as BookPage, Folios, Page } from './chrome';
 import { metricParts } from './entries';
@@ -19,6 +20,7 @@ import {
   idOf,
   joined,
   locatorHref,
+  longestWord,
   Md,
   Out,
   plain,
@@ -286,7 +288,19 @@ function Contents({ input, book }: { input: Input; book: Book }) {
           </p>
         ) : null}
       </div>
-      <ol className="toc" role="list">
+      <ol
+        className="toc"
+        role="list"
+        style={
+          {
+            '--layout-ch-toc-word': longestWord([
+              ...(preface ? [present(preface.title) ? preface.title : 'Preface'] : []),
+              ...book.chapters.map((chapter) => chapter.title),
+              'Back matter',
+            ]),
+          } as CSSProperties
+        }
+      >
         {preface ? (
           <li className="toc__fm">
             <a href={`#${idOf(input, ANCHORS.preface)}`} data-type-role="title">

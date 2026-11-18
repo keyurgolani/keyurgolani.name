@@ -1739,6 +1739,43 @@
   }
 }
 
+/*
+ * The contents' columns are in rem too: its numeral's and its page number's. On a list under 14rem
+ * (on a phone, only past 100% root text) each entry sets its numbers on its first line, the numeral
+ * at the start and the page at the end, and its title under them across the list, at its step or
+ * the size at which the list's longest title word (--layout-ch-toc-word, in code points) fits at
+ * 0.62em a letter, whichever is smaller, never under body size. Beside both numbers at 200% at
+ * 320, a title had 55 px of the list's 240 and broke every two or three letters.
+ */
+[data-variant='chapters'] .toc {
+  container: ch-toc / inline-size;
+}
+@container ch-toc (width < 14rem) {
+  [data-variant='chapters'] .toc > li {
+    grid-template-columns: [n t] minmax(0, 1fr) [pg] auto;
+  }
+  [data-variant='chapters'] .toc__n {
+    grid-column: n;
+    grid-row: 1;
+  }
+  [data-variant='chapters'] :is(.toc__t, .toc__fm > a) {
+    grid-column: t / -1;
+    grid-row: 2;
+  }
+  [data-variant='chapters'] .toc__t {
+    font-size: max(
+      var(--type-body-font-size),
+      min(var(--type-step-2), calc(100cqi / (var(--layout-ch-toc-word, 8) * 0.62)))
+    );
+  }
+  [data-variant='chapters'] .toc__fm > a {
+    font-size: max(
+      var(--type-body-font-size),
+      min(var(--type-title-font-size), calc(100cqi / (var(--layout-ch-toc-word, 8) * 0.62)))
+    );
+  }
+}
+
 /* Print: each spread is a printed spread; the chrome goes. */
 @media print {
   [data-variant='chapters'] :is(.ch-progress, .ch-endpaper__slot, .ch-edge__track) {
