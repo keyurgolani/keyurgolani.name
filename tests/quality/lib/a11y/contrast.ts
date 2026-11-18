@@ -418,6 +418,8 @@ interface Sample {
   readonly turned: boolean;
   /** Its content box on screen when turned, if it has one quad; `box` is then the quad's bounds. */
   readonly quad: Quad | null;
+  /** When its color was read, on the page's clock (performance.now()). */
+  readonly readAt: number;
 }
 
 /**
@@ -599,6 +601,7 @@ export function sampleScript(
     flat,
     turned,
     quad,
+    readAt: performance.now(),
   };
 }
 
@@ -1049,6 +1052,23 @@ export function unwatchTurnsScript(key: string): true {
   delete w[`__qualityTurnsOff_${key}`];
   delete w[`__qualityTurnsOwn_${key}`];
   return true;
+}
+
+/**
+ * Whether watchTurnsScript() under `key` saw an attribute of `el` or an ancestor change at or
+ * after `since`, on the page's clock: a word whose color was read at `since` and reads the same
+ * after its shots may still have turned and turned back between, so its shots' background needn't
+ * be one its color was ever over. True when there's no watch to ask. Runs in the browser.
+ */
+export function turnedSinceScript(
+  el: Element,
+  { key, since }: { key: string; since: number },
+): boolean {
+  const state = (window as unknown as Record<string, unknown>)[`__qualityTurns_${key}`] as
+    Turns | undefined;
+  if (!state) return true;
+  for (const [target, t] of state.last) if (t >= since && target.contains(el)) return true;
+  return false;
 }
 
 /** Why a word whose ancestors never held still within the cap has no color to read. */
@@ -2469,6 +2489,7 @@ export async function incompleteContrastFindings(
               white: Buffer;
               after: string | null;
               restless: boolean;
+              turned: boolean;
             }
         > => {
           if (again) await page.evaluate(pageRestScript, NODE_LIMIT_MS).catch(() => false);
@@ -2552,7 +2573,21 @@ export async function incompleteContrastFindings(
           const after = await locator
             .evaluate(inkScript, undefined, { timeout: NODE_LIMIT_MS })
             .catch(() => null);
-          return { sample, shot, black, white, after, restless: quiet === 'restless' };
+          // Whether the page changed it or an ancestor since its color was read: a color can turn
+          // and turn back in the waits after its shots, so reading the same proves no one state.
+          // One that can't be asked counts as changed.
+          const turned = await locator
+            .evaluate(turnedSinceScript, { key, since: sample.readAt }, { timeout: NODE_LIMIT_MS })
+            .catch(() => true);
+          return {
+            sample,
+            shot,
+            black,
+            white,
+            after,
+            restless: quiet === 'restless',
+            turned: turned === true,
+          };
         };
         // Its color and its background from one state of the page (row 25). Its color is read
         // outside the shots, and the page can turn it in between (a script's class as the
@@ -2560,13 +2595,17 @@ export async function incompleteContrastFindings(
         // one an earlier element's shots ended): one whose color isn't the same once its shots
         // are taken and what they ended has had its time is read once more, its pins off, its
         // wait run again and the page at rest, and one that turns again is unresolved, never
-        // judged from two states.
+        // judged from two states. One whose color reads the same, though the page changed it or an
+        // ancestor after its color was read (a turn and a turn back inside the waits after its
+        // shots, which ended the transition the turns were timed to), is read once more too, at
+        // rest, and judged from that read alone: its shots' background may be one its color was
+        // never over, and a color wrong at rest still fails there.
         let taken = await read(false);
         if (typeof taken === 'string') {
           unresolved(taken);
           continue;
         }
-        if (!sameInk(taken.sample.color, taken.after)) {
+        if (!sameInk(taken.sample.color, taken.after) || (taken.turned && !taken.restless)) {
           const turned = [taken.sample.color, taken.after] as const;
           await page.evaluate(releaseScript, key).catch(() => undefined);
           taken = await read(true);
