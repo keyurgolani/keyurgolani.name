@@ -32,6 +32,7 @@ import { startApp } from '../harness/app-server.mjs';
 import { optionalFaces, pinFaces } from '../harness/optional-faces';
 import { accepts, readBuildMeta, siteTextFor } from '../quality/cells';
 import type { Tuple } from '../quality/coverage';
+import { watchEnhancements } from '../quality/lib/a11y/conditions';
 import { sweepSiteText } from '../quality/lib/server';
 import { packCookie } from '../quality/lib/sweep';
 import { RANDOM_SEED, seedRandomScript } from '../quality/lib/visual';
@@ -45,6 +46,7 @@ import {
   type StructureNode,
   type ViewportId,
 } from './distinct';
+import { expectEnhancementsSettled } from './modes';
 import { fixtureApp, WEB } from './target';
 
 /** The fixture every capture renders: every kind, so every frame a composition has shows. */
@@ -374,10 +376,15 @@ export async function captureComposition({
           await context.addCookies(lookCookies(variant, look, app.origin));
           const page = await context.newPage();
           await page.addInitScript(seedRandomScript, RANDOM_SEED);
+          // Started before the page loads, so it sees the first enhancement chunk start.
+          const watch = watchEnhancements(page);
           await pinFaces(page, await optionalFaces(page, ROUTE), 'designed');
           const response = await page.goto(ROUTE);
           expect(response?.status(), `${variant} ${look.name} ${viewport}: ${ROUTE}`).toBe(200);
           await settle(page);
+          // As the variant shots wait (capturePage()): a composition's lazy enhancements have
+          // mounted or failed, so the capture reads the page as it stays, never before they land.
+          await expectEnhancementsSettled(watch);
           const rendered = await boundaryLook(page);
           expect(rendered, `${variant} renders ${look.name} as asked`).toEqual({
             variant,
