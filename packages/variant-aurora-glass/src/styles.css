@@ -243,22 +243,18 @@
 }
 
 /*
- * Focused, a button's ring is drawn inside its edge, in on-accent, its label's colour, over its own
- * fill, which on-accent already reads against. Outside it the language's card shadow lies where the
- * ring would be drawn, and the focus check compares the ring's pixels with the same pixels at rest;
- * inside the box no shadow falls. Set as the platform's inset ring (the focus width, negated) and a
- * focus colour the platform allows. Nothing changes at rest. Forced colours drop the shadow and give
- * the button an outline of its text's colour at its edge, where an inset ring would lie, so there it
- * keeps the platform's ring outside it. So does more contrast: on-accent is the canvas's white there,
- * and a focused pill takes the control radius, so the corners an inset ring lies in showed the canvas
- * at rest and the ring changed nothing there; outside, the focus colour is the text's, off the
- * canvas and the shadow both.
+ * Focused, a button keeps the platform's ring outside its edge, in the text's colour: the focus
+ * check compares the ring's pixels with the same pixels at rest, and outside the box they are the
+ * pane and the language's card shadow, which the text reads against, dark or faint alike. An inset
+ * ring over the fill read short wherever the fill doesn't reach the edge at rest: a pill's round
+ * ends, which a focused pill's control radius squares off, a sub-pixel box's partly covered inner
+ * row, and a language's own inset shadow. Forced colours and more contrast keep the platform's ring
+ * and focus colour as they are.
  */
 @media (forced-colors: none) and (not (prefers-contrast: more)) {
   [data-variant='aurora-glass']:not([data-display-mode='high-contrast'], [data-contrast='more'])
     .ag-btn:focus-visible {
-    --ui-focus-offset: calc(var(--ui-focus-width) * -1);
-    --color-focus: var(--color-on-accent);
+    --color-focus: var(--color-text-primary);
   }
 }
 
