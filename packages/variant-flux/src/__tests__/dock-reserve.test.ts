@@ -27,10 +27,30 @@ test("Flux reserves its phone dock's room at the window's block end, in the quer
   const media = docked[0]!.at.find((at) => at.startsWith('@media '))?.slice('@media '.length);
   assert.ok(MANIFEST.scrollReserve, 'the manifest declares a scrollReserve');
   assert.equal(MANIFEST.scrollReserve.media, media);
-  // The dock measured 67.1px at 16px root text (--layout-fx-bar-box), and the summary needs its
-  // 4px ring clear of it too: the reserve is the dock and a clearance, in rem so it grows with
-  // the root's text as the dock does.
+  // The dock measured 67.1px at 16px root text (--layout-fx-bar-box), and 79.1px under more
+  // contrast, and a control needs its 4px ring clear of it too: the reserve is the taller dock,
+  // the ring and a clearance, in rem so it grows with the root's text as the dock does.
   assert.match(MANIFEST.scrollReserve.blockEnd, /rem$/);
   const px = scrollReservePx(MANIFEST.scrollReserve.blockEnd)!;
-  assert.ok(px >= 67.1 + 4 + 8, `${px}px`);
+  assert.ok(px >= 79.1 + 4 + 8, `${px}px`);
+});
+
+test("a control Tab brings up from below a phone's dock stops clear of it by the dock, the ring's reach and more", () => {
+  const margins = RULES.filter(
+    (rule) =>
+      rule.selector === "[data-variant='flux'] :is(a, button, summary)" &&
+      valueOf(rule.body, 'scroll-margin-block-end') !== undefined,
+  );
+  assert.equal(margins.length, 1, "one rule sets the controls' scroll margin");
+  const margin = valueOf(margins[0]!.body, 'scroll-margin-block-end')!.replace(/\s+/g, ' ');
+  // The dock's token, then the ring's offset and width on top of the space the token leaves, which
+  // the dock's own growth under more contrast takes up.
+  for (const term of [
+    '--layout-fx-bar-box',
+    '--ui-focus-offset',
+    '--ui-focus-width',
+    '--space-s',
+  ]) {
+    assert.match(margin, new RegExp(`var\\(${term}\\)`), term);
+  }
 });
