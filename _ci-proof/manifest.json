@@ -1,0 +1,105 @@
+{
+  "name": "contrast-double-turn",
+  "summary": "a word the page changed after its color was read is read again at rest, even when its color reads the same",
+  "head": "ccfc1c42580caeb15fd3985bdb0912cd4614ea51",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "cells": [
+    {
+      "label": "flux454",
+      "scope": "quality/release/scope.json",
+      "grep": "flux/industrial/warm-parchment/humanist-ui/system .*contrast-more",
+      "shards": ["454/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "at": "base"
+    },
+    {
+      "label": "flux454",
+      "scope": "quality/release/scope.json",
+      "grep": "flux/industrial/warm-parchment/humanist-ui/system .*contrast-more",
+      "shards": ["454/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "flux6",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:flux complete .*contrast-more",
+      "shards": ["6/611"],
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "at": "base"
+    },
+    {
+      "label": "flux6",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:flux complete .*contrast-more",
+      "shards": ["6/611"],
+      "tests": 6,
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "label": "slow249",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/high-contrast/humanist-ui/light (1440x900|390x844) default|mission-control/platform-neutral/sunset-ember/humanist-ui/system 390x844 default|aurora-glass/carbon-inspired/oled-black/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["249/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "at": "base"
+    },
+    {
+      "label": "slow249",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/high-contrast/humanist-ui/light (1440x900|390x844) default|mission-control/platform-neutral/sunset-ember/humanist-ui/system 390x844 default|aurora-glass/carbon-inspired/oled-black/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["249/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "label": "slow219",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/night-terminal/humanist-ui/system (1440x900|390x844) default|mission-control/platform-neutral/cool-color-safe/humanist-ui/dark 390x844 default|aurora-glass/claymorphic/neutral-slate/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["219/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "at": "base"
+    },
+    {
+      "label": "slow219",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/night-terminal/humanist-ui/system (1440x900|390x844) default|mission-control/platform-neutral/cool-color-safe/humanist-ui/dark 390x844 default|aurora-glass/claymorphic/neutral-slate/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["219/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "label": "slow210",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/warm-parchment/drafting-grotesk/system (1440x900|390x844) default|mission-control/neobrutalist/forest-moss/editorial-serif/dark 390x844 default|aurora-glass/skeuomorphic/neon-city/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["210/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "at": "base"
+    },
+    {
+      "label": "slow210",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/warm-parchment/drafting-grotesk/system (1440x900|390x844) default|mission-control/neobrutalist/forest-moss/editorial-serif/dark 390x844 default|aurora-glass/skeuomorphic/neon-city/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["210/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
