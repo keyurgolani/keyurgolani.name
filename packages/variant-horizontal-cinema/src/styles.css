@@ -3281,12 +3281,14 @@
   }
 
   /* With no script nothing steers the strip, so focus moves it at once, as under reduced motion: a
-     glide can stop short of a control in a later scene and leave it past the window's edge. */
+     glide can stop short of a control in a later scene and leave it past the window's edge. It
+     snaps only near a scene's start, so nothing pulls it off where focus brought it. */
   [data-variant='horizontal-cinema']
     .hc[data-view='strip']
     .hc-shell:not(:has(.hc-scrub:is([data-live], [inert])))
     .hc-stage {
     scroll-behavior: auto;
+    scroll-snap-type: x proximity;
   }
 
   [data-variant='horizontal-cinema'] .hc-minimap__window {
