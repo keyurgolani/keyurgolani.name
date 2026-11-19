@@ -1,0 +1,19 @@
+{
+  "name": "horizontal-cinema-297-cells-2",
+  "summary": "Horizontal Cinema's top line: the Appearance summary's release cells on four more tuples, its ring inside its own box, wholly on the band",
+  "head": "eeaf88c26aa118283be26d6cb864682c7b962bd1",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "cells": [
+    {
+      "label": "hc-focus-2",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:horizontal-cinema complete / horizontal-cinema/(letterpress/night-terminal/drafting-grotesk/dark 1024x768 (default|contrast-more|forced-colors)|platform-neutral/sepia-film/humanist-ui/light (1440x900|1024x768|390x844) default|platform-neutral/night-terminal/humanist-ui/system (1440x900|1024x768|390x844) default|neumorphic/ocean-abyss/book-serif/dark 1024x768 (default|contrast-more|forced-colors)) ",
+      "shards": ["find"],
+      "tests": 12,
+      "passed": 12,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
