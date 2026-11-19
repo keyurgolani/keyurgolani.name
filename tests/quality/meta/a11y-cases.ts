@@ -1107,6 +1107,48 @@ const contrast = async (page: Page) =>
 /** The sampler with every element read on its own path, as one the batch path leaves to it is. */
 const contrastAlone = async (page: Page) =>
   incompleteContrastFindings(page, reached(await axeFor(page).analyze()), false, { batch: false });
+/**
+ * Where scrollIntoViewIfNeeded(), the scroll the sampler's own path makes before it reads an
+ * element, leaves words cut at a strip's end (contrast-scroll-into-view-edge.html): on a strip
+ * that doesn't snap, the smallest scroll that shows them, their end on the strip's; on one that
+ * snaps, mandatory, back on the first item with the words still cut. Any other is a finding, so a
+ * Playwright or Chromium whose scroll into view centres or snaps to the item fails here, before
+ * contrast-snap-peek.html's red can pass at the red unnoticed.
+ */
+const scrollIntoViewEdge = async (page: Page): Promise<Finding[]> => {
+  const findings: Finding[] = [];
+  const at = (strip: string, words: string) =>
+    page.evaluate(
+      ([strip, words]) => {
+        const box = document.getElementById(strip)!;
+        const own = box.getBoundingClientRect();
+        const word = document.getElementById(words)!.getBoundingClientRect();
+        return { scroll: box.scrollLeft, stripEnd: own.right, start: word.left, end: word.right };
+      },
+      [strip, words] as const,
+    );
+  await page.locator('#plain-words').scrollIntoViewIfNeeded();
+  const plain = await at('plain', 'plain-words');
+  if (Math.abs(plain.end - plain.stripEnd) > 1)
+    findings.push({
+      gate: 'contrast',
+      rule: 'scroll-into-view',
+      actual: `on a strip that doesn't snap, the words end at ${Math.round(plain.end)}, the strip at ${Math.round(plain.stripEnd)}: not the smallest scroll that shows them`,
+    });
+  await page.locator('#snapping-words').scrollIntoViewIfNeeded();
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
+  );
+  const snapping = await at('snapping', 'snapping-words');
+  if (snapping.scroll > 1 || snapping.end <= snapping.stripEnd)
+    findings.push({
+      gate: 'contrast',
+      rule: 'scroll-into-view',
+      actual: `on a strip that snaps, it rests at ${Math.round(snapping.scroll)} with the words at ${Math.round(snapping.start)} to ${Math.round(snapping.end)}, the strip ending at ${Math.round(snapping.stripEnd)}: not back on the first item with them cut`,
+    });
+  return findings;
+};
 
 /** How many changes the sampler's watch of the page may hold at once (row25-quiet-rc2-hardening). */
 const TURNS_BOUND = 1000;
@@ -3651,6 +3693,30 @@ export const A11Y_CASES: readonly MetaCase[] = [
     expect: 'pass',
     browser: true,
     run: () => onPage(manyTexts(40), contrastTrips),
+  },
+  // A title a mandatory-snap strip leaves cut by the viewport, its visible end under the strip's
+  // end fade, as Horizontal Cinema's is without script: a scroll into view that makes the smallest
+  // scroll snaps back, so it's read only once its snap area is scrolled into view by that area's
+  // own scroll-snap-align, wholly in view, where it passes; right to left too; and a faint one
+  // fails there, so the snap into view masks nothing.
+  goodFile('snap-peek', 'contrast-snap-peek.html', 'contrast', contrast),
+  goodFile('snap-peek-rtl', 'contrast-snap-peek-rtl.html', 'contrast', contrast),
+  // The scroll into view those fixtures' red needs: the smallest, and snapped back on a mandatory
+  // strip, never centred or snapped to the words' item.
+  goodFile(
+    'scroll-into-view-edge',
+    'contrast-scroll-into-view-edge.html',
+    'contrast',
+    scrollIntoViewEdge,
+  ),
+  {
+    id: 'contrast/snap-peek-faint',
+    gate: 'contrast',
+    input: 'tests/quality/fixtures/a11y/contrast-snap-peek-faint.html',
+    expect: 'fail',
+    reason: /^contrast (?:text|large-text): 1\.\d\d:1 against its worst background pixel$/,
+    browser: true,
+    run: () => onPage('contrast-snap-peek-faint.html', contrast),
   },
   // A batch member whose union shots hold a pixel its own shots don't (a stale subpixel fringe
   // on CI Linux): the batch path's finding is its own path's to confirm, which reads it clean, so
