@@ -662,6 +662,10 @@ function LiveStage(props: StageProps) {
       if (wrote.along !== undefined && Math.abs(along() - wrote.along) <= 1) return;
       // A scroll of the strip just after the reader's own wheel or moving touch is theirs: a swipe.
       const own = stageAt - inputAt < OWN_MS;
+      // The text size changed and its refit hasn't run yet: the refit's sentinel tells it after the
+      // layout, and the layout's own move of the strip onto its new length can be told first. That
+      // scroll isn't the reader's, so the page stays where they are for the refit to hold.
+      if (!own && em() !== fitted) return;
       if (aligning !== null) {
         // While the controller moves the page, the strip's scroll is its own doing, unless the reader
         // moved it: then the move is theirs, and the page goes where they took the strip.
