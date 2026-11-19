@@ -24,12 +24,14 @@ import {
   glyphHalo,
   glyphMask,
   HALO,
+  HOLDS,
   incompleteContrastFindings,
   incompleteContrastNodes,
   inFrame,
   inkScript,
   inkUnresolved,
   insideQuad,
+  MOVES,
   NEIGHBOUR_MARGIN,
   neededRatio,
   neighbourTexts,
@@ -149,6 +151,31 @@ test("under high contrast, text is held to thresholds.json's highContrast ratios
     rule: 'high-contrast-text',
     ratio: 7,
   });
+});
+
+test('an infinite animation is held for the shots when it moves the glyphs alone, as a ticker belt, and one that fades, filters, clips or paints them is not', () => {
+  // The wait runs in the page on its own, so it carries HOLDS inline; the two must agree.
+  assert.ok(stillnessScript.toString().includes(HOLDS.source));
+  for (const property of [
+    'transform',
+    'translate',
+    'rotate',
+    'scale',
+    'cssOffset',
+    'offsetDistance',
+  ]) {
+    assert.match(property, HOLDS, property);
+    assert.match(property, MOVES, property);
+  }
+  for (const property of [
+    'opacity',
+    'filter',
+    'clipPath',
+    'color',
+    'backgroundColor',
+    'outlineColor',
+  ])
+    assert.doesNotMatch(property, HOLDS, property);
 });
 
 test("a neighbour's glyph at the sampled box's edge is hidden with it, as an en dash before a date, and a backdrop or a faint date still fails", () => {
