@@ -1290,6 +1290,16 @@ export const STILL_TOGETHER = 1;
 /** The most scroll stops one call makes; the elements still left then take the per-element path. */
 export const BATCH_STOPS = 200;
 
+/**
+ * The most findings one call's batch path leaves to the per-element path to confirm. A finding
+ * the batch path reads comes from shots cut out of its union shot, and a union capture can hold a
+ * pixel a member's own shot doesn't (a CI Linux union kept a glyph's subpixel fringe as ground,
+ * 6.87:1, where the member's own read was 10.05:1); its own path reads it again, and that read is
+ * its record. Past this many in one call, on a page already failing, the batch path's reads stand,
+ * so a page with hundreds of findings doesn't read each twice.
+ */
+export const BATCH_CONFIRM_LIMIT = 20;
+
 /** A mark a batch member sets, and where its paint can reach. */
 export interface MarkReach {
   /** The marked element, by its index in the call's registry: one element, one id. */
@@ -2012,6 +2022,8 @@ export async function batchFindings(
   });
   if (items.length === 0 || typeof page.screenshot !== 'function') return done;
   const selectors = new Map(items.map(({ at, selector }) => [at, selector]));
+  // How many of this call's findings have gone to the per-element path to confirm.
+  let confirming = 0;
   const installed = await page
     .evaluate(
       `globalThis[${JSON.stringify(`__qualityBatch_${key}`)}] = { still: ${stillnessScript}, release: ${releaseScript}, cover: ${stuckCoverScript}, sample: ${sampleScript}, restless: ${restlessScript}, ink: ${inkScript}, quiet: ${turnsQuietScript} }, true`,
@@ -2224,6 +2236,12 @@ export async function batchFindings(
                 blacks.get(entry.at)!,
                 whites.get(entry.at)!,
               );
+              // A finding is its own path's to confirm (BATCH_CONFIRM_LIMIT): it leaves the batch,
+              // so the per-element path reads it, and that read is its record. A clean read stands.
+              if (found && confirming < BATCH_CONFIRM_LIMIT) {
+                confirming++;
+                continue;
+              }
               done.set(entry.at, found ? [found] : []);
             }
           }
