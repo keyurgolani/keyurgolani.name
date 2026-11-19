@@ -1,0 +1,57 @@
+{
+  "name": "ee-303",
+  "summary": "Editorial Evidence on a phone: a row's end sits a focus ring's reach below its title, so a focused plate link's ring stays off the title's underline",
+  "head": "d5eca5aaed77c0847e80661f37c07da96f82ef10",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "reds": [
+    {
+      "label": "row-end-ring",
+      "at": "f70e2b2478f6a65a8ccc86a294349fabcce61ab8",
+      "specs": [
+        "tests/e2e/editorial-evidence-plate-link-ring.spec.ts",
+        "tests/e2e/editorial-evidence-row-end-ring-room.spec.ts"
+      ],
+      "tests": 17,
+      "files": 2,
+      "failed": 17
+    }
+  ],
+  "gate": true,
+  "unit": {
+    "titles": []
+  },
+  "cells": [
+    {
+      "label": "ee-471-keys",
+      "scope": "quality/release/scope.json",
+      "grep": "editorial-evidence/platform-neutral/warm-parchment/accessible-reading/system 390x844 (default|contrast-more|forced-colors) ",
+      "shards": ["471/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "ee-390-spread",
+      "scope": "quality/release/scope.json",
+      "grep": "editorial-evidence/[a-z0-9-]+/[a-z0-9-]+/[a-z0-9-]+/[a-z-]+ 390x844 (contrast-more|forced-colors) ",
+      "shards": [
+        "286/611",
+        "21/611",
+        "290/611",
+        "340/611",
+        "469/611",
+        "566/611",
+        "287/611",
+        "336/611",
+        "302/611",
+        "294/611",
+        "308/611"
+      ],
+      "tests": 36,
+      "passed": 36,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
