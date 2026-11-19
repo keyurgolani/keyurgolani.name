@@ -1,0 +1,54 @@
+{
+  "name": "marquee-hold",
+  "summary": "the contrast sampler holds an infinite animation that only moves an element at one frame for its shots, and reads it inside its clipping ancestors",
+  "head": "b83634e2feeaa8e1f7a4a4dbd805e3009f05c73d",
+  "base": "af00f7e4a0953b3a5e04e4a82910ebc42c7d050a",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "an infinite animation is held for the shots when it moves the glyphs alone, as a ticker belt, and one that fades, filters, clips or paints them is not",
+      "every gate so far has a known-bad case and a known-good one, and each id is unique"
+    ]
+  },
+  "e2e": [
+    {
+      "label": "rg",
+      "specs": ["tests/e2e/raw-grid*.spec.ts", "tests/e2e/forced-backplate-raw-grid*.spec.ts"],
+      "tests": 107,
+      "files": 7,
+      "skipped": "record"
+    }
+  ],
+  "cells": [
+    {
+      "label": "breadth",
+      "scope": "quality/release/scope.json",
+      "grep": "(raw-grid/platform-neutral/control-room/humanist-ui/system|kinetic-cosmos/art-deco/forest-moss/shell-mono/dark|flux/art-deco/botanical-sage/book-serif/light|spatial-bento/poster-press/warm-parchment/humanist-ui/system|aurora-glass/industrial/night-terminal/accessible-reading/dark|horizontal-cinema/art-deco/drafting-blue/technical-sans-mono/dark|singular/platform-neutral/lavender-dusk/humanist-ui/light|mission-control/material-3-inspired/paper-ink/screen-grotesque/dark) 1024x768 (default|contrast-more)",
+      "shards": ["72/611", "295/611", "362/611", "579/611"],
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "at": "base"
+    },
+    {
+      "label": "breadth",
+      "scope": "quality/release/scope.json",
+      "grep": "(raw-grid/platform-neutral/control-room/humanist-ui/system|kinetic-cosmos/art-deco/forest-moss/shell-mono/dark|flux/art-deco/botanical-sage/book-serif/light|spatial-bento/poster-press/warm-parchment/humanist-ui/system|aurora-glass/industrial/night-terminal/accessible-reading/dark|horizontal-cinema/art-deco/drafting-blue/technical-sans-mono/dark|singular/platform-neutral/lavender-dusk/humanist-ui/light|mission-control/material-3-inspired/paper-ink/screen-grotesque/dark) 1024x768 (default|contrast-more)",
+      "shards": ["72/611", "295/611", "362/611", "579/611"],
+      "tests": 16,
+      "passed": 16,
+      "failed": 0
+    },
+    {
+      "label": "rg579",
+      "scope": "quality/release/scope.json",
+      "grep": "raw-grid/platform-neutral/control-room/humanist-ui/system .*(1024x768 reduced-transparency|1440x900 (default|reduced-transparency)|390x844 (default|reduced-transparency))",
+      "shards": ["579/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  ],
+  "kit": "150a0a7d54d9",
+  "kitScripts": "7964ce4b1c36"
+}
