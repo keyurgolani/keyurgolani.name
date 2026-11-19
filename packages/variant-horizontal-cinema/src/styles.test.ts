@@ -305,9 +305,19 @@ const STRIP =
 test('on the strip the open Appearance panel drops from the band’s foot on its own surface, held to the window under the band, in the canvas’s ink', () => {
   // Centred on the band the panel grew about it and ran above the window: its selects were out of
   // reach, and its radios lay over the scene in the band's ink.
+  const strip = blocks(STRIP).join('\n');
   const panel = declared(
-    at(".hc[data-view='strip'] .hc-chrome [data-ui-slot='disclosure.content']"),
-    blocks(STRIP).join('\n'),
+    at(
+      ".hc[data-view='strip'] .hc-chrome [data-ui-slot='disclosure'][open] > [data-ui-slot='disclosure.content']",
+    ),
+    strip,
+  );
+  // Only while it's open: closed, its content stays folded away in the band's flow. Placed off the
+  // band while closed, its rows were laid out over the pinned strip, where the contrast check read a
+  // closed label as text the strip's frame covers.
+  assert.equal(
+    declared(at(".hc[data-view='strip'] .hc-chrome [data-ui-slot='disclosure.content']"), strip),
+    '',
   );
   assert.match(panel, /position: absolute;/);
   assert.match(panel, /inset-block: 100% auto;/);
