@@ -3652,6 +3652,22 @@ export const A11Y_CASES: readonly MetaCase[] = [
     browser: true,
     run: () => onPage(manyTexts(40), contrastTrips),
   },
+  // A title a mandatory-snap strip leaves cut by the viewport, its visible end under the strip's
+  // end fade, as Horizontal Cinema's is without script: a scroll into view that makes the smallest
+  // scroll snaps back, so it's read only once its snap area is scrolled into view by that area's
+  // own scroll-snap-align, wholly in view, where it passes; right to left too; and a faint one
+  // fails there, so the snap into view masks nothing.
+  goodFile('snap-peek', 'contrast-snap-peek.html', 'contrast', contrast),
+  goodFile('snap-peek-rtl', 'contrast-snap-peek-rtl.html', 'contrast', contrast),
+  {
+    id: 'contrast/snap-peek-faint',
+    gate: 'contrast',
+    input: 'tests/quality/fixtures/a11y/contrast-snap-peek-faint.html',
+    expect: 'fail',
+    reason: /^contrast (?:text|large-text): 1\.\d\d:1 against its worst background pixel$/,
+    browser: true,
+    run: () => onPage('contrast-snap-peek-faint.html', contrast),
+  },
   // A batch member whose union shots hold a pixel its own shots don't (a stale subpixel fringe
   // on CI Linux): the batch path's finding is its own path's to confirm, which reads it clean, so
   // it passes, never a record no shot of its own holds.
