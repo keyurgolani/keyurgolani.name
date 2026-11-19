@@ -1,0 +1,54 @@
+{
+  "name": "oa-top-row-pin",
+  "summary": "Obsidian Atelier's room switch gives way to the pinned Index with the root text at 200%",
+  "head": "97b8e3961ed44d638f4e3384a2d7b4cafd36005d",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "every bundled variant and pack declares budgets within its ceilings"
+    ]
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "top-row-pin",
+      "at": "cac51e180beaad6073acdf1b4a90461bae02d2bc",
+      "specs": ["tests/e2e/obsidian-atelier-top-row-pin.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "failed": 5
+    }
+  ],
+  "e2e": [
+    {
+      "label": "oa",
+      "specs": ["tests/e2e/obsidian-atelier*.spec.ts"],
+      "tests": 95,
+      "files": 20
+    }
+  ],
+  "cells": [
+    {
+      "label": "accessible",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/platform-neutral/warm-parchment/accessible-reading/system (1440x900|1024x768|390x844) (default|reduced-motion|forced-colors|contrast-more|reduced-transparency|print|no-javascript) ",
+      "shards": ["417/611"],
+      "tests": 21,
+      "passed": 21,
+      "failed": 0
+    },
+    {
+      "label": "sepia",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/platform-neutral/sepia-film/accessible-reading/dark (1440x900|1024x768|390x844) (default|reduced-motion|forced-colors|contrast-more|reduced-transparency|print|no-javascript) ",
+      "shards": ["505/611"],
+      "tests": 21,
+      "passed": 21,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
