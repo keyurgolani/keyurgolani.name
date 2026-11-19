@@ -1,0 +1,16 @@
+{
+  "name": "singular-colophon-email-probe",
+  "summary": "Singular's colophon email link under more contrast, read on CI by the contrast sampler alone, batched, and batched with marked elements' repaint widened",
+  "head": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "look": [
+    {
+      "label": "sg305",
+      "spec": "look/zz-l1-sg305-probe.spec.ts",
+      "project": "chromium",
+      "tests": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
