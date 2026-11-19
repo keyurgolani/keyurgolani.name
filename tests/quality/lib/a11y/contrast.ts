@@ -52,11 +52,21 @@
 // and cancel the rest, and its glyphs would paint off the box. Only an
 // animation that can move or repaint it counts (MOVES, PAINTS on the node
 // itself, and INHERITED_PAINTS on an ancestor whose value reaches it).
-// NODE_LIMIT_MS at most: one with an infinite time-based
-// animation, or one still moving then, is unresolved, saying which. At rest,
-// a counted scroll-driven animation's guarded values are pinned inline for
-// the shots, which would cancel it, and its target's style attribute is put
-// back as it was once the element is read (releaseScript).
+// NODE_LIMIT_MS at most: one still moving then, or with an infinite
+// time-based animation of anything but its place (HOLDS), is unresolved,
+// saying which. At rest, a counted scroll-driven animation's guarded values
+// are pinned inline for the shots, which would cancel it, and its target's
+// style attribute is put back as it was once the element is read
+// (releaseScript). An infinite one that only moves it, such as a ticker's
+// belt, is held where it is for the shots at a playback rate of 0, which
+// page.screenshot's animations: 'disabled' leaves be (it cancels any other
+// infinite one to its start), and runs again at its own rate once the
+// element is read (releaseScript).
+//
+// Its box is its visible part: inside every ancestor that clips it, at that
+// ancestor's padding box (sampleScript). What's past a clipping edge is
+// painted by something beside it, never under its glyphs, as a ticker item
+// straddling the end of its track sits over the toggle beyond it.
 
 import { randomBytes } from 'node:crypto';
 import type { Page } from '@playwright/test';
@@ -141,6 +151,20 @@ export const PAINTS = /^(?:color|background(?:[A-Z]\w*)?)$/;
 export const INHERITED_PAINTS = /^color$/;
 
 /**
+ * The properties of MOVES that move the glyphs and leave their paint as it
+ * is: an infinite time-based animation of these alone, such as a ticker's
+ * belt, is held at one frame for the shots, a frame a visitor sees, and the
+ * element is read there (stillnessScript()). An infinite one of any other
+ * counted property, opacity, a filter, a clip-path or a paint, gives a
+ * different ratio at each frame, so the element stays unresolved. One held
+ * frame reads one place on the element's path: a belt that carries its own
+ * ground, or runs over one color, reads the same everywhere, but over a
+ * ground that varies along the way, a gradient or an image behind the belt,
+ * a worse place elsewhere on the path goes unread.
+ */
+export const HOLDS = /^(?:transform|translate|rotate|scale|cssOffset|offset[A-Z]\w*)$/;
+
+/**
  * What still moves an element once the sampler gives up, or null once it
  * holds still: an infinite time-based animation, one still running or a
  * scroll-driven one still changing at the limit, or a scroll-driven one at
@@ -173,9 +197,13 @@ export type Motion = {
  * isn't a time, and would show its target un-animated, off the box read
  * now. Each target's style attribute as it was before its first pin, it
  * keeps on the window under `__qualityHeld_<key>` for releaseScript(). A
- * value the pin doesn't hold, read back, makes it unholdable. Null once it rests and is pinned;
- * else what still moves it: an infinite time-based animation at once, or
- * the first still running at the limit. Runs in the browser.
+ * value the pin doesn't hold, read back, makes it unholdable. A counted
+ * infinite time-based animation whose counted properties are all HOLDS's it
+ * holds at its current frame, at a playback rate of 0, keeping each one and
+ * its rate under `__qualityRates_<key>` for releaseScript(). Null once it
+ * rests and is pinned; else what still moves it: an infinite time-based
+ * animation of anything else at once, or the first still running at the
+ * limit. Runs in the browser.
  */
 export function stillnessScript(
   el: Element,
@@ -205,8 +233,12 @@ export function stillnessScript(
     ((animation as CSSTransition).transitionProperty
       ? `a transition of ${(animation as CSSTransition).transitionProperty}`
       : animation.id || 'unnamed');
-  // INHERITED_PAINTS, inline: this runs in the page on its own.
+  // INHERITED_PAINTS and HOLDS, inline: this runs in the page on its own.
   const inheriting = /^color$/;
+  const holding = /^(?:transform|translate|rotate|scale|cssOffset|offset[A-Z]\w*)$/;
+  // The infinite animations it holds, each with its own rate, for releaseScript().
+  const rates: { animation: Animation; rate: number }[] = [];
+  (window as unknown as Record<string, unknown>)[`__qualityRates_${key}`] = rates;
   // Whether an ancestor's value of an inherited paint reaches `el`: every element from `el` up to
   // it computes its parent's color, so none between sets its own. A pseudo-element's doesn't.
   const reaches = (effect: KeyframeEffect, target: Element): boolean => {
@@ -302,8 +334,15 @@ export function stillnessScript(
           last.set(animation, { progress, held });
           if (held < 2) left ??= { kind: 'scrolling', name: named(animation) };
         } else if (animation.effect?.getComputedTiming().iterations === Infinity) {
-          finish({ kind: 'infinite', name: named(animation) });
-          return;
+          // One that only moves it is held at this frame for the shots, which leave an animation
+          // at a rate of 0 be; one that paints it, or fades or filters it, never holds one look.
+          if (rates.some((each) => each.animation === animation)) continue;
+          if (!guarded(animation).every((property) => holding.test(property))) {
+            finish({ kind: 'infinite', name: named(animation) });
+            return;
+          }
+          rates.push({ animation, rate: animation.playbackRate });
+          animation.playbackRate = 0;
         } else if (animation.playState !== 'finished' && animation.playState !== 'idle') {
           left ??= { kind: 'running', name: named(animation) };
         }
@@ -317,7 +356,8 @@ export function stillnessScript(
 
 /**
  * Takes off what stillnessScript() pinned under `key`: each target's style
- * attribute as it was, byte for byte, or none if it had none. Runs in the
+ * attribute as it was, byte for byte, or none if it had none, and each
+ * infinite animation it held runs again at its own rate. Runs in the
  * browser. A write the page itself makes to the same style attribute while
  * the pins hold (a layout custom property a script sets, say) is overwritten
  * too: the hold lasts the three shots, a few milliseconds, and only the test's
@@ -325,6 +365,10 @@ export function stillnessScript(
  */
 export function releaseScript(key: string): void {
   const name = `__qualityHeld_${key}`;
+  const rates = (window as unknown as Record<string, unknown>)[`__qualityRates_${key}`] as
+    { animation: Animation; rate: number }[] | undefined;
+  for (const { animation, rate } of rates ?? []) animation.playbackRate = rate;
+  delete (window as unknown as Record<string, unknown>)[`__qualityRates_${key}`];
   const held = (window as unknown as Record<string, unknown>)[name] as
     { target: Element; style: string | null }[] | undefined;
   // The release is the sampler's own write too (stillnessScript()'s pins).
@@ -590,6 +634,34 @@ export function sampleScript(
     const qr = Math.min(innerWidth, Math.ceil(Math.max(...corners.map((p) => p[0]!))));
     const qb = Math.min(innerHeight, Math.ceil(Math.max(...corners.map((p) => p[1]!))));
     box = { x: qx, y: qy, width: qr - qx, height: qb - qy };
+  }
+  // Its visible part: inside every ancestor whose overflow clips it, at that ancestor's padding
+  // box, as a locator's scroll into view reads it. Past a clipping edge, what's painted is beside
+  // it, never under its glyphs.
+  for (
+    let up = el.parentElement;
+    up && up !== document.body && up !== document.documentElement;
+    up = up.parentElement
+  ) {
+    const s = getComputedStyle(up);
+    const [across, down] = [s.overflowX !== 'visible', s.overflowY !== 'visible'];
+    if (!across && !down) continue;
+    const u = up.getBoundingClientRect();
+    let [left, top, right, bottom] = [box.x, box.y, box.x + box.width, box.y + box.height];
+    if (across) {
+      left = Math.max(left, u.left + (Number.parseFloat(s.borderLeftWidth) || 0));
+      right = Math.min(right, u.right - (Number.parseFloat(s.borderRightWidth) || 0));
+    }
+    if (down) {
+      top = Math.max(top, u.top + (Number.parseFloat(s.borderTopWidth) || 0));
+      bottom = Math.min(bottom, u.bottom - (Number.parseFloat(s.borderBottomWidth) || 0));
+    }
+    box = {
+      x: left,
+      y: top,
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top),
+    };
   }
   return {
     mode: high ? ('high-contrast' as const) : ('normal' as const),
@@ -1768,9 +1840,12 @@ export async function batchPlanScript({
   }
   counting = false;
   const pinned = new Set<number>();
+  const holding = new Set<number>();
   for (const { at } of [...settled].sort((a, b) => b.order - a.order)) {
     const held = w[`__qualityHeld_${key}_${at}`] as unknown[] | undefined;
     if (held && held.length > 0) pinned.add(at);
+    const rates = w[`__qualityRates_${key}_${at}`] as unknown[] | undefined;
+    if (rates && rates.length > 0) holding.add(at);
     helpers.release(`${key}_${at}`);
   }
   // What the page has changed since the call began, as it scrolled (an IntersectionObserver's
@@ -1824,6 +1899,11 @@ export async function batchPlanScript({
     // At rest on a scroll-driven animation, its own path holds the pin through its shots.
     if (pinned.has(at)) {
       own(at, 'it rests on a scroll-driven animation, which its own path pins for its shots');
+      continue;
+    }
+    // Moved for good by an infinite animation of its place alone, its own path holds that.
+    if (holding.has(at)) {
+      own(at, 'an infinite animation moves it, which its own path holds for its shots');
       continue;
     }
     // Checked again, as the waits after its own took time: what started moving it since takes it
