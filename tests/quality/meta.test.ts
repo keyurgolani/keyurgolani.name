@@ -215,6 +215,9 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     // A turn and its turn back after the shots, read again at rest; and a word wrong at rest.
     'contrast/double-turn',
     'contrast/double-turn-at-rest',
+    // A batch finding its own path confirms: a union-only pixel, and the most a call confirms.
+    'contrast/batch-union-stale',
+    'contrast/batch-confirmed',
     // Row 25's RC2 hardening: the sampler's watch bounded on a churning page.
     'contrast/turns-bounded',
     // Its own pins never the page's changes, a pending page change still kept.
