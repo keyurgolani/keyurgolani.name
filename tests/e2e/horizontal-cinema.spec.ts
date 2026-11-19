@@ -887,6 +887,60 @@ async function snapFromStart(page: Page): Promise<void> {
   await glideSetOut(page, 200, 1);
 }
 
+/**
+ * From rest at the strip's start, the snap's glide set out, then a wheel notch of `by` px the way it
+ * goes, read as it lands: whether the page was still moving then, its scroll at the notch's event
+ * apart from its scroll two frames before. A slow round trip can bring the notch after the glide has
+ * reached its scene, some 80 ms on; that notch comes from rest and is a fresh step, not the take-over
+ * the guard means, so the strip goes back to its start and the notch is sent again, at most 3 times,
+ * the tries recorded. One that never lands inside the glide fails as that.
+ */
+async function notchInGlide(page: Page, by: number): Promise<void> {
+  for (let tries = 1; ; tries++) {
+    await notchFromStart(page);
+    // The watch starts before the glide sets out, so the notch follows the set-out read as closely
+    // as glideSetOut's wait would have it.
+    await page.evaluate(
+      () =>
+        new Promise<void>((done) => {
+          const w = window as unknown as { __notchLanded?: boolean | null };
+          const last: number[] = [];
+          let out = false;
+          w.__notchLanded = null;
+          addEventListener(
+            'wheel',
+            () => {
+              w.__notchLanded = last.length > 0 && window.scrollY !== last[0];
+            },
+            { capture: true, once: true, passive: true },
+          );
+          const frame = () => {
+            last.push(window.scrollY);
+            if (last.length > 3) last.shift();
+            if (!out && window.scrollY >= 208) {
+              out = true;
+              done();
+            }
+            if (w.__notchLanded === null) requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+        }),
+    );
+    await page.mouse.wheel(0, by);
+    const landed = await page.evaluate(
+      () => (window as unknown as { __notchLanded?: boolean | null }).__notchLanded,
+    );
+    if (landed === true) {
+      test.info().annotations.push({ type: 'notch tries', description: String(tries) });
+      return;
+    }
+    expect(
+      tries,
+      `a ${by} px notch that lands inside the snap's glide, in 3 tries (the last read ${String(landed)})`,
+    ).toBeLessThan(3);
+  }
+}
+
 // A script's instant scroll back inside the glide, as the scroll bar drags it (row 123). Under CPU
 // throttling the browser's own smooth glide can land its next frame over a scroll a separate evaluate
 // makes, so the page never sits where the script put it and the test reads a premise that never held
@@ -944,13 +998,13 @@ test(
 );
 
 // A guard, not a pin: the snap before the rework passes it too, 10 of 10, so it keeps the rework from
-// turning back a notch the way the glide goes; it doesn't prove the rework.
+// turning back a notch the way the glide goes; it doesn't prove the rework. The notch counts only
+// when it lands inside the glide: one from rest, after the glide has arrived, is a fresh step on.
 test(
   "the pin's snap, taken over by a wheel notch the way it glides, still finishes on the scene ahead",
   { annotation, tag },
   async ({ page }) => {
-    await snapFromStart(page);
-    await page.mouse.wheel(0, 40);
+    await notchInGlide(page, 40);
     await expectRestsOn(page, 1);
   },
 );
