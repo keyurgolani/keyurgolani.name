@@ -1,0 +1,18 @@
+{
+  "name": "hc-289-place-probe",
+  "summary": "Horizontal Cinema's reader below the strip through a text size and back, read on CI Linux: every page and strip scroll and every scroll write, at three CPU rates",
+  "head": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "gate": false,
+  "look": [
+    {
+      "label": "p289",
+      "spec": "look/look-p289.spec.ts",
+      "project": "chromium",
+      "tests": 52,
+      "files": 1
+    }
+  ],
+  "kit": "150a0a7d54d9",
+  "kitScripts": "7964ce4b1c36"
+}
