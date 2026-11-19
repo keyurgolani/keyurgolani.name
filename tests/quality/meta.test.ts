@@ -218,6 +218,12 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     // A batch finding its own path confirms: a union-only pixel, and the most a call confirms.
     'contrast/batch-union-stale',
     'contrast/batch-confirmed',
+    // The scroll into view the snap-peek red below needs, pinned: the smallest, snapped back.
+    'contrast/scroll-into-view-edge',
+    // A title a snapping strip leaves cut, read once its snap area is in view, both directions.
+    'contrast/snap-peek',
+    'contrast/snap-peek-rtl',
+    'contrast/snap-peek-faint',
     // Row 25's RC2 hardening: the sampler's watch bounded on a churning page.
     'contrast/turns-bounded',
     // Its own pins never the page's changes, a pending page change still kept.
