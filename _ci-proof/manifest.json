@@ -1,0 +1,28 @@
+{
+  "name": "rc3-oa-coverage-at-rc4",
+  "summary": "Obsidian Atelier's header links stay clear of its running head in a phone's landscape check, in the two release cells where it fell short, on Linux at the next candidate's tip",
+  "head": "337ce18ca1f51318a66d596f8825642cf3f2d6d4",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "cells": [
+    {
+      "label": "oa-353",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:obsidian\\-atelier\\ complete\\ /\\ obsidian\\-atelier/bauhaus\\-geometric/high\\-contrast/swiss\\-grotesque/dark\\ 390x844\\ default\\ )",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "oa-556",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:obsidian\\-atelier\\ complete\\ /\\ obsidian\\-atelier/minimal\\-flat/neon\\-city/paste\\-up/dark\\ 390x844\\ default\\ )",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
