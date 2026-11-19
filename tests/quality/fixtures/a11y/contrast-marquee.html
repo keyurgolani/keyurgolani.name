@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A clipped marquee, known-good</title>
+    <!--
+      A ticker shaped like Raw Grid's: a flex row, a track that clips
+      (overflow: hidden) a belt an infinite translate carries, and a Pause
+      toggle beside the track on a ground of its own. The items' text is
+      light on the ticker's dark ground, and each item is 200 px wide from
+      the track's start, so the third straddles the track's end at load,
+      its unclipped box over the toggle. Axe leaves such an item incomplete
+      only when it reads the box over the toggle, a race with the belt that
+      its own clip to the track mostly hides, so the cases (a11y-cases.ts)
+      name the third item to the sampler as axe names one it leaves
+      incomplete. The belt crawls, 600 s a lap, so the third still straddles
+      the end when the sampler reaches it. The cases add the third item at
+      the marker: a readable one, which is sampled at one held frame inside
+      the track, and the known-bad one, a faint one, which still fails as a
+      measure.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem;
+      }
+      .ticker {
+        display: flex;
+        inline-size: 600px;
+        background: #1a1a1a;
+        color: #f5f5f5;
+      }
+      .track {
+        display: flex;
+        flex: 1;
+        min-inline-size: 0;
+        overflow: hidden;
+      }
+      .belt {
+        display: flex;
+        flex: none;
+        animation: crawl 600s linear infinite;
+      }
+      .item {
+        flex: none;
+        box-sizing: border-box;
+        inline-size: 200px;
+        margin: 0;
+        padding: 0.5rem 1rem;
+        white-space: nowrap;
+      }
+      .faint {
+        color: #3a3a3a;
+      }
+      .toggle {
+        flex: none;
+        inline-size: 120px;
+        padding: 0.5rem;
+        border: 0;
+        font: inherit;
+        background: #ffd400;
+        color: #111;
+      }
+      @keyframes crawl {
+        to {
+          transform: translateX(-50%);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A ticker</h1>
+      <div class="ticker">
+        <div class="track">
+          <div class="belt">
+            <p class="item">First item</p>
+            <p class="item">Second item</p>
+            <!-- edge -->
+            <p class="item">Fourth item</p>
+          </div>
+        </div>
+        <button class="toggle" type="button">Pause</button>
+      </div>
+    </main>
+  </body>
+</html>
