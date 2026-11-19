@@ -52,6 +52,14 @@ export function openingRead(entries: readonly IntersectionObserverEntry[], line:
   return entry?.isIntersecting === true && entry.boundingClientRect.top > top;
 }
 
+/** A length the element's computed style gives in px, or 0 where it gives none. */
+function px(
+  element: Element,
+  property: 'paddingLeft' | 'paddingBlockStart' | 'rowGap' | 'top',
+): number {
+  return parseFloat(getComputedStyle(element)[property]) || 0;
+}
+
 export function ScrollSpy() {
   const { plate } = useBoundary();
   const mark = useRef<HTMLSpanElement>(null);
@@ -115,7 +123,7 @@ export function ScrollSpy() {
       if (list) {
         const box = stop.getBoundingClientRect();
         const edge = list.getBoundingClientRect();
-        const reach = parseFloat(getComputedStyle(list).paddingLeft) || 0;
+        const reach = px(list, 'paddingLeft');
         // Whole pixels, rounded away from the link: the scroller moves by whole pixels.
         list.scrollLeft +=
           Math.ceil(Math.max(0, box.right + reach - edge.right)) +
@@ -195,13 +203,13 @@ export function ScrollSpy() {
     let railWatches: IntersectionObserver[] = [];
     let docked = false;
     let dockWatch: IntersectionObserver | null = null;
-    const wide = () => view.matchMedia('(width >= 81.25rem)').matches;
+    const wide = view.matchMedia('(width >= 81.25rem)');
     const watchDock = () => {
       dockWatch?.disconnect();
       dockWatch = null;
       // Only beside the head column: below it the rail is the chapter bar, pinned over the page.
-      if (!rail || !wide()) return;
-      const stick = parseFloat(getComputedStyle(rail).top) || 0;
+      if (!rail || !wide.matches) return;
+      const stick = px(rail, 'top');
       dockWatch = new IntersectionObserver(
         (entries) => {
           const now = railDocked(entries, stick);
@@ -218,11 +226,11 @@ export function ScrollSpy() {
       railWatches = [];
       inRail.clear();
       inTop.clear();
-      rail?.removeAttribute('data-ee-yield');
-      if (!rail || !wide()) return;
-      if (held) return rail.setAttribute('data-ee-yield', 'held');
-      if (!docked) {
-        rail.setAttribute('data-ee-yield', 'fold');
+      if (!rail) return;
+      delete rail.dataset.eeYield;
+      if (!wide.matches) return;
+      if (held || !docked) {
+        rail.dataset.eeYield = held ? 'held' : 'fold';
         return;
       }
       const box = rail.getBoundingClientRect();
@@ -233,7 +241,7 @@ export function ScrollSpy() {
       const reading =
         rail.querySelector<HTMLElement>('[data-ee-rail][data-current] > a') ??
         rail.querySelector<HTMLElement>('[data-ee-rail] > a');
-      const gap = parseFloat(getComputedStyle(rail).rowGap) || 0;
+      const gap = px(rail, 'rowGap');
       const top =
         (label ? label.getBoundingClientRect().bottom : box.top) +
         (reading ? gap + reading.offsetHeight : 0) +
@@ -242,8 +250,8 @@ export function ScrollSpy() {
         // The current head counts too until it docks: after a jump it sits lower, over the rail.
         // Docked, it's above the rail's box, so it no longer crosses.
         const state = inTop.size > 0 ? 'away' : inRail.size > 0 ? 'fold' : null;
-        if (state) rail.setAttribute('data-ee-yield', state);
-        else rail.removeAttribute('data-ee-yield');
+        if (state) rail.dataset.eeYield = state;
+        else delete rail.dataset.eeYield;
       };
       for (const [set, bottom] of [
         [inRail, box.bottom],
@@ -316,7 +324,7 @@ export function ScrollSpy() {
     const observe = () => {
       observer?.disconnect();
       before?.disconnect();
-      const line = Math.ceil(parseFloat(getComputedStyle(sentinel).paddingBlockStart) || 0) + 1;
+      const line = Math.ceil(px(sentinel, 'paddingBlockStart')) + 1;
       const below = Math.max(0, sentinel.clientHeight - line - 1);
       observer = new IntersectionObserver(
         (entries) => {
