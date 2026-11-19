@@ -3280,6 +3280,15 @@
     scroll-behavior: smooth;
   }
 
+  /* With no script nothing steers the strip, so focus moves it at once, as under reduced motion: a
+     glide can stop short of a control in a later scene and leave it past the window's edge. */
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not(:has(.hc-scrub:is([data-live], [inert])))
+    .hc-stage {
+    scroll-behavior: auto;
+  }
+
   [data-variant='horizontal-cinema'] .hc-minimap__window {
     transition:
       inset-inline-start var(--motion-feedback) var(--motion-curve)
