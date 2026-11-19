@@ -3590,9 +3590,11 @@
     color: var(--color-text-primary);
   }
 
+  /* The place's mark, inside its tab: the gap beside it is a neighbour's ring's when that's focused. */
   [data-variant='flux'] .fx-tab[aria-current],
   [data-variant='flux'] .fx:not([data-fx-live]) .fx-tabs .fx-tab--name {
     outline: 2px solid currentColor;
+    outline-offset: -2px;
   }
 
   [data-variant='flux'] .fx-sheet__tab,
