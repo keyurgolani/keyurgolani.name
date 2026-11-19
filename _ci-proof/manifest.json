@@ -1,0 +1,29 @@
+{
+  "name": "contrast-batch-confirm-cost",
+  "summary": "contrast confirms batch findings and reads cut text with its snap area in view; the keyboard walk starts at the top and judges stops at rest",
+  "head": "0de8f4ef9697efa276a481c937b59e5271f9e001",
+  "base": "f7511c2d2f70ebe9e4c4af18f3be184a9fbc5545",
+  "cells": [
+    {
+      "label": "slow219",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/night-terminal/humanist-ui/system (1440x900|390x844) default|mission-control/platform-neutral/cool-color-safe/humanist-ui/dark 390x844 default|aurora-glass/claymorphic/neutral-slate/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["219/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "at": "base"
+    },
+    {
+      "label": "slow219",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/night-terminal/humanist-ui/system (1440x900|390x844) default|mission-control/platform-neutral/cool-color-safe/humanist-ui/dark 390x844 default|aurora-glass/claymorphic/neutral-slate/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["219/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
