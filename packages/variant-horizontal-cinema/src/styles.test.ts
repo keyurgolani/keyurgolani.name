@@ -258,6 +258,17 @@ test('no other link in a bar sets its ring’s offset: the inset is the Next lin
   assert.deepEqual(others, []);
 });
 
+test('a scene’s one column is its own width, and the bottom bar wraps and breaks its words, never cutting them short, so its credit or note and Next link keep inside the scene', () => {
+  // Sized by what its rows hold, the column ran past the scene's clipped edge under a bar set wider
+  // than its scene, and the bars' ends, the Next link's ring with them, were cut off. Cut short to
+  // fit, under an ellipsis, the bar's words were lost at 200% root text: they wrap instead.
+  assert.match(declared(at('.hc-scene'), CSS), /grid-template-columns: minmax\(0, 1fr\);/);
+  const bottom = declared(at('.hc-bar--bottom'), CSS);
+  assert.match(bottom, /flex-wrap: wrap;/);
+  assert.match(bottom, /overflow-wrap: anywhere;/);
+  assert.doesNotMatch(declared(at('.hc-bar__next'), CSS), /flex:|text-overflow|white-space/);
+});
+
 /** The top line's own links, its name and its site nav, and the visitor's control: never the band as a whole. */
 const TOP_LINE_LINKS =
   ':is(.hc-chrome__name, .hc-chrome__nav, .hc-chrome > [data-visitor-control-slot])';

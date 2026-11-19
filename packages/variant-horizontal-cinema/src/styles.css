@@ -265,6 +265,10 @@
   --layout-arrive: var(--space-l);
   position: relative;
   display: grid;
+  /* One column, the scene's own width: sized by what its rows hold, a bar set wider than its scene
+     ran it past the scene's clipped edge, and the bars' ends, a Next link's ring with them, were cut
+     off. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: clip;
   /* A frame for words and controls, so the card's radius: it clips at its corners, where its bars'
@@ -307,6 +311,14 @@
   --color-focus: var(--color-on-scrim);
 }
 
+/* The bottom bar wraps where its credit or note and its Next link don't fit one line, and each
+   breaks its words where it must: nothing in it runs past the scene, and none of its words are cut
+   short, the Next link's ring whole round all of its own. */
+[data-variant='horizontal-cinema'] .hc-bar--bottom {
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+
 [data-variant='horizontal-cinema'] .hc-bar__lead {
   display: flex;
   align-items: baseline;
@@ -333,7 +345,6 @@
 
 /* Inline, not a flex box, so the space between its English words and a title in another language stays. */
 [data-variant='horizontal-cinema'] .hc-bar__next {
-  flex: none;
   display: inline-block;
   /* The ring's width clear of the text on either side, taken back by the margin, so the text stays put. */
   padding-inline: var(--ui-focus-width);
