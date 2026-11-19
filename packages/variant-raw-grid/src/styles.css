@@ -23,6 +23,8 @@
   --layout-motion-scene: 600ms;
   --layout-motion-ambient: 40s;
   --layout-rule: 3px solid var(--color-text-primary);
+  /* --layout-rule's width, for what stands clear of a rule drawn apart from its cell. */
+  --layout-rule-size: 3px;
   --layout-cell-x: var(--space-m);
   /* A focus ring's reach and as much again: what a control keeps clear inside its ruled cell,
      so the platform's ring lies on the cell's ground, never on a rule or a shadow. */
@@ -736,9 +738,35 @@
   border-inline-start: 0;
 }
 
+/* A destination's cell draws its rule from a box of its own and keeps its tab's end a ring's
+   reach clear with a room that gives way, the tab shifted the rule's width onto its start: the cell
+   lays its tab out as before, but asks the row for no more than the tab and its start's ring room.
+   So a tab that only reaches into its ring's room at its end stays in its column, and only one that
+   would run its link past the next cell's rule widens the row's destination columns (below). */
+[data-variant='raw-grid'] .rg-head__dests > li {
+  position: relative;
+  border-inline-start: 0;
+}
+
+[data-variant='raw-grid'] .rg-head__dests > li::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-inline-start: var(--layout-rule);
+}
+
+[data-variant='raw-grid'] .rg-head__dests > li::after {
+  content: '';
+  flex: 1 1 0;
+  max-inline-size: calc(var(--layout-ring) + var(--layout-rule-size));
+}
+
 [data-variant='raw-grid'] .rg-head__dest {
+  inset-inline-start: var(--layout-rule-size);
   justify-content: space-between;
   gap: var(--space-3xs);
+  margin-inline-end: 0;
   font-size: var(--type-label-font-size);
 }
 
@@ -2383,6 +2411,21 @@
 
   [data-variant='raw-grid'] .rg-head__dests {
     grid-column: 4 / 12;
+  }
+}
+
+/* Wider, each destination has its own column while its tab fits it. One that would run past the
+   next cell's rule widens all five alike, as far as the widest asks, into the where cell's columns
+   (whose last words give way), and never past them; the name's and the Index's stay as they are. */
+@container rg-page (width >= 82.5rem) {
+  [data-variant='raw-grid'] .rg-head__row {
+    grid-template-columns:
+      repeat(3, minmax(calc(100% / 12), 1fr)) repeat(5, minmax(max-content, 1fr))
+      repeat(3, minmax(0, 1fr)) minmax(calc(100% / 12), 1fr);
+  }
+
+  [data-variant='raw-grid'] .rg-head__dests > li {
+    max-inline-size: 13cqi;
   }
 }
 
