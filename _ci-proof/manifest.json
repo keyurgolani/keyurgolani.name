@@ -1,0 +1,68 @@
+{
+  "name": "hc-289-fix",
+  "summary": "Horizontal Cinema keeps a reader below the strip in place when the strip's scroll lands before the text size's refit",
+  "head": "19c1c618bc98bbbf9043403d4f2013ded1c56885",
+  "base": "c74e8740447439013e23e0c636f93d504d401181",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "every bundled variant and pack declares budgets within its ceilings",
+      "five chapters, in their authored order, each with its direct anchor",
+      "at the strip's end, a current scene that is stuck there holds; elsewhere the probe decides",
+      "a travel resting between scenes finishes on the next one the way it went, never pulled back",
+      "its manifest renders every core kind itself, owns both pages, and has a List view",
+      "a whole citation shows at most once, and never beside its structured authors (A4)",
+      "numbers read from digits and English words",
+      "a scene that still overflows in a wider face opens a width wider, never shrinking its type"
+    ]
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "text-size-stage-scroll",
+      "at": "790c20ccbc4b989c13872643d3cca1ce2705e4f3",
+      "specs": ["tests/e2e/horizontal-cinema-text-size-stage-scroll.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "failed": 2
+    }
+  ],
+  "e2e": [
+    {
+      "label": "hc-full",
+      "specs": ["tests/e2e/horizontal-cinema*.spec.ts"],
+      "tests": 232,
+      "files": 36
+    },
+    {
+      "label": "stage-scroll-x10",
+      "specs": ["tests/e2e/horizontal-cinema-text-size-stage-scroll.spec.ts"],
+      "tests": 2,
+      "files": 1,
+      "repeatEach": 10
+    }
+  ],
+  "cells": [
+    {
+      "label": "hc-neutral",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:horizontal-cinema complete / horizontal-cinema/platform-neutral/warm-parchment/humanist-ui/system (1440x900|1024x768|390x844) (default|reduced-motion|contrast-more) ",
+      "shards": ["find"],
+      "tests": 9,
+      "passed": 9,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "p289",
+      "spec": "look/look-p289.spec.ts",
+      "project": "chromium",
+      "tests": 52,
+      "files": 1
+    }
+  ],
+  "kit": "150a0a7d54d9",
+  "kitScripts": "7964ce4b1c36"
+}
