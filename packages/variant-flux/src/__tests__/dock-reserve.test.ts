@@ -27,12 +27,14 @@ test("Flux reserves its phone dock's room at the window's block end, in the quer
   const media = docked[0]!.at.find((at) => at.startsWith('@media '))?.slice('@media '.length);
   assert.ok(MANIFEST.scrollReserve, 'the manifest declares a scrollReserve');
   assert.equal(MANIFEST.scrollReserve.media, media);
-  // The dock measured 67.1px at 16px root text (--layout-fx-bar-box), and 79.1px under more
-  // contrast, and a control needs its 4px ring clear of it too: the reserve is the taller dock,
-  // the ring and a clearance, in rem so it grows with the root's text as the dock does.
+  // A control focus reaches already in view rests wherever the reserve lets it stand, so the
+  // reserve holds the tallest dock and the widest ring, and 1px more. The dock measured 67.1px at
+  // 16px root text (--layout-fx-bar-box); under more contrast it stands taller, by language: 99.1px
+  // on Material Expressive, 95.1px on Claymorphic, 93.1px on Art Deco, 89.1px on Blueprint. The
+  // widest ring reaches 8px (Art Deco). In rem, so it grows with the root's text as the dock does.
   assert.match(MANIFEST.scrollReserve.blockEnd, /rem$/);
   const px = scrollReservePx(MANIFEST.scrollReserve.blockEnd)!;
-  assert.ok(px >= 79.1 + 4 + 8, `${px}px`);
+  assert.ok(px >= 99.1 + 8 + 1, `${px}px`);
 });
 
 test("a control Tab brings up from below a phone's dock stops clear of it by the dock, the ring's reach and more", () => {
