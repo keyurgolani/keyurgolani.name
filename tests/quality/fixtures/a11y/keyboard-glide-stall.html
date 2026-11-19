@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A link a stalled glide brings into view, known-good</title>
+    <!--
+      A strip of links whose glide the page drives with a stall in it, as a loaded runner's frames
+      can stall a smooth scroll-into-view: Tab to the far link scrolls the strip, the page puts it
+      back, takes it half way at 50 ms, where the link is still out of view, holds 250 ms, and
+      brings the link into view at 300 ms. The walk reads the stop where the page comes to rest:
+      one that reads out of view waits for the focused box and every scroll on the way up to hold
+      still 600 ms before it's judged, so this one, in view at rest, passes.
+    -->
+    <style>
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+      }
+      main {
+        padding: 1rem;
+      }
+      .strip {
+        display: flex;
+        gap: 1rem;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .strip a {
+        flex: 0 0 12rem;
+        padding: 0.5rem;
+        color: #222;
+      }
+      .gap {
+        flex: 0 0 2800px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A strip of links</h1>
+      <div class="strip" id="strip">
+        <a href="#one">One</a>
+        <a href="#two">Two</a>
+        <span class="gap"></span>
+        <a href="#far" id="far">Far along the strip</a>
+      </div>
+    </main>
+    <script>
+      const strip = document.getElementById('strip');
+      let rest = strip.scrollLeft;
+      // A glide the page drives itself: where focus's own scroll took the strip, put back, then
+      // half way at 50 ms, a 250 ms stall, and the rest at 300 ms.
+      strip.addEventListener('focusin', () => {
+        const end = strip.scrollLeft;
+        if (end === rest) return;
+        const from = rest;
+        rest = end;
+        strip.scrollLeft = from;
+        setTimeout(() => {
+          strip.scrollLeft = from + (end - from) / 2;
+        }, 50);
+        setTimeout(() => {
+          strip.scrollLeft = end;
+        }, 300);
+      });
+    </script>
+  </body>
+</html>
