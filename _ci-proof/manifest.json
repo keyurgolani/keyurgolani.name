@@ -1,0 +1,118 @@
+{
+  "name": "rc3-coverage-at-rc4",
+  "summary": "Focus rings in Aurora Glass, on Flux's Copy email button and on Terra Field's stat link read at 3:1 in the release cells where they fell furthest short, on Linux at the next candidate's tip",
+  "head": "f7511c2d2f70ebe9e4c4af18f3be184a9fbc5545",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "cells": [
+    {
+      "label": "ag-451",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/skeuomorphic/jewel\\-twilight/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/skeuomorphic/jewel\\-twilight/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/skeuomorphic/jewel\\-twilight/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["451/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "ag-460",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/botanical\\-sage/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/botanical\\-sage/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/botanical\\-sage/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["460/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "ag-80",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/paper\\-ink/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/paper\\-ink/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/paper\\-ink/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["80/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "ag-297",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/night\\-terminal/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/night\\-terminal/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/night\\-terminal/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["297/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "ag-54",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/sepia\\-film/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/sepia\\-film/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/sepia\\-film/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["54/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "ag-493",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/low\\-stimulus\\-warm/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/low\\-stimulus\\-warm/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/low\\-stimulus\\-warm/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["493/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "ag-509",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/oled\\-black/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/oled\\-black/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/oled\\-black/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["509/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "fx-450",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:flux\\ complete\\ /\\ flux/blueprint/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ contrast\\-more\\ )",
+      "shards": ["450/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "fx-445",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:flux\\ complete\\ /\\ flux/platform\\-neutral/arctic\\-aurora/humanist\\-ui/light\\ 390x844\\ contrast\\-more\\ )",
+      "shards": ["445/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "fx-431",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:flux\\ complete\\ /\\ flux/platform\\-neutral/aurora\\-meadow/humanist\\-ui/system\\ 390x844\\ contrast\\-more\\ )",
+      "shards": ["431/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "ag-104",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/claymorphic/neon\\-city/multilingual\\-system/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/claymorphic/neon\\-city/multilingual\\-system/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/claymorphic/neon\\-city/multilingual\\-system/dark\\ 390x844\\ default\\ )",
+      "shards": ["104/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "tf-214",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:terra\\-field\\ complete\\ /\\ terra\\-field/platform\\-neutral/warm\\-parchment/technical\\-sans\\-mono/system\\ 1024x768\\ default\\ )",
+      "shards": ["214/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
