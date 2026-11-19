@@ -1,0 +1,29 @@
+{
+  "name": "horizontal-cinema-297-flake-head",
+  "summary": "Horizontal Cinema's wheel-notch guard and its below-strip text-size place, twenty runs each on CI Linux, at the stack top",
+  "head": "eeaf88c26aa118283be26d6cb864682c7b962bd1",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "gate": false,
+  "e2e": [
+    {
+      "label": "w948",
+      "specs": ["tests/e2e/horizontal-cinema.spec.ts"],
+      "project": "chromium-interaction",
+      "grep": "taken over by a wheel notch the way it glides",
+      "tests": 1,
+      "files": 1,
+      "repeatEach": 20
+    },
+    {
+      "label": "bst55",
+      "specs": ["tests/e2e/horizontal-cinema-below-strip-text-size.spec.ts"],
+      "project": "chromium",
+      "grep": "at 1440, a reader in the full record keeps their place through a text size and back",
+      "tests": 1,
+      "files": 1,
+      "repeatEach": 20
+    }
+  ],
+  "kit": "150a0a7d54d9",
+  "kitScripts": "7964ce4b1c36"
+}
