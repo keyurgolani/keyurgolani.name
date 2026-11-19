@@ -1,0 +1,114 @@
+{
+  "name": "oa-top-row-checklists",
+  "summary": "Obsidian Atelier's catalogue checklists reflow at 200% text, its top row gives the name and the room switch their room under any face, and a custom item's links keep their focus ring clear of the rule above",
+  "head": "cebf11b02e0ee6e235c021963444d1239b8f44d1",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "every bundled variant and pack declares budgets within its ceilings"
+    ]
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "root-text-checklist",
+      "at": "3e3a72d5a0c08df2a0c122d50648dcd0822d3ccb",
+      "specs": ["tests/e2e/obsidian-atelier-root-text-checklist.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 2
+    },
+    {
+      "label": "top-row-fit",
+      "at": "276ff3b1d4e7ffc406271a86870249fb5cd46930",
+      "specs": ["tests/e2e/obsidian-atelier-top-row-fit.spec.ts"],
+      "tests": 10,
+      "files": 1,
+      "failed": 9
+    },
+    {
+      "label": "top-row-switch",
+      "at": "46acf274deeba7799e16551fffd9599b9754d419",
+      "specs": ["tests/e2e/obsidian-atelier-top-row-switch.spec.ts"],
+      "tests": 6,
+      "files": 1,
+      "failed": 6
+    },
+    {
+      "label": "entries-links-ring",
+      "at": "e104d5185e1ac2e28632b263db9c900e51b54ad7",
+      "specs": ["tests/e2e/obsidian-atelier-entries-links-ring.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    }
+  ],
+  "e2e": [
+    {
+      "label": "oa",
+      "specs": ["tests/e2e/obsidian-atelier*.spec.ts"],
+      "tests": 90,
+      "files": 19
+    }
+  ],
+  "cells": [
+    {
+      "label": "swiss",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/platform-neutral/warm-parchment/swiss-grotesque/system (1440x900|1024x768|390x844) (default|reduced-motion|forced-colors|contrast-more|reduced-transparency|print|no-javascript) ",
+      "shards": ["24/611"],
+      "tests": 21,
+      "passed": 21,
+      "failed": 0
+    },
+    {
+      "label": "accessible",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/platform-neutral/warm-parchment/accessible-reading/system (1440x900|1024x768|390x844) (default|reduced-motion|forced-colors|contrast-more|reduced-transparency|print|no-javascript) ",
+      "shards": ["417/611"],
+      "tests": 21,
+      "passed": 21,
+      "failed": 0
+    },
+    {
+      "label": "drafting",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/neobrutalist/paper-ink/drafting-grotesk/dark (1440x900|1024x768|390x844) (default|reduced-motion|forced-colors|contrast-more|reduced-transparency|print|no-javascript) ",
+      "shards": ["32/611"],
+      "tests": 21,
+      "passed": 21,
+      "failed": 0
+    },
+    {
+      "label": "sepia",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/platform-neutral/sepia-film/accessible-reading/dark (1440x900|1024x768|390x844) (default|reduced-motion|forced-colors|contrast-more|reduced-transparency|print|no-javascript) ",
+      "shards": ["505/611"],
+      "tests": 21,
+      "passed": 21,
+      "failed": 0
+    },
+    {
+      "label": "letterpress",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/letterpress/botanical-sage/screen-grotesque/dark (1440x900|1024x768|390x844) (default|reduced-motion|forced-colors|contrast-more|reduced-transparency|print|no-javascript) ",
+      "shards": ["502/611"],
+      "tests": 21,
+      "passed": 21,
+      "failed": 0
+    },
+    {
+      "label": "pasteup",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:obsidian-atelier complete / obsidian-atelier/platform-neutral/warm-parchment/paste-up/system (1440x900|1024x768|390x844) (default|reduced-motion|forced-colors|contrast-more|reduced-transparency|print|no-javascript) ",
+      "shards": ["find"],
+      "tests": 21,
+      "passed": 21,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
