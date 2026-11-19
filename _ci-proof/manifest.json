@@ -1,0 +1,59 @@
+{
+  "name": "flux-bar-tabs-ring-drop",
+  "summary": "Flux's bar: a focused tab rings whole beside the marked place under forced colours, and a move that begins mid-move lands at once",
+  "head": "0790d5b42937b2b5e54f5ae0da57b0b6e1bc9a3a",
+  "base": "f7511c2d2f70ebe9e4c4af18f3be184a9fbc5545",
+  "reds": [
+    {
+      "label": "ring",
+      "at": "41780d0baab7ca3a1ac0b33218988b83ed259701",
+      "specs": ["tests/e2e/flux-forced-tab-ring.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    },
+    {
+      "label": "drop",
+      "at": "29505c89227788f035e929cf66f3ca3d7109919b",
+      "specs": ["tests/e2e/flux-bar-drop-interrupted.spec.ts"],
+      "tests": 4,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "ring",
+      "specs": ["tests/e2e/flux-forced-tab-ring.spec.ts"],
+      "tests": 4,
+      "files": 1
+    },
+    {
+      "label": "drop",
+      "specs": ["tests/e2e/flux-bar-drop-interrupted.spec.ts"],
+      "tests": 4,
+      "files": 1
+    }
+  ],
+  "cells": [
+    {
+      "label": "bar-sample",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:flux\\ complete\\ /\\ flux/((letterpress/forest\\-moss/humanist\\-ui/dark|letterpress/warm\\-parchment/humanist\\-ui/system|neobrutalist/oled\\-black/console\\-mono/dark|utility\\-dense/control\\-room/drafting\\-grotesk/dark|cyberpunk/low\\-stimulus\\-warm/screen\\-grotesque/dark|claymorphic/jewel\\-twilight/accessible\\-reading/dark|handcrafted\\-collage/neon\\-city/shell\\-mono/dark|bauhaus\\-geometric/aurora\\-meadow/drafting\\-grotesk/dark|industrial/desert\\-terracotta/shell\\-mono/dark|material\\-expressive\\-inspired/drafting\\-blue/field\\-serif/dark)\\ [^ ]+\\ forced\\-colors|industrial/warm\\-parchment/humanist\\-ui/system\\ 1024x768\\ contrast\\-more|material\\-expressive\\-inspired/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ contrast\\-more)\\ )",
+      "shards": ["find"],
+      "tests": 32,
+      "passed": 32,
+      "failed": 0
+    }
+  ],
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "the words the drop lies under take the inverse ink: the place, and every tab a stretch spans",
+      "a stretch covers both tabs, either way round"
+    ]
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
