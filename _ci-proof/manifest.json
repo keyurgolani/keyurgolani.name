@@ -1,0 +1,26 @@
+{
+  "name": "hc-script-off-focus-a",
+  "summary": "With no script, Tab through Horizontal Cinema's strip at 1440 by 900: the red at its own commit, and the strip scrolling at once (no glide) at the head",
+  "head": "2dbec582762e684baf58f0a9968e75a2e8e23d98",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "reds": [
+    {
+      "label": "base",
+      "at": "14602ab6755b198852fcd0ee19c96266f5f78433",
+      "specs": ["tests/e2e/horizontal-cinema-script-off-focus.spec.ts"],
+      "tests": 10,
+      "files": 1,
+      "failed": 10
+    }
+  ],
+  "e2e": [
+    {
+      "label": "a",
+      "specs": ["tests/e2e/horizontal-cinema-script-off-focus.spec.ts"],
+      "tests": 10,
+      "files": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
