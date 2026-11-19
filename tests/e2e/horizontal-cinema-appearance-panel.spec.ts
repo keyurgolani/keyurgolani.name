@@ -1,3 +1,4 @@
+import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { CONTRACT_FIXTURES } from '../../packages/variant-contract/src/node/fixtures';
 import { startApp } from '../harness/app-server.mjs';
@@ -12,7 +13,11 @@ import { load } from './horizontal-cinema-model';
 // the panel lies wholly inside the window, on the panel's own opaque ground, and Tab reaches each of
 // them, a select, the display mode's radios and Reset, with its ring inside the window, in the default
 // row and under more contrast. At 390 the band grows to hold the open control, which stays in its
-// flow. One server a tuple, on the complete contract fixture.
+// flow. Closed on the pinned strip, the panel's content stays folded away in the band's flow, as a
+// closed disclosure's is: placed off the band while closed, its rows were laid out over the strip's
+// pinned frame, where the release run's contrast check read a closed label as text the frame covers
+// (platform-neutral, sepia-film, humanist-ui and light at 1024 and 1440). There axe's contrast rule
+// reads nothing in the closed panel. One server a tuple, on the complete contract fixture.
 
 const FIXTURE = CONTRACT_FIXTURES.find((fixture) => fixture.name === 'complete')!;
 const HC = { manifest: { id: 'horizontal-cinema' } };
@@ -34,7 +39,7 @@ const annotation = [
 ];
 const tag = '@interaction';
 
-function onTuple([language, scheme, typography, mode]: (typeof TUPLES)[number]) {
+function onTuple([language, scheme, typography, mode]: readonly [string, string, string, string]) {
   const app = fixtureApp(FIXTURE, HC);
   return {
     ...app,
@@ -200,3 +205,43 @@ for (const tuple of TUPLES)
       },
     );
   });
+
+/** The tuple whose closed panel the release run read over the pinned frame. */
+const FOLDED = ['platform-neutral', 'sepia-film', 'humanist-ui', 'light'] as const;
+
+test.describe(`Horizontal Cinema's closed Appearance panel on ${FOLDED.join('/')}`, () => {
+  test.describe.configure({ mode: 'default' });
+  let app: Awaited<ReturnType<typeof startApp>>;
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    app = await startApp({ ...onTuple(FOLDED), logFile: test.info().outputPath('server.log') });
+  });
+  test.afterAll(async () => {
+    await app?.stop();
+  });
+  for (const viewport of STRIP)
+    test(
+      `${FOLDED[1]} at ${viewport.width}x${viewport.height}: closed on the pinned strip, the Appearance panel's content stays folded away, and axe's contrast rule reads nothing in it`,
+      { annotation, tag },
+      async ({ browser }) => {
+        const context = await browser.newContext({ viewport, baseURL: app.origin });
+        try {
+          const page = await context.newPage();
+          await load(page);
+          await expect(page.locator('.hc')).toHaveAttribute('data-view', 'strip');
+          await expect(page.locator('.hc-shell')).toHaveAttribute('data-pin', '');
+          await expect(page.locator('#appearance')).not.toHaveAttribute('open');
+          const results = await new AxeBuilder({ page })
+            .withRules(['color-contrast'])
+            .include('#appearance > [data-ui-slot="disclosure.content"]')
+            .analyze();
+          const read = [...results.passes, ...results.violations, ...results.incomplete].flatMap(
+            (rule) => rule.nodes.map((node) => `${rule.id}: ${node.target.join(' ')}`),
+          );
+          expect(read, 'what axe read in the closed panel').toEqual([]);
+        } finally {
+          await context.close();
+        }
+      },
+    );
+});
