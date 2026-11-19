@@ -2271,6 +2271,20 @@ export const A11Y_CASES: readonly MetaCase[] = [
     scriptlessKeyboard('keyboard/no-js-smooth-scroll-out'),
     { noScript: true },
   ),
+  // A glide the page drives that stalls part way, as a loaded runner's frames can stall a smooth
+  // scroll-into-view: a stop that reads out of view is judged only once the focused box and the
+  // scroll chain hold still 600 ms, so one the glide brings into view passes, and one it leaves
+  // out of view still fails.
+  goodFile('glide-stall', 'keyboard-glide-stall.html', 'keyboard', keyboard),
+  {
+    id: 'keyboard/glide-short',
+    gate: 'keyboard',
+    input: 'tests/quality/fixtures/a11y/keyboard-glide-short.html',
+    expect: 'fail',
+    reason: /^keyboard hidden-focusable: it has focus outside the viewport$/,
+    browser: true,
+    run: () => onPage('keyboard-glide-short.html', keyboard),
+  },
   builtCase(
     'summary-skipped',
     'keyboard',
