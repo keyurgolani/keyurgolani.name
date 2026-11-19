@@ -1,0 +1,22 @@
+{
+  "name": "oa-top-row-pin-variants",
+  "summary": "Obsidian Atelier's room switch giving way to the pinned Index at large text moves no variant shot at the default text",
+  "head": "97b8e3961ed44d638f4e3384a2d7b4cafd36005d",
+  "base": "cebf11b02e0ee6e235c021963444d1239b8f44d1",
+  "e2e": [
+    {
+      "label": "row-1x",
+      "specs": ["tests/e2e/obsidian-atelier-top-row-switch.spec.ts"],
+      "grep": "from 768 to 1440",
+      "tests": 4,
+      "files": 1
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
