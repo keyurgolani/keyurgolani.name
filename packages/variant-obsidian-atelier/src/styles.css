@@ -1823,6 +1823,14 @@
 }
 
 /*
+ * Links under the entries stand clear of the last one's rule by a focus ring's room, so a ring's top
+ * never lies on the rule: in a scheme whose rule is the focus colour, that side read under 3:1.
+ */
+[data-variant='obsidian-atelier'] .oa-entries + .oa-links {
+  margin-block-start: var(--layout-ring-clear);
+}
+
+/*
  * An entry title's link reaches as far under the line as its underline hangs, as a room title's
  * does, so the focus ring's foot passes under the underline, never over it: in a face whose descent
  * is short of the underline's offset, Verdana's on Linux, the ring's foot lay on the underline's
