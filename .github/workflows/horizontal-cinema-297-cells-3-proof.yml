@@ -1,0 +1,210 @@
+name: horizontal-cinema-297-cells-3-proof
+
+# A branch's full proof on CI Linux, never merged: on a push of its proof branch alone, every
+# check of a full local proof in parallel jobs, at most six at a time, as _ci-proof/manifest.json
+# lists them. The branch is the head plus one commit that carries this file and _ci-proof. Each
+# task job sets _ci-proof aside and checks out that commit's parent, so every check runs on the
+# head's own tree, byte for byte; jobs that need the base or a red commit check it out as a
+# worktree. The summary job reads every task's lines and ends in one verdict. Read-only, no
+# secrets, and nothing it uploads is a build.
+on:
+  push:
+    branches: [kgn-proof/horizontal-cinema-297-cells-3]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horizontal-cinema-297-cells-3-proof-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  # As ci.yml's: the Node release the image ships.
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+  NEXT_TELEMETRY_DISABLED: '1'
+  RETENTION_DAYS: 14
+
+jobs:
+  # The manifest, checked, and the two task matrices: host tasks on the plain runner, as ci.yml's
+  # static and unit jobs run, and browser tasks in the pinned image.
+  plan:
+    name: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      host: ${{ steps.plan.outputs.host }}
+      browser: ${{ steps.plan.outputs.browser }}
+      has-host: ${{ steps.plan.outputs.has-host }}
+      has-browser: ${{ steps.plan.outputs.has-browser }}
+    steps:
+      # The whole history, for the guard: the proof commit is the head's top commit only, the base
+      # is the head's ancestor, and each red commit lies on base..head. It refuses otherwise.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: The guard, the manifest and the task matrices
+        id: plan
+        run: node _ci-proof/proof.mjs plan
+
+  # The gate's first sixteen steps and ci:unit, one at a time.
+  host:
+    name: proof (${{ matrix.task }})
+    needs: [plan]
+    if: ${{ needs.plan.outputs.has-host == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.plan.outputs.host) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 3
+      - name: Set the proof aside, and check out the head
+        run: |
+          cp -R _ci-proof "$RUNNER_TEMP/proof"
+          git checkout -q --detach HEAD^1
+          echo "[proof] at $(git rev-parse HEAD)"
+      - name: Install
+        uses: ./.github/actions/install # zizmor: ignore[self-repository]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Proof task
+        env:
+          PROOF_OUT: ${{ runner.temp }}/proof-out
+          TASK: ${{ matrix.task }}
+        run: node "$RUNNER_TEMP/proof/proof.mjs" task "$TASK"
+      - name: Upload the task's lines
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proof-lines-${{ matrix.task }}
+          path: |
+            ${{ runner.temp }}/proof-out/${{ matrix.task }}/
+            !${{ runner.temp }}/proof-out/${{ matrix.task }}/logs/
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}
+      - name: Upload the task's logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proof-logs-${{ matrix.task }}
+          path: ${{ runner.temp }}/proof-out/${{ matrix.task }}/logs/
+          if-no-files-found: ignore
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+  # Variants shards, ci:budgets, the gate's quality-meta, the e2e sets, the cells, the reds and the
+  # look, five at a time beside the host's one.
+  browser:
+    name: proof (${{ matrix.task }})
+    needs: [plan]
+    if: ${{ needs.plan.outputs.has-browser == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix: ${{ fromJSON(needs.plan.outputs.browser) }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 3
+      - name: Set the proof aside, and check out the head
+        run: |
+          cp -R _ci-proof "$RUNNER_TEMP/proof"
+          git checkout -q --detach HEAD^1
+          echo "[proof] at $(git rev-parse HEAD)"
+      - name: Install
+        uses: ./.github/actions/install # zizmor: ignore[self-repository]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Proof task
+        env:
+          PROOF_OUT: ${{ runner.temp }}/proof-out
+          TASK: ${{ matrix.task }}
+        run: node "$RUNNER_TEMP/proof/proof.mjs" task "$TASK"
+      - name: Upload the task's lines
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proof-lines-${{ matrix.task }}
+          path: |
+            ${{ runner.temp }}/proof-out/${{ matrix.task }}/
+            !${{ runner.temp }}/proof-out/${{ matrix.task }}/logs/
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}
+      - name: Upload the task's logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proof-logs-${{ matrix.task }}
+          path: ${{ runner.temp }}/proof-out/${{ matrix.task }}/logs/
+          if-no-files-found: ignore
+          retention-days: ${{ env.RETENTION_DAYS }}
+      # The shots that differ from the base's, each pair with Playwright's diff.
+      - name: Upload the differing shots
+        if: ${{ always() && startsWith(matrix.task, 'variants-') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proof-shots-${{ matrix.task }}
+          path: ${{ runner.temp }}/proof-out/shots/
+          if-no-files-found: ignore
+          retention-days: ${{ env.RETENTION_DAYS }}
+      - name: Upload the look
+        if: ${{ always() && matrix.task == 'look' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proof-look
+          path: ${{ runner.temp }}/proof-out/look/
+          if-no-files-found: ignore
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+  # Every task's lines in the local proof's order, and one verdict line. The job fails on FAIL.
+  summary:
+    name: summary
+    needs: [plan, host, browser]
+    if: ${{ always() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # The whole history again, so the summary prints the guard's checks too.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Download every task's lines
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: proof-lines-*
+          path: ${{ runner.temp }}/lines
+      - name: Summary
+        env:
+          PROOF_OUT: ${{ runner.temp }}/proof-out
+        run: node _ci-proof/proof.mjs summary "$RUNNER_TEMP/lines"
+      - name: Upload the summary
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proof-summary
+          path: ${{ runner.temp }}/proof-out/summary/
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}

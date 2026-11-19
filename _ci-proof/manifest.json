@@ -1,0 +1,19 @@
+{
+  "name": "horizontal-cinema-297-cells-3",
+  "summary": "Horizontal Cinema's top line: the Appearance summary's release cells on seven tuples more, its ring inside its own box, wholly on the band",
+  "head": "eeaf88c26aa118283be26d6cb864682c7b962bd1",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "cells": [
+    {
+      "label": "hc-focus-3",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:horizontal-cinema complete / horizontal-cinema/(platform-neutral/sepia-film/humanist-ui/system (1440x900|1024x768|390x844) default|platform-neutral/jewel-twilight/humanist-ui/light (1440x900|1024x768|390x844) default|platform-neutral/forest-moss/humanist-ui/system (1440x900|1024x768|390x844) default|poster-press/ultramarine-ink/accessible-reading/system (1024x768 (default|contrast-more|forced-colors)|390x844 default)|platform-neutral/paper-ink/humanist-ui/light (1440x900|1024x768|390x844) default|platform-neutral/poster-primaries/humanist-ui/light (1440x900|1024x768|390x844) default|platform-neutral/iridescent-pearl/humanist-ui/high-contrast (1440x900|1024x768|390x844) default) ",
+      "shards": ["find"],
+      "tests": 22,
+      "passed": 22,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
