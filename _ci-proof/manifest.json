@@ -1,0 +1,342 @@
+{
+  "name": "landing-rc4-final",
+  "summary": "Every 1.0.0 fix since rc.3 at once: the rings, marks and reflows they fix, the sampler and walk reading what a visitor sees",
+  "head": "bd4e117b9eacf8d043b8d6b2c783860175ff3611",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "the repository passes its own audit: every finding has a reviewed exception, and every exception a finding",
+      "Pause ships waiting: no box by default, its place kept unseen only where script runs and would show it",
+      "no rule styles by a scripting query; the page and the case study carry the no-script mark last in the sky",
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "C5: folios, page numbers and durations sit on their row's baseline",
+      "C2: the measures count characters as the faces render, and tables, meta lines and dates never wrap early",
+      "the stylesheet styles its own elements, never a primitive's slots, and keys nothing on a display mode",
+      "the stylesheet reads the platform's scales: no length of its own in a padding, margin, or gap",
+      "readStructure reads the boundary and its names in one task of the page, so an element the page adds between two of its tasks can't put them out of step",
+      "torn down, the controller refits nothing and leaves none of its attributes on the shell",
+      "on a phone the title card’s tagline band keeps space under it, with no bottom bar to give it (HOR-4)",
+      "on a phone the full record’s rows have room around and between their lines, on the scenes’ inset (HOR-5)",
+      "print leaves the visitor's Appearance controls off the page",
+      "the ticker: hidden from assistive technology, every fact shown elsewhere as text, off by control",
+      "print is opaque and still",
+      "the case study: month and year, the aside, the fact sheet rows the work has",
+      "with script off the parser reaches the no-script mark before every part its rules style",
+      "Flux reserves its phone dock's room at the window's block end, in the query the dock docks in",
+      "a control Tab brings up from below a phone's dock stops clear of it by the dock, the ring's reach and more",
+      "every bundled variant and pack declares budgets within its ceilings",
+      "on the top line its own links and the visitor’s control ring in the band’s ink, and the Appearance summary rings inside its own box",
+      "on the strip the open Appearance panel drops from the band’s foot on its own surface, held to the window under the band, in the canvas’s ink",
+      "every gate so far has a known-bad case and a known-good one, and each id is unique"
+    ]
+  },
+  "budgets": true,
+  "e2e": [
+    {
+      "label": "aurora-glass",
+      "specs": ["tests/e2e/aurora-glass*.spec.ts"],
+      "tests": 205,
+      "files": 17,
+      "skipped": "record"
+    },
+    {
+      "label": "chapters",
+      "specs": ["tests/e2e/chapters*.spec.ts"],
+      "tests": 42,
+      "files": 8,
+      "skipped": "record"
+    },
+    {
+      "label": "editorial-evidence",
+      "specs": ["tests/e2e/editorial-evidence*.spec.ts"],
+      "tests": 185,
+      "files": 23,
+      "skipped": "record"
+    },
+    {
+      "label": "horizontal-cinema",
+      "specs": ["tests/e2e/horizontal-cinema*.spec.ts"],
+      "tests": 270,
+      "files": 38,
+      "skipped": "record"
+    },
+    {
+      "label": "kinetic-cosmos",
+      "specs": ["tests/e2e/kinetic-cosmos*.spec.ts", "tests/e2e/kinetic-case.spec.ts"],
+      "tests": 53,
+      "files": 15,
+      "skipped": "record"
+    },
+    {
+      "label": "mission-control",
+      "specs": ["tests/e2e/mission-control*.spec.ts"],
+      "tests": 51,
+      "files": 17,
+      "skipped": "record"
+    },
+    {
+      "label": "obsidian-atelier",
+      "specs": ["tests/e2e/obsidian-atelier*.spec.ts"],
+      "tests": 95,
+      "files": 20,
+      "skipped": "record"
+    },
+    {
+      "label": "raw-grid",
+      "specs": ["tests/e2e/raw-grid*.spec.ts"],
+      "tests": 95,
+      "files": 5,
+      "skipped": "record"
+    },
+    {
+      "label": "schematic",
+      "specs": ["tests/e2e/schematic*.spec.ts"],
+      "tests": 183,
+      "files": 21,
+      "skipped": "record"
+    },
+    {
+      "label": "shell",
+      "specs": ["tests/e2e/shell*.spec.ts"],
+      "tests": 94,
+      "files": 8,
+      "skipped": "record"
+    },
+    {
+      "label": "spatial-bento",
+      "specs": ["tests/e2e/spatial-bento*.spec.ts"],
+      "tests": 129,
+      "files": 11,
+      "skipped": "record"
+    },
+    {
+      "label": "swiss-signal",
+      "specs": ["tests/e2e/swiss-signal*.spec.ts"],
+      "tests": 110,
+      "files": 19,
+      "skipped": "record"
+    },
+    {
+      "label": "terra-field",
+      "specs": ["tests/e2e/terra-field*.spec.ts"],
+      "tests": 56,
+      "files": 7,
+      "skipped": "record"
+    },
+    {
+      "label": "print",
+      "config": "tests/appearance/playwright.config.ts",
+      "specs": ["tests/appearance/print.spec.ts"],
+      "tests": 1,
+      "files": 1
+    },
+    {
+      "label": "parity-client-snapshot",
+      "specs": ["tests/e2e/parity-client-snapshot.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "parity-flaked-projects",
+      "config": "tests/variants/playwright.config.ts",
+      "project": ["schematic/rtl", "aurora-glass/engineering", "singular/academic"],
+      "specs": ["tests/variants/parity.spec.ts"],
+      "tests": 3,
+      "files": 1
+    },
+    {
+      "label": "flux",
+      "specs": ["tests/e2e/flux*.spec.ts"],
+      "skipped": "record",
+      "tests": 99,
+      "files": 19
+    },
+    {
+      "label": "singular",
+      "specs": ["tests/e2e/singular*.spec.ts"],
+      "skipped": "record",
+      "tests": 103,
+      "files": 19
+    },
+    {
+      "label": "e2e-rest",
+      "specs": [
+        "tests/e2e/app-server.spec.ts",
+        "tests/e2e/demo-import.spec.ts",
+        "tests/e2e/demo-local-frame.spec.ts",
+        "tests/e2e/demo-origin.spec.ts",
+        "tests/e2e/demo-probes.spec.ts",
+        "tests/e2e/demo-studio-chunks.spec.ts",
+        "tests/e2e/demo-studio-compare.spec.ts",
+        "tests/e2e/demo-studio-content.spec.ts",
+        "tests/e2e/demo-studio-frame.spec.ts",
+        "tests/e2e/demo-studio-import.spec.ts",
+        "tests/e2e/demo-studio-load-failure.spec.ts",
+        "tests/e2e/demo-studio-pickers.spec.ts",
+        "tests/e2e/demo-studio-reference.spec.ts",
+        "tests/e2e/demo-studio-sandbox-wrap.spec.ts",
+        "tests/e2e/demo-studio-split.spec.ts",
+        "tests/e2e/demo-studio-twin.spec.ts",
+        "tests/e2e/demo-studio.spec.ts",
+        "tests/e2e/demo.spec.ts",
+        "tests/e2e/extensions.spec.ts",
+        "tests/e2e/fallback-navigation.spec.ts",
+        "tests/e2e/focus-perimeter-painted-offset.spec.ts",
+        "tests/e2e/focus-ring.spec.ts",
+        "tests/e2e/forced-backplate-flux.spec.ts",
+        "tests/e2e/forced-backplate-horizontal-cinema.spec.ts",
+        "tests/e2e/forced-backplate-kinetic-cosmos.spec.ts",
+        "tests/e2e/forced-backplate-mission-control.spec.ts",
+        "tests/e2e/forced-backplate-obsidian-atelier.spec.ts",
+        "tests/e2e/forced-backplate-raw-grid-islands.spec.ts",
+        "tests/e2e/forced-backplate-raw-grid.spec.ts",
+        "tests/e2e/forced-backplate-spatial-bento.spec.ts",
+        "tests/e2e/forced-backplate-terra-field.spec.ts",
+        "tests/e2e/forced-drawings-kinetic-cosmos.spec.ts",
+        "tests/e2e/forced-drawings-spatial-bento.spec.ts",
+        "tests/e2e/kinetic-motion.spec.ts",
+        "tests/e2e/kinetic-signature-label.spec.ts",
+        "tests/e2e/kinetic-wordmark-hit.spec.ts",
+        "tests/e2e/kit-parts.spec.ts",
+        "tests/e2e/media-owner.spec.ts",
+        "tests/e2e/media-preview-origin.spec.ts",
+        "tests/e2e/media.spec.ts",
+        "tests/e2e/metadata.spec.ts",
+        "tests/e2e/migrate.spec.ts",
+        "tests/e2e/motion-contract.spec.ts",
+        "tests/e2e/motion-harness.spec.ts",
+        "tests/e2e/native-ui-scheme.spec.ts",
+        "tests/e2e/owner-store.spec.ts",
+        "tests/e2e/owner-studio-chunks.spec.ts",
+        "tests/e2e/owner.spec.ts",
+        "tests/e2e/pair-rtl.spec.ts",
+        "tests/e2e/pair.spec.ts",
+        "tests/e2e/preview-agent-demo.spec.ts",
+        "tests/e2e/preview-channel.spec.ts",
+        "tests/e2e/preview-dev.spec.ts",
+        "tests/e2e/preview-scheme.spec.ts",
+        "tests/e2e/preview.spec.ts",
+        "tests/e2e/profiles.spec.ts",
+        "tests/e2e/read-only.spec.ts",
+        "tests/e2e/reference.spec.ts",
+        "tests/e2e/scales.spec.ts",
+        "tests/e2e/security.spec.ts",
+        "tests/e2e/skip-link-ink.spec.ts",
+        "tests/e2e/skip-link-on-top.spec.ts",
+        "tests/e2e/smoke.spec.ts",
+        "tests/e2e/spatial-stage-unsupported.spec.ts",
+        "tests/e2e/spatial-stage.spec.ts",
+        "tests/e2e/startup.spec.ts",
+        "tests/e2e/structured-data.spec.ts",
+        "tests/e2e/studio-appearance.spec.ts",
+        "tests/e2e/studio-drafts.spec.ts",
+        "tests/e2e/studio-fields.spec.ts",
+        "tests/e2e/studio-history.spec.ts",
+        "tests/e2e/studio-load-failure.spec.ts",
+        "tests/e2e/studio-nojs-signout.spec.ts",
+        "tests/e2e/studio-preview-origin.spec.ts",
+        "tests/e2e/studio-preview.spec.ts",
+        "tests/e2e/studio-publish.spec.ts",
+        "tests/e2e/studio-recovery.spec.ts",
+        "tests/e2e/studio-render-error.spec.ts",
+        "tests/e2e/studio-retired-alias.spec.ts",
+        "tests/e2e/studio-signout-look.spec.ts",
+        "tests/e2e/studio-signout.spec.ts",
+        "tests/e2e/studio-split-compare.spec.ts",
+        "tests/e2e/studio-split-fresh.spec.ts",
+        "tests/e2e/studio-split-races.spec.ts",
+        "tests/e2e/studio-split.spec.ts",
+        "tests/e2e/studio.spec.ts",
+        "tests/e2e/theme.spec.ts"
+      ],
+      "skipped": "record",
+      "tests": 1045,
+      "files": 89
+    },
+    {
+      "label": "appearance-browser",
+      "config": "tests/appearance/playwright.config.ts",
+      "specs": [
+        "tests/appearance/fixtures.spec.ts",
+        "tests/appearance/focus.spec.ts",
+        "tests/appearance/keyboard.spec.ts",
+        "tests/appearance/plates.spec.ts"
+      ],
+      "skipped": "record",
+      "tests": 31,
+      "files": 4
+    },
+    {
+      "label": "routes",
+      "config": "tests/routes/playwright.config.ts",
+      "specs": [
+        "tests/routes/leaks-sample.spec.ts",
+        "tests/routes/leaks.spec.ts",
+        "tests/routes/reference.spec.ts",
+        "tests/routes/sample.spec.ts",
+        "tests/routes/shortcuts.spec.ts",
+        "tests/routes/switch.spec.ts",
+        "tests/routes/unregistered.spec.ts",
+        "tests/routes/views.spec.ts"
+      ],
+      "skipped": "record",
+      "tests": 36,
+      "files": 8
+    },
+    {
+      "label": "preview-fixtures",
+      "config": "tests/preview-fixtures/playwright.config.ts",
+      "specs": ["tests/preview-fixtures/environments.spec.ts"],
+      "skipped": "record",
+      "tests": 5,
+      "files": 1
+    },
+    {
+      "label": "pack-distinct-schemes",
+      "config": "tests/variants/playwright.config.ts",
+      "project": "pack-distinct",
+      "specs": [],
+      "env": {
+        "PORTFOLIO_PACK_DISTINCT_AXIS": "colorScheme"
+      },
+      "skipped": "record",
+      "tests": 2,
+      "files": 1
+    },
+    {
+      "label": "pack-distinct-type",
+      "config": "tests/variants/playwright.config.ts",
+      "project": "pack-distinct",
+      "specs": [],
+      "env": {
+        "PORTFOLIO_PACK_DISTINCT_AXIS": "typography"
+      },
+      "skipped": "record",
+      "tests": 2,
+      "files": 1
+    }
+  ],
+  "cells": [
+    {
+      "label": "hc-focus-362",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:horizontal-cinema complete / horizontal-cinema/paper-tactile/poster-primaries/console-mono/high-contrast (1440x900 default|1024x768 (default|contrast-more|forced-colors)|390x844 default) ",
+      "shards": ["find"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": [
+      "^editorial-evidence/[a-z-]+ > (fixtures|sample)\\.spec\\.ts > mobile >",
+      "^obsidian-atelier/(academic|long-text) > fixtures\\.spec\\.ts > mobile >",
+      "^obsidian-atelier/complete > fixtures\\.spec\\.ts > (desktop|mobile) >"
+    ]
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
