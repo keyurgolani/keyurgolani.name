@@ -1,0 +1,15 @@
+{
+  "name": "snap-peek-linux",
+  "summary": "contrast reads cut text with its snap area in view, and the scroll into view it needs is pinned",
+  "head": "9f25712271c3e099447ddc4b3a2c54f2e1c226a9",
+  "base": "f7511c2d2f70ebe9e4c4af18f3be184a9fbc5545",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every gate so far has a known-bad case and a known-good one, and each id is unique",
+      "a color that reads the same after its shots, though the page changed it or an ancestor after it was read, is read again at rest and judged there"
+    ]
+  },
+  "kit": "150a0a7d54d9",
+  "kitScripts": "7964ce4b1c36"
+}
