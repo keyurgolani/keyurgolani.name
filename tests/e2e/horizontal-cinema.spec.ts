@@ -887,6 +887,94 @@ async function snapFromStart(page: Page): Promise<void> {
   await glideSetOut(page, 200, 1);
 }
 
+/**
+ * A wheel notch as its event came: the page's scroll then (`at`), in the three frames before it and
+ * in the two after, beside where the snap comes to rest on scene 1 (`top`), and the set-ups it took.
+ */
+type NotchRead = { tries: number; top: number; at: number; before: number[]; after: number[] };
+
+/**
+ * How many set-ups a notch gets to land inside the glide: after the round trip, many come once the
+ * glide has arrived.
+ */
+const NOTCH_TRIES = 8;
+
+/**
+ * From rest at the strip's start, the snap's glide set out, then a wheel notch of `by` px the way it
+ * goes, read as its event comes. The glide eases over its first frames and then reaches its scene in
+ * a single frame, so a scroll apart from the frames before can be the page already there: the notch
+ * counts as one inside the glide only if at its event the page has moved since the frame before and
+ * is still short of where the snap rests on scene 1, read first from a plain snap. One that comes as
+ * the glide arrives, or after, is a fresh step on from that scene, not the take-over the guard means,
+ * so the strip goes back to its start and the notch is sent again, up to NOTCH_TRIES set-ups. One
+ * that never lands inside the glide fails as that, with the last read.
+ */
+async function notchInGlide(page: Page, by: number): Promise<NotchRead> {
+  await snapFromStart(page);
+  await expectAt(page, 1);
+  await page.waitForTimeout(400);
+  const top = (await read(page)).scrollY;
+  let last: NotchRead | undefined;
+  for (let tries = 1; tries <= NOTCH_TRIES; tries++) {
+    await notchFromStart(page);
+    // The watch starts before the glide sets out and resolves in the frame it first moves, so the
+    // notch comes as early in the glide as the round trip allows.
+    await page.evaluate(
+      () =>
+        new Promise<void>((done) => {
+          const notch = {
+            at: null as number | null,
+            before: [] as number[],
+            after: [] as number[],
+          };
+          (window as unknown as { __notch?: typeof notch }).__notch = notch;
+          const seen: number[] = [];
+          addEventListener(
+            'wheel',
+            () => {
+              notch.at = window.scrollY;
+              notch.before = [...seen];
+            },
+            { capture: true, once: true, passive: true },
+          );
+          let out = false;
+          const frame = () => {
+            if (notch.at === null) {
+              seen.push(window.scrollY);
+              if (seen.length > 3) seen.shift();
+            } else notch.after.push(window.scrollY);
+            if (!out && window.scrollY > 200) {
+              out = true;
+              done();
+            }
+            if (notch.after.length < 2) requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+        }),
+    );
+    await page.mouse.wheel(0, by);
+    const notch = (await (
+      await page.waitForFunction(
+        () => {
+          const watched = (window as unknown as { __notch?: { after: number[] } }).__notch;
+          return watched && watched.after.length >= 2 ? watched : null;
+        },
+        undefined,
+        { polling: 'raf' },
+      )
+    ).jsonValue()) as Omit<NotchRead, 'tries' | 'top'>;
+    last = { tries, top, ...notch };
+    const moving = notch.before.length > 0 && notch.at !== notch.before[notch.before.length - 1];
+    if (moving && notch.at < top - 1) {
+      test.info().annotations.push({ type: 'notch', description: JSON.stringify(last) });
+      return last;
+    }
+  }
+  throw new Error(
+    `a ${by} px notch never landed inside the snap's glide in ${NOTCH_TRIES} set-ups (the last read ${JSON.stringify(last)})`,
+  );
+}
+
 // A script's instant scroll back inside the glide, as the scroll bar drags it (row 123). Under CPU
 // throttling the browser's own smooth glide can land its next frame over a scroll a separate evaluate
 // makes, so the page never sits where the script put it and the test reads a premise that never held
@@ -944,14 +1032,17 @@ test(
 );
 
 // A guard, not a pin: the snap before the rework passes it too, 10 of 10, so it keeps the rework from
-// turning back a notch the way the glide goes; it doesn't prove the rework.
+// turning back a notch the way the glide goes; it doesn't prove the rework. The notch counts only when
+// it comes inside the glide, and a failure carries its read: a page still short of the scene at the
+// notch's event, and still carried on past it, is the controller's; one already there is a fresh step.
 test(
   "the pin's snap, taken over by a wheel notch the way it glides, still finishes on the scene ahead",
   { annotation, tag },
   async ({ page }) => {
-    await snapFromStart(page);
-    await page.mouse.wheel(0, 40);
-    await expectRestsOn(page, 1);
+    const notch = await notchInGlide(page, 40);
+    await expectRestsOn(page, 1).catch((error: Error) => {
+      throw new Error(`${error.message}\n\nthe notch as its event came: ${JSON.stringify(notch)}`);
+    });
   },
 );
 
