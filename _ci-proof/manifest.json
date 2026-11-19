@@ -1,0 +1,19 @@
+{
+  "name": "horizontal-cinema-300-cover-probe",
+  "summary": "Horizontal Cinema's open Appearance panel on the pinned strip, read on CI: where its third fieldset's fifth row sits, closed and open, and what the quality walk's cover script finds over it",
+  "head": "9e8c494bdf895beb8f210c1ed9a4cf5b2d64d367",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "gate": false,
+  "look": [
+    {
+      "label": "cover300",
+      "spec": "look/zz-hc-panel-cover-probe.spec.ts",
+      "project": "chromium-interaction",
+      "tests": 2,
+      "files": 1,
+      "shots": 6
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
