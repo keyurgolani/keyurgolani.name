@@ -1,0 +1,16 @@
+{
+  "name": "hc-script-off-focus-b",
+  "summary": "With no script, Tab through Horizontal Cinema's strip at 1440 by 900, the strip scrolling at once and snapping only near a scene's start",
+  "head": "b9238921543e7cf8f4f34ffc3c4d92868a49a6d7",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "e2e": [
+    {
+      "label": "b",
+      "specs": ["tests/e2e/horizontal-cinema-script-off-focus.spec.ts"],
+      "tests": 10,
+      "files": 1
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
