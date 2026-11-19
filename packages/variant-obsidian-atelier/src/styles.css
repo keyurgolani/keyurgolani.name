@@ -276,12 +276,15 @@
   /*
    * The page's column lines, but from the sixth the room switch stands on a track of its own, as
    * wide as its rooms and four columns at most, and the corner on what's left: so the running head,
-   * the part that gives way, never runs over the switch.
+   * the part that gives way, never runs over the switch. What's left is never narrower than the
+   * pinned Index and a ring's room, which scale with its text, so at large text the switch gives way
+   * to the pin.
    */
   grid-template-columns:
     calc(var(--layout-pin-end) - var(--layout-grid-gutter)) repeat(5, [col] var(--layout-track))
     [col] fit-content(calc(4 * var(--layout-track) + 3 * var(--layout-grid-gutter)))
-    [corner] minmax(0, 1fr) calc(var(--layout-pin-end) - var(--layout-grid-gutter));
+    [corner] minmax(calc(var(--layout-index) + var(--layout-ring-clear)), 1fr)
+    calc(var(--layout-pin-end) - var(--layout-grid-gutter));
   column-gap: var(--layout-grid-gutter);
   align-items: center;
   padding-block-start: var(--space-xs);
