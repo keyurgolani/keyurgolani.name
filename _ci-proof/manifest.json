@@ -1,0 +1,44 @@
+{
+  "name": "flux-copy-reserve",
+  "summary": "Flux's phone reserve at the foot holds the tallest dock under more contrast and the widest ring, so Copy email reached by Tab rings clear of it",
+  "head": "60db79e8e574937bdfa1f998638fe9759e8117de",
+  "base": "0790d5b42937b2b5e54f5ae0da57b0b6e1bc9a3a",
+  "reds": [
+    {
+      "label": "copy-reserve",
+      "at": "2a44578731090def0f6070a633173e950d4dcfc5",
+      "specs": ["tests/e2e/flux-copy-reserve-*.spec.ts"],
+      "tests": 3,
+      "files": 1,
+      "failed": 3
+    }
+  ],
+  "e2e": [
+    {
+      "label": "copy-reserve",
+      "specs": ["tests/e2e/flux-copy-reserve-*.spec.ts"],
+      "tests": 3,
+      "files": 1
+    }
+  ],
+  "cells": [
+    {
+      "label": "records",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:flux\\ complete\\ /\\ flux/(blueprint/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ contrast\\-more|industrial/warm\\-parchment/humanist\\-ui/system\\ 1024x768\\ contrast\\-more|material\\-expressive\\-inspired/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ contrast\\-more)\\ )",
+      "shards": ["find"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    }
+  ],
+  "gate": true,
+  "unit": {
+    "titles": [
+      "Flux reserves its phone dock's room at the window's block end, in the query the dock docks in",
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget"
+    ]
+  },
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
