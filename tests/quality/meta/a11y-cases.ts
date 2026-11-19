@@ -46,6 +46,7 @@ import {
   type SettleRecord,
 } from '../lib/a11y/interaction';
 import { killSwitches, MOTION_SAMPLER, motionFindings, osWinsFindings } from '../lib/a11y/motion';
+import { decodePng, encodePng } from '../lib/pixels';
 import { inPage, type Active } from '../lib/a11y/probe';
 import { applyRow, audit, landscapeOcclusionFindings, loadForPass, runPass } from '../lib/run-cell';
 import type { MetaCase, MetaOutcome } from './cases';
@@ -1229,6 +1230,108 @@ const manyTexts = (count: number) =>
     'main { display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px 48px; } p { margin: 0; font: 16px/1.5 Arial, sans-serif; color: #444; background: linear-gradient(90deg, #fff, #fafafa); }',
     Array.from({ length: count }, (_, at) => `<p>Text number ${at + 1}.</p>`).join(''),
   );
+
+/** `count` faint texts, #bbb, about 1.9:1, on the same gradient, in one viewport, far apart. */
+const manyFaintTexts = (count: number) =>
+  built(
+    'Many faint texts on a gradient',
+    'main { display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px 48px; } p { margin: 0; font: 16px/1.5 Arial, sans-serif; color: #bbb; background: linear-gradient(90deg, #fff, #fafafa); }',
+    Array.from({ length: count }, (_, at) => `<p>Faint text ${at + 1}.</p>`).join(''),
+  );
+
+/**
+ * The sampler, every screenshot that takes in more than the last text's own box (the batch
+ * path's union, cutShots()) given a one-pixel column of that text's ink down the middle of its
+ * line, the same in each of a batch's three shots, as the CI Linux union of one batch kept a
+ * glyph's subpixel fringe its member's own shots never showed. The last text, so the camera's
+ * check of the first member of each sub-pixel way against its own shot doesn't meet it. Its own
+ * path's shots are left as they are.
+ */
+const contrastUnionStale = async (page: Page): Promise<Finding[]> => {
+  const results = reached(await axeFor(page).analyze());
+  const shoot = page.screenshot.bind(page);
+  const stale = new Proxy(page, {
+    get(of, name) {
+      const value = Reflect.get(of, name, of) as unknown;
+      if (name !== 'screenshot') return typeof value === 'function' ? value.bind(of) : value;
+      return async (options: Parameters<Page['screenshot']>[0] = {}) => {
+        const shot = await shoot(options);
+        const clip = options.clip;
+        if (!clip) return shot;
+        const at = await of.evaluate(() => {
+          const texts = [...document.querySelectorAll('main p')];
+          const last = texts[texts.length - 1]!;
+          const box = last.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(last);
+          const line = range.getBoundingClientRect();
+          const ink = (getComputedStyle(last).color.match(/[\d.]+/g) ?? []).map(Number);
+          return {
+            box: { width: box.width, height: box.height },
+            x: Math.floor(line.left + line.width / 2),
+            top: Math.ceil(line.top),
+            bottom: Math.floor(line.bottom),
+            ink,
+          };
+        });
+        const own = clip.width <= at.box.width + 2 && clip.height <= at.box.height + 2;
+        if (own || at.x < clip.x || at.x >= clip.x + clip.width) return shot;
+        const image = decodePng(shot);
+        const x = at.x - Math.round(clip.x);
+        for (let y = at.top; y < at.bottom; y++) {
+          const row = y - Math.round(clip.y);
+          if (row < 0 || row >= image.height) continue;
+          const i = (row * image.width + x) * 4;
+          [image.data[i], image.data[i + 1], image.data[i + 2]] = [
+            at.ink[0]!,
+            at.ink[1]!,
+            at.ink[2]!,
+          ];
+        }
+        return Buffer.from(encodePng(image));
+      };
+    },
+  });
+  return incompleteContrastFindings(stale, results);
+};
+
+/** The most batch findings one sampler call confirms on their own path (contrast.ts). */
+const CONFIRMED_AT_MOST = 20;
+
+/**
+ * The sampler's findings, and a `contrast confirmed` finding unless exactly as many elements
+ * were read on their own path (a locator's scroll into view, which only that path takes) as the
+ * batch path found failing, up to CONFIRMED_AT_MOST: a finding the batch path reads is its own
+ * path's to confirm, and past that many the batch path's own read stands.
+ */
+const contrastConfirmed = async (page: Page): Promise<Finding[]> => {
+  const results = reached(await axeFor(page).analyze());
+  let own = 0;
+  const counted = <T extends object>(target: T): T =>
+    new Proxy(target, {
+      get(of, name) {
+        const value = Reflect.get(of, name, of) as unknown;
+        if (typeof value !== 'function') return value;
+        return (...args: unknown[]) => {
+          if (name === 'scrollIntoViewIfNeeded') own++;
+          const out = (value as (...a: unknown[]) => unknown).apply(of, args);
+          return name === 'locator' || name === 'first' ? counted(out as object) : out;
+        };
+      },
+    });
+  const findings = await incompleteContrastFindings(counted(page), results);
+  const want = Math.min(findings.length, CONFIRMED_AT_MOST);
+  return own === want
+    ? findings
+    : [
+        ...findings,
+        {
+          gate: 'contrast',
+          rule: 'confirmed',
+          actual: `${own} element(s) read on their own path, where the batch path's ${findings.length} finding(s) want ${want}`,
+        },
+      ];
+};
 
 /**
  * A row's axe pass and its sampler, as run-cell.ts's audit() runs them on
@@ -3548,6 +3651,29 @@ export const A11Y_CASES: readonly MetaCase[] = [
     expect: 'pass',
     browser: true,
     run: () => onPage(manyTexts(40), contrastTrips),
+  },
+  // A batch member whose union shots hold a pixel its own shots don't (a stale subpixel fringe
+  // on CI Linux): the batch path's finding is its own path's to confirm, which reads it clean, so
+  // it passes, never a record no shot of its own holds.
+  {
+    id: 'contrast/batch-union-stale',
+    gate: 'contrast',
+    input:
+      'three texts on a gradient in one viewport, the last one with a column of its ink in its batch union shots alone',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(manyTexts(3), contrastUnionStale),
+  },
+  // And every finding the batch path reads goes to its own path, up to CONFIRMED_AT_MOST a call:
+  // twenty-five faint texts fail all twenty-five, and twenty are read on their own path.
+  {
+    id: 'contrast/batch-confirmed',
+    gate: 'contrast',
+    input: 'twenty-five faint texts on a gradient in one 1440x900 viewport',
+    expect: 'fail',
+    reason: /^contrast text: 1\.\d\d:1 against its worst background pixel$/,
+    browser: true,
+    run: () => onPage(manyFaintTexts(25), contrastConfirmed),
   },
   // High contrast holds text to thresholds.json's highContrast ratio, 7, by the element's own
   // boundary (a tuple cell's, here on the default row) or by prefers-contrast: more: axe's
