@@ -751,6 +751,48 @@ export async function scriptlessSettle(
   }
 }
 
+/** How long the focused box and the scroll chain must hold still before a stop that reads out of view is judged. */
+export const REST_HOLD_MS = 600;
+/** The longest that wait takes: a stop still moving then is judged on its latest read. */
+export const REST_LIMIT_MS = 2_000;
+
+/**
+ * Waits, after a Tab whose stop reads hidden or out of view, until the focused element's box and
+ * the scroll of the page and of every ancestor of it that scrolls have read the same for `hold`
+ * ms, polled every `poll` ms from here, up to `limit`. A smooth scroll-into-view, or a glide a
+ * page drives itself, can stall on a loaded runner for longer than the walk's settle window and
+ * go on to show the control. Polled from here, as scriptlessSettle() is, so it holds on a page
+ * without script too, and a glide done by a transform counts, as the box moves. Says whether it
+ * held within the limit.
+ */
+export async function restingFocus(
+  page: Page,
+  { poll = SETTLE_POLL_MS, hold = REST_HOLD_MS, limit = REST_LIMIT_MS } = {},
+): Promise<boolean> {
+  const start = Date.now();
+  let last: string | null = null;
+  let since = start;
+  for (;;) {
+    const read = await page.evaluate(() => {
+      const focused = document.activeElement;
+      const scroll: number[] = [scrollX, scrollY];
+      for (let at = focused?.parentElement ?? null; at; at = at.parentElement) {
+        if (at.scrollWidth > at.clientWidth || at.scrollHeight > at.clientHeight)
+          scroll.push(at.scrollLeft, at.scrollTop);
+      }
+      const box = focused && focused !== document.body ? focused.getBoundingClientRect() : null;
+      return JSON.stringify([scroll, box ? [box.x, box.y, box.width, box.height] : null]);
+    });
+    const now = Date.now();
+    if (read !== last) {
+      last = read;
+      since = now;
+    } else if (now - since >= hold) return true;
+    if (now - start >= limit) return false;
+    await page.waitForTimeout(poll);
+  }
+}
+
 /** A pixel channel that moves more than this when the layers go is the layers' doing. */
 const COVER_CHANNEL = 32;
 /** The share of the control's pixels that must move for its layers to cover it. */
@@ -848,7 +890,7 @@ export async function keyboardFindings(
     if (settle) options.settleLog?.push({ press, ...settle });
     // Frames for what focus scrolls to, and for what that scroll shows, such as a footer.
     if (options.occlusion) await frames(page, 50);
-    const active = await inPage<Active>(page, { kind: 'active' });
+    let active = await inPage<Active>(page, { kind: 'active' });
     // Past the last control, focus leaves for the document before it wraps.
     if (active.none) {
       ended = true;
@@ -893,6 +935,13 @@ export async function keyboardFindings(
         actual: `unresolved: the page still scrolls ${SETTLE_LIMIT_MS} ms after Tab, so where it rests is unknown`,
       });
       continue;
+    }
+    // One that reads hidden or out of view is judged once the page holds still (restingFocus()),
+    // on that read, if focus is still on it: a glide a loaded runner stalls goes on to show it.
+    if (!active.shown || !active.inView) {
+      await restingFocus(page);
+      const again = await inPage<Active>(page, { kind: 'active' });
+      if (!again.none && again.path === active.path) active = again;
     }
     if (!active.shown || !active.inView) {
       findings.push({
