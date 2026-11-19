@@ -1071,6 +1071,105 @@ export function turnedSinceScript(
   return false;
 }
 
+/** The most frames snapIntoViewScript() waits for a snapped scroll to hold still. */
+export const SNAP_SETTLE_FRAMES = 10;
+
+/**
+ * When `el`'s box is cut by the viewport, or by the padding box of an ancestor its visitor can
+ * scroll (overflow auto or scroll), by more than a pixel, and could fit in each: scrolls its snap
+ * area into view, the nearest of it and its ancestors with a scroll-snap-align inside a container
+ * that snaps, by that area's own scroll-snap-align on each axis its container snaps, nearest on
+ * the others (or `el` itself, nearest, when nothing snaps). Then it waits for every scroll on the
+ * way up to read the same on two frames together, up to `frames`, and checks again. A scroll into
+ * view that makes the smallest scroll can leave a mandatory-snap strip's peeking item cut, as the
+ * snap takes the strip back, and the sampler would read the sliver left in view. Says `whole` when
+ * it wasn't cut, `snapped` when the scroll left it whole, and `cut` when it's still cut or can't
+ * fit, which is then read as before. Runs in the browser.
+ */
+export function snapIntoViewScript(
+  el: Element,
+  { frames }: { frames: number },
+): Promise<'whole' | 'snapped' | 'cut'> {
+  const raf =
+    (window as unknown as { __qualityRaf?: typeof requestAnimationFrame }).__qualityRaf ??
+    requestAnimationFrame;
+  const scrollers: Element[] = [];
+  for (
+    let up = el.parentElement;
+    up && up !== document.body && up !== document.documentElement;
+    up = up.parentElement
+  ) {
+    const s = getComputedStyle(up);
+    if (/auto|scroll/.test(s.overflowX) || /auto|scroll/.test(s.overflowY)) scrollers.push(up);
+  }
+  const state = (): 'whole' | 'cut' | 'unfit' => {
+    const r = el.getBoundingClientRect();
+    const areas = [{ left: 0, top: 0, right: innerWidth, bottom: innerHeight }];
+    for (const up of scrollers) {
+      const u = up.getBoundingClientRect();
+      const s = getComputedStyle(up);
+      areas.push({
+        left: u.left + (Number.parseFloat(s.borderLeftWidth) || 0),
+        top: u.top + (Number.parseFloat(s.borderTopWidth) || 0),
+        right: u.right - (Number.parseFloat(s.borderRightWidth) || 0),
+        bottom: u.bottom - (Number.parseFloat(s.borderBottomWidth) || 0),
+      });
+    }
+    if (areas.some((a) => r.width > a.right - a.left + 1 || r.height > a.bottom - a.top + 1))
+      return 'unfit';
+    return areas.some(
+      (a) =>
+        r.left < a.left - 1 ||
+        r.top < a.top - 1 ||
+        r.right > a.right + 1 ||
+        r.bottom > a.bottom + 1,
+    )
+      ? 'cut'
+      : 'whole';
+  };
+  const first = state();
+  if (first !== 'cut') return Promise.resolve(first === 'whole' ? 'whole' : 'cut');
+  // Its snap area, and how that area aligns on the axes its container snaps.
+  let area: Element = el;
+  let options: ScrollIntoViewOptions = { block: 'nearest', inline: 'nearest' };
+  for (let at: Element | null = el; at && at !== document.documentElement; at = at.parentElement) {
+    const align = getComputedStyle(at).scrollSnapAlign;
+    if (!align || align === 'none') continue;
+    const holder = scrollers.find((up) => up !== at && up.contains(at));
+    const type = holder ? getComputedStyle(holder).scrollSnapType : 'none';
+    if (!holder || !type || type === 'none') continue;
+    const [block = 'none', inline = block] = align.trim().split(/\s+/);
+    const position = (value: string, snaps: boolean): ScrollLogicalPosition =>
+      snaps && ['start', 'center', 'end'].includes(value)
+        ? (value as ScrollLogicalPosition)
+        : 'nearest';
+    area = at;
+    options = {
+      block: position(block, /\b(?:y|block|both)\b/.test(type)),
+      inline: position(inline, /\b(?:x|inline|both)\b/.test(type)),
+    };
+    break;
+  }
+  area.scrollIntoView({ ...options, behavior: 'instant' });
+  const positions = () =>
+    [scrollX, scrollY, ...scrollers.map((up) => `${up.scrollLeft},${up.scrollTop}`)].join('|');
+  return new Promise((done) => {
+    let last = positions();
+    let seen = 0;
+    const look = () => {
+      seen++;
+      const now = positions();
+      if (now === last || seen >= frames) {
+        done(state() === 'whole' ? 'snapped' : 'cut');
+        return;
+      }
+      last = now;
+      raf(look);
+    };
+    raf(look);
+  });
+}
+
 /** Why a word whose ancestors never held still within the cap has no color to read. */
 export const turnsUnresolved = (cap: number): string =>
   `unresolved: its ancestors' attributes were still changing ${cap / 1000} s after its shots, so its color can't be read from one state of the page`;
@@ -2482,6 +2581,11 @@ export async function incompleteContrastFindings(
       const at = await page.evaluate(() => [scrollX, scrollY] as const).catch(() => null);
       try {
         await locator.scrollIntoViewIfNeeded({ timeout: NODE_LIMIT_MS }).catch(() => undefined);
+        // One a mandatory-snap strip leaves cut once that scroll's snap takes it back is scrolled
+        // into view by its snap area and read whole; one still cut, or too big to fit, reads as before.
+        await locator
+          .evaluate(snapIntoViewScript, { frames: SNAP_SETTLE_FRAMES }, { timeout: NODE_LIMIT_MS })
+          .catch(() => undefined);
         // A stuck header or dock over it isn't its background: scroll it clear, or say so.
         const cover = await clearOfStuckCovers(page, locator);
         if (cover.still) {
