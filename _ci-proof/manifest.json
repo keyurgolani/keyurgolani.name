@@ -1,0 +1,226 @@
+{
+  "name": "contrast-batch-confirm",
+  "summary": "contrast confirms batch findings and reads cut text with its snap area in view; the keyboard walk starts at the top and judges stops at rest",
+  "head": "0de8f4ef9697efa276a481c937b59e5271f9e001",
+  "base": "f7511c2d2f70ebe9e4c4af18f3be184a9fbc5545",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every gate so far has a known-bad case and a known-good one, and each id is unique",
+      "a color that reads the same after its shots, though the page changed it or an ancestor after it was read, is read again at rest and judged there"
+    ]
+  },
+  "cells": [
+    {
+      "label": "s482",
+      "scope": "quality/release/scope.json",
+      "grep": "singular/neobrutalist/neon-city/swiss-grotesque/dark .*390x844 contrast-more",
+      "shards": ["482/611"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "at": "base"
+    },
+    {
+      "label": "s482",
+      "scope": "quality/release/scope.json",
+      "grep": "singular/neobrutalist/neon-city/swiss-grotesque/dark .*390x844 contrast-more",
+      "shards": ["482/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s442",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/platform-neutral/warm-parchment/accessible-reading/system .*1024x768 no-javascript",
+      "shards": ["442/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s442",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/platform-neutral/warm-parchment/accessible-reading/system .*1024x768 no-javascript",
+      "shards": ["442/611"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "at": "base"
+    },
+    {
+      "label": "s444",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/handcrafted-collage/neutral-slate/technical-sans-mono/dark .*1024x768 no-javascript",
+      "shards": ["444/611"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "at": "base"
+    },
+    {
+      "label": "s444",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/handcrafted-collage/neutral-slate/technical-sans-mono/dark .*1024x768 no-javascript",
+      "shards": ["444/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s295",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/art-deco/drafting-blue/technical-sans-mono/dark .*1024x768 no-javascript",
+      "shards": ["295/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s295",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/art-deco/drafting-blue/technical-sans-mono/dark .*1024x768 no-javascript",
+      "shards": ["295/611"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "at": "base"
+    },
+    {
+      "label": "s307",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/pixel-interface/arctic-aurora/technical-sans-mono/dark .*1024x768 no-javascript",
+      "shards": ["307/611"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "at": "base"
+    },
+    {
+      "label": "s307",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/pixel-interface/arctic-aurora/technical-sans-mono/dark .*1024x768 no-javascript",
+      "shards": ["307/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s313",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/poster-press/ultramarine-ink/accessible-reading/system .*1024x768 no-javascript",
+      "shards": ["313/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s313",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/poster-press/ultramarine-ink/accessible-reading/system .*1024x768 no-javascript",
+      "shards": ["313/611"],
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "at": "base"
+    },
+    {
+      "label": "s485",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/platform-neutral/pastel-sorbet/humanist-ui/light .*1440x900 no-javascript",
+      "shards": ["485/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "at": "base"
+    },
+    {
+      "label": "s485",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/platform-neutral/pastel-sorbet/humanist-ui/light .*1440x900 no-javascript",
+      "shards": ["485/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s469",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/blueprint/iridescent-pearl/multilingual-system/high-contrast .*(390x844|1440x900) default",
+      "shards": ["469/611"],
+      "tests": 2,
+      "passed": 0,
+      "failed": 2
+    },
+    {
+      "label": "s469",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/blueprint/iridescent-pearl/multilingual-system/high-contrast .*(390x844|1440x900) default",
+      "shards": ["469/611"],
+      "tests": 2,
+      "passed": 0,
+      "failed": 2,
+      "at": "base"
+    },
+    {
+      "label": "s435",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/platform-neutral/jewel-twilight/humanist-ui/system .*(390x844|1024x768|1440x900) default",
+      "shards": ["435/611"],
+      "tests": 3,
+      "passed": 0,
+      "failed": 3,
+      "at": "base"
+    },
+    {
+      "label": "s435",
+      "scope": "quality/release/scope.json",
+      "grep": "horizontal-cinema/platform-neutral/jewel-twilight/humanist-ui/system .*(390x844|1024x768|1440x900) default",
+      "shards": ["435/611"],
+      "tests": 3,
+      "passed": 0,
+      "failed": 3
+    },
+    {
+      "label": "slow249",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/high-contrast/humanist-ui/light (1440x900|390x844) default|mission-control/platform-neutral/sunset-ember/humanist-ui/system 390x844 default|aurora-glass/carbon-inspired/oled-black/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["249/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "label": "slow249",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/high-contrast/humanist-ui/light (1440x900|390x844) default|mission-control/platform-neutral/sunset-ember/humanist-ui/system 390x844 default|aurora-glass/carbon-inspired/oled-black/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["249/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "at": "base"
+    },
+    {
+      "label": "slow219",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/night-terminal/humanist-ui/system (1440x900|390x844) default|mission-control/platform-neutral/cool-color-safe/humanist-ui/dark 390x844 default|aurora-glass/claymorphic/neutral-slate/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["219/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "at": "base"
+    },
+    {
+      "label": "slow219",
+      "scope": "quality/release/scope.json",
+      "grep": "schematic/platform-neutral/night-terminal/humanist-ui/system (1440x900|390x844) default|mission-control/platform-neutral/cool-color-safe/humanist-ui/dark 390x844 default|aurora-glass/claymorphic/neutral-slate/accessible-reading/dark 390x844 (default|contrast-more)",
+      "shards": ["219/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  ],
+  "kit": "75556fc838c9",
+  "kitScripts": "d28cc6375b49"
+}
