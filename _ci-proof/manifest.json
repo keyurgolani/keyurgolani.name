@@ -1,0 +1,19 @@
+{
+  "name": "horizontal-cinema-362-cells",
+  "summary": "Horizontal Cinema's top line: the Appearance summary's release cells on paper-tactile, poster-primaries, console-mono and high-contrast, its ring inside its own box, wholly on the band",
+  "head": "e8548bd4517180ebc9202ced2ce5407f8e65afe6",
+  "base": "d599c309405b0a8b8b4291fa0ea8a87e38de9d0d",
+  "cells": [
+    {
+      "label": "hc-focus-362",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:horizontal-cinema complete / horizontal-cinema/paper-tactile/poster-primaries/console-mono/high-contrast (1440x900 default|1024x768 (default|contrast-more|forced-colors)|390x844 default) ",
+      "shards": ["find"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  ],
+  "kit": "150a0a7d54d9",
+  "kitScripts": "7964ce4b1c36"
+}
