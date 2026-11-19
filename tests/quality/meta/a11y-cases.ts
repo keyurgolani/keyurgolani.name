@@ -1160,6 +1160,42 @@ const scrollIntoViewEdge = async (page: Page): Promise<Finding[]> => {
   return findings;
 };
 
+/** The item at the end of contrast-marquee.html's track, the one a case adds at its marker. */
+const MARQUEE_EDGE_ITEM = '.belt > .item:nth-child(3)';
+/**
+ * The sampler on contrast-marquee.html's edge item, named to it as axe names a ticker's item it
+ * leaves incomplete, and held to one more thing: the belt it held for its shots runs again, at its
+ * own rate, once the call ends. One that doesn't adds a finding no case's reason matches. Whether
+ * axe leaves the item incomplete is a race with the belt: only when its box sits over the toggle
+ * as axe reads it, which axe's own clip to the track mostly hides. Named here, the sampler reads it
+ * mid-crawl every time.
+ */
+const marqueeContrast = async (page: Page): Promise<Finding[]> => {
+  const findings = await incompleteContrastFindings(page, {
+    incomplete: [{ id: CONTRAST_RULE, nodes: [{ target: [MARQUEE_EDGE_ITEM] }] }],
+  } as unknown as Parameters<typeof incompleteContrastFindings>[1]);
+  const belt = await page.evaluate(async () => {
+    const animation = document.querySelector('.belt')?.getAnimations()[0];
+    if (!animation) return 'no animation on the belt';
+    const before = Number(animation.currentTime);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const after = Number(animation.currentTime);
+    return animation.playbackRate === 1 && animation.playState === 'running' && after > before
+      ? null
+      : `rate ${animation.playbackRate}, ${animation.playState}, ${before} ms to ${after} ms`;
+  });
+  return belt === null
+    ? findings
+    : [
+        ...findings,
+        {
+          gate: 'contrast',
+          rule: 'marquee-resumes',
+          actual: `the belt isn't running again at its own rate once the sampler is done: ${belt}`,
+        },
+      ];
+};
+
 /** How many changes the sampler's watch of the page may hold at once (row25-quiet-rc2-hardening). */
 const TURNS_BOUND = 1000;
 
@@ -1574,6 +1610,20 @@ const ARRIVAL_PULSING = withFixture(
   'contrast-animated.html',
   '<!-- infinite -->',
   '<p class="band pulse">Text over a gradient that pulses for good.</p>',
+);
+
+/** contrast-marquee.html with a readable item straddling the end of the track that clips the belt. */
+const MARQUEE_EDGE = withFixture(
+  'contrast-marquee.html',
+  '<!-- edge -->',
+  '<p class="item">Third item, at the end of the track</p>',
+);
+
+/** contrast-marquee.html with a faint item straddling the end of the track that clips the belt. */
+const MARQUEE_EDGE_FAINT = withFixture(
+  'contrast-marquee.html',
+  '<!-- edge -->',
+  '<p class="item faint">Third item, at the end of the track</p>',
 );
 
 /** contrast-animated.html with a figure a scroll-driven animation slides in as it comes into view. */
@@ -3595,6 +3645,27 @@ export const A11Y_CASES: readonly MetaCase[] = [
     ARRIVAL_PULSING,
     /^contrast text: unresolved: an infinite animation, pulse, moves or repaints it, /,
     contrast,
+  ),
+  // A marquee's edge item, straddling the end of the track that clips the belt, is read at one held
+  // frame of the belt, inside the track, never over the toggle beyond it: it passes, and the belt
+  // runs again once the sampler is done.
+  {
+    id: 'contrast/marquee-edge',
+    gate: 'contrast',
+    input:
+      'tests/quality/fixtures/a11y/contrast-marquee.html, with a readable item straddling the end of the track that clips the running belt',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(MARQUEE_EDGE, marqueeContrast),
+  },
+  // And a faint edge item still fails, as a measure.
+  builtCase(
+    'marquee-edge-faint',
+    'contrast',
+    'tests/quality/fixtures/a11y/contrast-marquee.html, with a faint item straddling the end of the track that clips the running belt',
+    MARQUEE_EDGE_FAINT,
+    /^contrast text: \d\.\d\d:1 against its worst background pixel$/,
+    marqueeContrast,
   ),
   // Nor is a rotated sticker's border round its line: sampled inside its own quad, it passes.
   goodFile('rotated', 'contrast-rotated.html', 'contrast', contrast),

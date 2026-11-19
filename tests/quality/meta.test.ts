@@ -224,6 +224,9 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'contrast/snap-peek',
     'contrast/snap-peek-rtl',
     'contrast/snap-peek-faint',
+    // A ticker's edge item read mid-crawl: at one held frame inside its track, and a faint one.
+    'contrast/marquee-edge',
+    'contrast/marquee-edge-faint',
     // A stop read once a stalled glide comes to rest, and one a glide leaves out of view.
     'keyboard/glide-stall',
     'keyboard/glide-short',
