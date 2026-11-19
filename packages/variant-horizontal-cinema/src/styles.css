@@ -2989,12 +2989,15 @@
    * Open, the visitor's control keeps its summary on the line and drops its panel from the band's
    * foot over the scene, on its own surface in the canvas's ink, held to the window under the band
    * and scrolled inside it. Centred on the band, the panel ran above the window, its selects out of
-   * reach, and its radios lay over the scene in the band's ink.
+   * reach, and its radios lay over the scene in the band's ink. Closed, its content stays folded
+   * away in the band's flow: placed off the band, it lay over the pinned strip, where the contrast
+   * check read a closed label as covered.
    */
   [data-variant='horizontal-cinema']
     .hc[data-view='strip']
     .hc-chrome
-    [data-ui-slot='disclosure.content'] {
+    [data-ui-slot='disclosure'][open]
+    > [data-ui-slot='disclosure.content'] {
     position: absolute;
     inset-block: 100% auto;
     inset-inline: auto var(--layout-grid-margin);
