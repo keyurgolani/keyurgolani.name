@@ -14,7 +14,13 @@ import path from 'node:path';
 import test from 'node:test';
 import type { TestContext } from 'node:test';
 import { MERGED_VERDICT, mergeRun, parseMergeArgs } from './merge';
-import { mergeShards, readShards } from './lib/shards';
+import {
+  mergeShards,
+  readShards,
+  type PlanRecord,
+  type RunVerdict,
+  type ShardReport,
+} from './lib/shards';
 import { OVER, releaseOutcome, WITHIN } from './meta/release-cases';
 import {
   PERF_PLAN,
@@ -26,7 +32,7 @@ import {
   type ShardInput,
 } from './meta/shard-cases';
 import { judgeRelease, RELEASE_GATES } from './release';
-import type { Summary } from './reporter';
+import type { Summary, SummaryTest } from './reporter';
 
 // pnpm quality:merge (#11, 11-4): a sharded quality:full run judged whole.
 // The rules themselves are quality:meta's merged-verdict cases.
@@ -565,4 +571,169 @@ test("611 shards' verdict files with one shard's never uploaded, as a shard whos
   assert.deepEqual(missing(gap), [
     'Shard 307/611 left no report, so its tests are unaccounted for.',
   ]);
+});
+
+/** A release's plan record, as run.ts writes plan.json, of these planned tests. */
+const releasePlan = (planned: PlanRecord['planned']): PlanRecord => ({
+  mode: 'full',
+  cells: planned.length,
+  tests: planned.length,
+  targets: [],
+  reasons: [],
+  changes: [],
+  changed: [],
+  coverage: { rows: [], tuples: 0, accepted: 0, uncoverable: [] },
+  planned,
+});
+
+/** A release shard's verdict.json with these failures. */
+const shardVerdict = (shard: string, failures: RunVerdict['failures']): RunVerdict => ({
+  ok: failures.length === 0,
+  failures,
+  flaky: [],
+  counts: {},
+  mode: 'full',
+  shard,
+  engines: ['chromium'],
+  canary: { before: [], after: [] },
+});
+
+test("a release's merge of 91,224 distinct failures finishes in seconds, each once, the first of each kept in order", (t) => {
+  // A release whose every test fails has about as many failing records as its plan has tests,
+  // 91,224. The merge keeps the first failure of each rule and message. Found by searching the
+  // list again for each one, that costs the square of the count: half a minute here, longer on
+  // a runner, of the verdict job's 15 minutes. These are carried from the shards' verdicts; a
+  // release's own come from judging the joined summary, and meet the same pass.
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-merge-many-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const count = 8;
+  const each = 11_403;
+  const rows = ['default', 'contrast-more', 'forced-colors', 'reduced-motion', 'root-text-200'];
+  const message = (at: number) =>
+    `composition:editorial-evidence complete / platform-neutral/scheme-${at % 89}/type-${at % 13}/system ${['390x844', '1024x768', '1440x900'][at % 3]} ${rows[at % 5]} on chromium: focus perimeter on a.ee-link-${at} failed`;
+  const shards: ShardReport[] = Array.from({ length: count }, (_, s) => {
+    const own = Array.from({ length: each }, (_, i) => ({
+      rule: 'shard-failure',
+      message: message(s * each + i),
+    }));
+    return {
+      dir: `reports-quality-release-${s + 1}/quality`,
+      plan: releasePlan([]),
+      summary: null,
+      // The shard's first failure again at its end: the merge keeps it once, where it came first.
+      verdict: shardVerdict(`${s + 1}/${count}`, [...own, own[0]!]),
+    };
+  });
+  writeFileSync(path.join(root, 'shards.json'), JSON.stringify(shards));
+  const script = path.join(root, 'merge.mts');
+  writeFileSync(
+    script,
+    [
+      `import { readFileSync, writeFileSync } from 'node:fs';`,
+      `import { mergeShards } from ${JSON.stringify(path.resolve('tests/quality/lib/shards.ts'))};`,
+      `const shards = JSON.parse(readFileSync(${JSON.stringify(path.join(root, 'shards.json'))}, 'utf8'));`,
+      `const start = performance.now();`,
+      `const verdict = mergeShards(shards, { expected: ${count}, mode: 'full' });`,
+      `const ms = Math.round(performance.now() - start);`,
+      `writeFileSync(${JSON.stringify(path.join(root, 'merged.json'))}, JSON.stringify(verdict.failures));`,
+      `console.log(JSON.stringify({ ms }));`,
+    ].join('\n'),
+  );
+  const started = Date.now();
+  const child = spawnSync(process.execPath, ['--import', 'tsx', script], {
+    cwd: path.resolve('.'),
+    encoding: 'utf8',
+    timeout: 10_000,
+    killSignal: 'SIGKILL',
+  });
+  const wall = Date.now() - started;
+  assert.equal(
+    child.signal,
+    null,
+    `the merge of ${count * each} failures was still running after 10 s (${wall} ms)`,
+  );
+  assert.equal(child.status, 0, child.stderr.slice(-400));
+  const { ms } = JSON.parse(child.stdout.trim().split('\n').at(-1)!) as { ms: number };
+  t.diagnostic(
+    `the merge of ${count * each} distinct failures took ${ms} ms, its process ${wall} ms`,
+  );
+  const merged = JSON.parse(readFileSync(path.join(root, 'merged.json'), 'utf8')) as {
+    rule: string;
+    message: string;
+  }[];
+  const carried = shards.flatMap((shard) =>
+    shard.verdict!.failures.slice(0, each).map((failure) => ({
+      rule: failure.rule,
+      message: `shard ${shard.verdict!.shard}: ${failure.message}`,
+    })),
+  );
+  assert.equal(carried.length, 91_224);
+  assert.deepEqual(merged.slice(0, carried.length), carried);
+  assert.deepEqual(
+    merged.slice(carried.length).map((failure) => failure.rule),
+    ['no-summary'],
+  );
+});
+
+test('a release whose verdict finds 200,000 failures reports every one of them, never a stack overflow', () => {
+  // The judged failures handed to push() as one argument each run out of stack past about
+  // 110,000 (Node 22), so a release that fails that widely would end in a throw, not a verdict.
+  // Here every planned test but none ran: one plan-coverage failure each.
+  const total = 200_000;
+  const planned = Array.from({ length: total }, (_, at) => ({
+    cell: `composition:fallback complete / fallback/language-${at}/scheme-${at % 89}/type-${at % 13}/system`,
+    viewport: '1440x900',
+    row: 'default',
+    skip: null,
+    engineSkips: {},
+    conditions: true,
+  }));
+  const ran: SummaryTest = {
+    title: 'the routes answer',
+    file: 'tests/quality/routes.spec.ts',
+    line: 1,
+    project: 'chromium',
+    outcome: 'expected',
+    expectedStatus: 'passed',
+    status: 'passed',
+    skipReason: null,
+    checks: [],
+    canaryProbe: false,
+    errors: [],
+    records: 0,
+  };
+  const summary: Summary = {
+    schemaVersion: 1,
+    mode: 'full',
+    shard: '1/1',
+    status: 'passed',
+    projects: [],
+    tests: [ran],
+    errors: [],
+  };
+  const shards: ShardReport[] = [
+    {
+      dir: 'reports-quality-release-1/quality',
+      plan: releasePlan(planned),
+      summary,
+      verdict: shardVerdict('1/1', []),
+    },
+  ];
+  let verdict: ReturnType<typeof mergeShards> | undefined;
+  assert.doesNotThrow(() => {
+    verdict = mergeShards(shards, { expected: 1, mode: 'full' });
+  });
+  const unrun = verdict!.failures
+    .filter((each) => each.rule === 'plan-coverage')
+    .map((each) => each.message);
+  assert.equal(verdict!.ok, false);
+  assert.equal(unrun.length, total);
+  assert.equal(
+    unrun[0],
+    `${planned[0]!.cell} at 1440x900, default, on chromium is planned, and didn't run.`,
+  );
+  assert.equal(
+    unrun.at(-1),
+    `${planned.at(-1)!.cell} at 1440x900, default, on chromium is planned, and didn't run.`,
+  );
 });
