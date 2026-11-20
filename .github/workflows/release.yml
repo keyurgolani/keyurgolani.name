@@ -71,7 +71,7 @@ concurrency:
 
 env:
   # The Node release the image ships (pnpm check:pins).
-  NODE_VERSION: 22.23.4
+  NODE_VERSION: 22.23.5
   TZ: UTC
   PLATFORMS: linux/amd64,linux/arm64
 
