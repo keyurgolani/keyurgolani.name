@@ -10,12 +10,12 @@ import { finalScopeRefusal, readScope, SCOPE_FILE, scopeMismatch } from './verif
 
 const scope = (release) => ({ release, scope: 'default-packs', records: 'records.json' });
 
-test("a candidate tag whose scope file is its own passes, and the checked-in file is RC5's", () => {
+test("a candidate tag whose scope file is its own passes, and the checked-in file is RC6's", () => {
   assert.equal(scopeMismatch('v1.0.0-rc.1', scope('1.0.0-rc.1')), null);
   const checkedIn = JSON.parse(
     readFileSync(new URL(`../../${SCOPE_FILE}`, import.meta.url), 'utf8'),
   );
-  assert.equal(scopeMismatch('v1.0.0-rc.5', checkedIn), null);
+  assert.equal(scopeMismatch('v1.0.0-rc.6', checkedIn), null);
 });
 
 test("the checked-in scope and records list are a final's: the reachable scope, an empty list and no timing reported, so promotion's scope rule names nothing", () => {
