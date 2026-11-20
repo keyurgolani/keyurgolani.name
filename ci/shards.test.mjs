@@ -178,6 +178,24 @@ test('browser and variants shards pass exact files and projects to Playwright', 
   assert.ok(variants.includes('tests/variants/playwright.config.ts'));
 });
 
+test("a browser shard's Playwright run ends at SHARD_GLOBAL_TIMEOUT_MINUTES with its report when the job sets it, and has no suite limit when it doesn't", () => {
+  const files = ['tests/e2e/pair.spec.ts'];
+  const [set] = commandsFor('browser', files, [], { SHARD_GLOBAL_TIMEOUT_MINUTES: '37' });
+  assert.deepEqual(set.slice(1, 3), ['test', '--global-timeout=2220000']);
+  assert.equal(set.at(-1), 'tests/e2e/pair\\.spec\\.ts$');
+  for (const env of [{}, { SHARD_GLOBAL_TIMEOUT_MINUTES: '' }]) {
+    const [plain] = commandsFor('browser', files, [], env);
+    assert.ok(!plain.some((arg) => arg.startsWith('--global-timeout')), JSON.stringify(env));
+  }
+  assert.throws(
+    () => commandsFor('browser', files, [], { SHARD_GLOBAL_TIMEOUT_MINUTES: 'soon' }),
+    /SHARD_GLOBAL_TIMEOUT_MINUTES is "soon", not a whole number of minutes/,
+  );
+  // The variants shards take no suite limit from it.
+  const [variants] = commandsFor('variants', ['modes'], [], { SHARD_GLOBAL_TIMEOUT_MINUTES: '37' });
+  assert.ok(!variants.some((arg) => arg.startsWith('--global-timeout')));
+});
+
 test("a harness module's tests count for the specs that call what they import from it", () => {
   const sources = {
     'tests/e2e/demo.spec.ts':

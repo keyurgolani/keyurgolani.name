@@ -730,6 +730,15 @@ test('each sharded suite runs as many shards as ci/shards.mjs splits it into, an
   const browser = CI.jobs.browser;
   assert.deepEqual(browser.strategy.matrix.shard, [1, 2, 3, 4]);
   assert.equal(browser['timeout-minutes'], 40);
+  // A stuck shard ends three minutes before the job's limit, so Playwright writes its report and
+  // names what was running, where a cancel at the limit writes nothing; only the browser job sets it.
+  const [shardStep] = browser.steps.filter((step) => step.env?.SHARD);
+  assert.equal(shardStep.env.SHARD_GLOBAL_TIMEOUT_MINUTES, browser['timeout-minutes'] - 3);
+  for (const [id, job] of Object.entries(CI.jobs)) {
+    if (id === 'browser') continue;
+    for (const step of job.steps ?? [])
+      assert.equal(step.env?.SHARD_GLOBAL_TIMEOUT_MINUTES, undefined, `${id}: ${step.name}`);
+  }
   assert.equal(browser.strategy['fail-fast'], false);
   // A plain literal, so rc-verify can read the count from a tag commit's own ci.yml.
   const source = readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
