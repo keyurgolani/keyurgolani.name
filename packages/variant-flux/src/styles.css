@@ -1650,12 +1650,17 @@
    its share of the run's longest (FX-S36: the liquid below the fold). For the eye alone. */
 [data-variant='flux'] .fx-len {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-xs);
 }
 
+/* No wider than half its sheet (the sheet is a container): under 200% root text the tube's own
+   --space-3xl and its minutes beside it came to about 263px in a 176px sheet at 320, and the
+   sheet's one track grew to them. The tube and the minutes wrap where they still don't fit. */
 [data-variant='flux'] .fx-len__tube {
   inline-size: var(--space-3xl);
+  max-inline-size: 50cqi;
   block-size: var(--space-2xs);
   border-radius: var(--ui-radius-badge);
   background-image: linear-gradient(
