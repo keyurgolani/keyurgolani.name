@@ -3249,6 +3249,16 @@
   }
 }
 
+/* A sheet narrower than 12rem of the root's text stacks each fact, term over value: the term's
+   6rem column and its value came to about 275px beside each other in a 176px body at 320 under
+   200% root text, and the body's one track grew to them, so every part of the sheet ran past the
+   window. The query's rem is the root's, so this acts under large text alone. */
+@container fx-sheet (inline-size < 12rem) {
+  [data-variant='flux'] .fx-case__facts > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 39.99rem) {
   [data-variant='flux'] .fx-case__head {
     max-inline-size: 85%;
