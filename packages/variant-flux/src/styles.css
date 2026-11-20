@@ -3417,6 +3417,18 @@
     gap: var(--space-s);
   }
 
+  /* A case picture that can't be shown labels its box in the caption's type, as the picture's
+     own caption reads, inside a narrower padding, so each word of the label sits whole on its
+     line in a box two up (115px at 320), in every typography. The shape still holds the label:
+     at the label's lines each shape keeps 6px or more clear of it. */
+  [data-variant='flux'] .fx-case__pictures .pf-figure--unavailable > .pf-media-box {
+    padding-inline: var(--space-xs);
+    font-family: var(--type-caption-font-family);
+    font-size: var(--type-caption-font-size);
+    font-weight: var(--type-caption-font-weight);
+    line-height: var(--type-caption-line-height);
+  }
+
   /* A work's card holds its picture in a wider pebble: the page's width, near half as tall. */
   [data-variant='flux'] .fx-card__drop {
     aspect-ratio: 8 / 5;
