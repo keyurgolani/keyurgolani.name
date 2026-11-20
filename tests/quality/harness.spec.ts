@@ -3,7 +3,13 @@ import { COLOR_ROLES } from '../../packages/appearance/src/roles';
 import { BUSY_LIMIT_MS, notBusy, STILL_BUSY } from './lib/a11y/conditions';
 import { axeFor } from './lib/axe';
 import { EGRESS_GUARD_URL, FIXED_CLOCK_URL, FIXED_TIME } from './lib/clock';
-import { elementDetails, elementDetailsScript } from './lib/probes';
+import {
+  chromiumNames,
+  closeNameSession,
+  elementDetails,
+  elementDetailsScript,
+  withNames,
+} from './lib/probes';
 import { startApp } from '../harness/app-server.mjs';
 import { defaultTuple } from './cells';
 import { canaryPassword } from './lib/artifacts.mjs';
@@ -153,6 +159,33 @@ test(
     expect(link?.found).toBe(true);
     expect(link?.semanticRole).toBe('link');
     expect(link?.accessibleName).toBe(browserName === 'chromium' ? 'More 1' : 'More1');
+  },
+);
+
+test(
+  "a record's name keeps axe's for an element gone before Chromium's tree is read, and takes a selector's first match, as the details lookup does",
+  { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+  async ({ page, browserName }) => {
+    await page.setContent(
+      '<main><a id="gone" href="#gone">Gone soon</a><a class="pair" href="#first" style="display: flex"><span>First</span><span>link</span></a><a class="pair" href="#second">Second link</a></main>',
+    );
+    await axeFor(page).analyze();
+    const selectors = ['#gone', '.pair'];
+    const details = await page.evaluate(elementDetailsScript, {
+      selectors,
+      property: null,
+      roles: [...COLOR_ROLES],
+    });
+    // The element goes between the details read and the tree's, so DOM.querySelector finds none.
+    await page.evaluate(() => document.getElementById('gone')?.remove());
+    const names = await chromiumNames(page, selectors);
+    await closeNameSession(page);
+    expect(names[0]).toBeUndefined();
+    const [gone, pair] = withNames(details, names);
+    expect(gone?.found).toBe(true);
+    expect(gone?.accessibleName).toBe('Gone soon');
+    // Both reads take the first .pair: never the second link's name.
+    expect(pair?.accessibleName).toBe(browserName === 'chromium' ? 'First link' : 'Firstlink');
   },
 );
 

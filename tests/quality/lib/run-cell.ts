@@ -39,7 +39,12 @@ import {
 import { FIXED_TIME } from './clock';
 import { checkDisplayMode, checkEmulation } from './emulation';
 import type { PreferenceRow, Viewport } from './matrix';
-import { elementDetails, resolvedTokensScript, type ElementDetails } from './probes';
+import {
+  closeNameSession,
+  elementDetails,
+  resolvedTokensScript,
+  type ElementDetails,
+} from './probes';
 import {
   exceptionFor,
   failureTarget,
@@ -939,16 +944,21 @@ export async function runCell(run: CellRun, pass: typeof runPass = runPass) {
   const passes: Pass[] = [];
   // A swept row that throws is a failure of its own, and the rows after it still run.
   const broken: CellFailure[] = [];
-  for (const [at, row] of (cell.sweep ? SWEEP_ROWS : [run.row]).entries()) {
-    try {
-      passes.push(await pass({ ...run, row }, { reemulate: at > 0 }));
-    } catch (error) {
-      if (!cell.sweep) throw error;
-      const context: CellContext = { cell, viewport: run.viewport, row, artifacts: [] };
-      broken.push(
-        runnerFailure(context, 'sweep-row', (error as Error).message.split('\n')[0] ?? ''),
-      );
+  try {
+    for (const [at, row] of (cell.sweep ? SWEEP_ROWS : [run.row]).entries()) {
+      try {
+        passes.push(await pass({ ...run, row }, { reemulate: at > 0 }));
+      } catch (error) {
+        if (!cell.sweep) throw error;
+        const context: CellContext = { cell, viewport: run.viewport, row, artifacts: [] };
+        broken.push(
+          runnerFailure(context, 'sweep-row', (error as Error).message.split('\n')[0] ?? ''),
+        );
+      }
     }
+  } finally {
+    // The names' one CDP session on the test's page (probes.ts) ends with its passes.
+    await closeNameSession(run.page);
   }
   // What quality/exceptions.yml waives (#11, Slice 1, item 12): each covered failure keeps its
   // record, with the exception's id, and leaves the cell's suites.
