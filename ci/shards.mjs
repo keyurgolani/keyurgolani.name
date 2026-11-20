@@ -3,7 +3,7 @@
 //
 //   pnpm test:shard <suite> <index>/<count>     # run one shard
 //   node ci/shards.mjs list <suite> <index>/<count>
-//   node ci/shards.mjs measure <suite> <log>...  # durations from finished job logs
+//   node ci/shards.mjs measure <suite> [--higher] <log>...  # durations from finished job logs
 //
 // Suites: unit (`pnpm test`, split by workspace package and root test
 // script), browser (the Playwright suite in tests/e2e, split by spec file),
@@ -16,7 +16,10 @@
 //
 // Durations come from ci/shard-durations.json, which `measure` writes from
 // `gh run view --job <id> --log` output of a finished run, merging into the
-// suite's weights: an item the logs don't measure keeps its own.
+// suite's weights: an item the logs don't measure keeps its own. Across
+// several logs an item takes its median, or with --higher its highest. For
+// browser it also keeps each shard's wall over its planned time (walls.browser),
+// which BROWSER_WALL_RATIO must cover.
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -413,6 +416,65 @@ export function mergeDurations(section, measured) {
   );
 }
 
+/**
+ * A browser shard's wall over its planned time at the suite's workers, at most: the files' times
+ * summed don't see the tail where one worker waits on a long test, the files whose tests run in
+ * turn, or each file's servers starting. Measuring keeps each shard's own ratio in the durations
+ * file (walls.browser), and a test holds this to their worst, so it never drifts below what CI
+ * shows. 1.5: the worst of push runs 44676670022 and 44248643119, browser 1/4 to 4/4 each, was
+ * 1.49 (44248643119's 1/4), rounded up.
+ */
+export const BROWSER_WALL_RATIO = 1.5;
+
+/** The browser suite's Playwright workers, as playwright.config.ts sets them. */
+export function browserWorkers(root = REPO_ROOT) {
+  const workers = Number(
+    /\n {2}workers: (\d+),\n/.exec(
+      readFileSync(path.join(root, 'playwright.config.ts'), 'utf8'),
+    )?.[1],
+  );
+  if (!(workers > 0)) throw new Error('playwright.config.ts sets no workers count');
+  return workers;
+}
+
+/**
+ * A browser job's wall from its log, in seconds: the time ci/run.mjs says the suite took, passed or
+ * failed. Null when the log has none, a job cancelled at its limit.
+ */
+export function wallOf(text) {
+  const line = logLines(text).find(({ text: line }) =>
+    /^\[ci\] browser (?:passed|failed) in [\d.]+s$/.test(line),
+  );
+  return line ? Number(/in ([\d.]+)s$/.exec(line.text)[1]) : null;
+}
+
+/**
+ * Each measured shard's wall over its planned time at `workers`: { log, wall, planned, ratio }, in
+ * the order given. A log without a wall isn't measured.
+ */
+export function wallRatios(logs, workers) {
+  return logs.flatMap(({ log, text }) => {
+    const wall = wallOf(text);
+    const planned = Object.values(measure('browser', text)).reduce((sum, s) => sum + s, 0);
+    if (wall === null || !(planned > 0)) return [];
+    const ratio = Math.round((wall / (planned / workers)) * 100) / 100;
+    return [{ log, wall, planned: Math.round(planned * 10) / 10, ratio }];
+  });
+}
+
+/**
+ * What's wrong with `ratio` against the shards measured, or null: their worst, rounded up to the
+ * next 0.05, above it.
+ */
+export function wallRatioDrift(shards, ratio = BROWSER_WALL_RATIO) {
+  if (shards.length === 0) return 'no browser shard has a measured wall';
+  const worst = shards.reduce((most, shard) => (shard.ratio > most.ratio ? shard : most));
+  const rounded = Math.ceil(Math.round(worst.ratio * 100) / 5) * 0.05;
+  return rounded > ratio + 1e-9
+    ? `${worst.log} ran ${worst.ratio}x its planned time, ${rounded.toFixed(2)} rounded up, over the ${ratio} the budget check uses`
+    : null;
+}
+
 // ---- CLI --------------------------------------------------------------------
 
 function run(command) {
@@ -427,28 +489,48 @@ function run(command) {
 function main(argv) {
   const [verb, suite, ...rest] = argv;
   if (verb === 'measure') {
+    // --higher takes each item's highest time across the logs, so the plan holds a slow runner's.
+    const higher = rest[0] === '--higher';
+    const files = higher ? rest.slice(1) : rest;
     const durations = loadDurations();
     const merged = {};
-    for (const file of rest) {
-      for (const [item, seconds] of Object.entries(measure(suite, readFileSync(file, 'utf8')))) {
+    const logs = files.map((file) => ({ log: file, text: readFileSync(file, 'utf8') }));
+    for (const { text } of logs) {
+      for (const [item, seconds] of Object.entries(measure(suite, text))) {
         merged[item] = [...(merged[item] ?? []), seconds];
       }
     }
-    // The median across the logs given, so one slow runner doesn't skew it.
-    const medians = Object.fromEntries(
+    // The median across the logs given, so one slow runner doesn't skew it, or the highest.
+    const picked = Object.fromEntries(
       Object.entries(merged).map(([item, list]) => [
         item,
-        [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)],
+        higher ? Math.max(...list) : [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)],
       ]),
     );
-    durations[suite] = mergeDurations(durations[suite], medians);
+    durations[suite] = mergeDurations(durations[suite], picked);
+    if (suite === 'browser') {
+      const workers = browserWorkers();
+      durations.walls = {
+        ...durations.walls,
+        browser: wallRatios(
+          // Named by the log's own directory and file: where it was saved stays out of the file.
+          logs.map(({ log, text }) => ({
+            log: `${path.basename(path.dirname(log))}/${path.basename(log)}`,
+            text,
+          })),
+          workers,
+        ),
+      };
+      const drift = wallRatioDrift(durations.walls.browser);
+      if (drift) console.error(`[shards] ${drift}`);
+    }
     writeFileSync(DURATIONS_FILE, `${JSON.stringify(durations, null, 2)}\n`);
     console.log(JSON.stringify(durations[suite], null, 2));
     return 0;
   }
   if (verb !== 'run' && verb !== 'list') {
     console.error(
-      'usage: node ci/shards.mjs run|list <suite> <index>/<count> | measure <suite> <log>...',
+      'usage: node ci/shards.mjs run|list <suite> <index>/<count> | measure <suite> [--higher] <log>...',
     );
     return 2;
   }

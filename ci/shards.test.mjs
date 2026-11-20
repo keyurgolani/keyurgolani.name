@@ -8,6 +8,8 @@ import { parse as parseYaml } from 'yaml';
 import {
   assign,
   attributeHarness,
+  BROWSER_WALL_RATIO,
+  browserWorkers,
   commandsFor,
   loadDurations,
   measure,
@@ -17,6 +19,9 @@ import {
   specFiles,
   SUITES,
   unitItems,
+  wallOf,
+  wallRatioDrift,
+  wallRatios,
   workspacePackages,
 } from './shards.mjs';
 
@@ -340,13 +345,6 @@ test('the measured durations cover the suites CI shards', () => {
 
 /** The most of the browser suite's planned time its unmeasured specs may hold. */
 const UNMEASURED_SHARE = 0.1;
-/**
- * A browser shard's wall time over its planned time at the suite's workers, at most, as CI ran
- * them: the files' own times summed don't see the tail where one worker waits on a long test, the
- * files whose tests run in turn, or each file's servers starting. The worst of push runs 44676670022
- * and 44248643119, browser 1/4 to 4/4 each, was 1.49 (44248643119's 1/4), rounded up.
- */
-const WALL_RATIO = 1.5;
 /** The most of a browser job's test time a shard's wall may take: the rest is a slow runner's and growth's. */
 const WALL_SHARE = 0.75;
 /** What a browser job spends before its test step: install, caches and the build. */
@@ -379,11 +377,7 @@ test("the durations file measures CI's browser specs: those it doesn't, each wei
 test("every browser shard's wall, its planned time at the suite's workers times the wall ratio CI shows, takes at most three quarters of its job's test time", () => {
   const ci = parseYaml(readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
   const limit = ci.jobs.browser['timeout-minutes'];
-  const workers = Number(
-    /\n {2}workers: (\d+),\n/.exec(
-      readFileSync(path.join(ROOT, 'playwright.config.ts'), 'utf8'),
-    )?.[1],
-  );
+  const workers = browserWorkers();
   assert.ok(
     Number.isInteger(limit) && workers > 0,
     'the browser job sets a limit, the config its workers',
@@ -392,12 +386,57 @@ test("every browser shard's wall, its planned time at the suite's workers times 
   const items = specFiles('tests/e2e');
   for (let index = 1; index <= SUITES.browser.count; index++) {
     const { mine } = plan('browser', `${index}/${SUITES.browser.count}`, items);
-    const wall = (mine.weight / workers / 60) * WALL_RATIO;
+    const wall = (mine.weight / workers / 60) * BROWSER_WALL_RATIO;
     assert.ok(
       wall <= budget,
-      `browser ${index}/${SUITES.browser.count} plans ${mine.weight} s: ${wall.toFixed(1)} min of wall at ${workers} workers and ${WALL_RATIO}x, over ${WALL_SHARE} of ${limit - SETUP_MINUTES} (${budget.toFixed(1)} min)`,
+      `browser ${index}/${SUITES.browser.count} plans ${mine.weight} s: ${wall.toFixed(1)} min of wall at ${workers} workers and ${BROWSER_WALL_RATIO}x, over ${WALL_SHARE} of ${limit - SETUP_MINUTES} (${budget.toFixed(1)} min)`,
     );
   }
+});
+
+test("the browser wall ratio covers every shard the durations file measured, so the budget check never runs on a ratio below CI's", () => {
+  const shards = loadDurations().walls?.browser ?? [];
+  assert.ok(shards.length >= 8, `${shards.length} browser shards with a measured wall`);
+  assert.equal(wallRatioDrift(shards), null);
+});
+
+test('a shard that ran over the wall ratio, rounded up to 0.05, fails the ratio; one under it passes', () => {
+  const shard = (ratio) => ({
+    log: `logs-1/browser-${ratio}.log`,
+    wall: 900,
+    planned: 1200,
+    ratio,
+  });
+  assert.equal(wallRatioDrift([shard(1.2), shard(1.49)], 1.5), null);
+  assert.equal(wallRatioDrift([shard(1.2), shard(1.5)], 1.5), null);
+  assert.match(
+    wallRatioDrift([shard(1.2), shard(1.51)], 1.5),
+    /^logs-1\/browser-1\.51\.log ran 1\.51x its planned time, 1\.55 rounded up, over the 1\.5 /,
+  );
+  assert.match(wallRatioDrift([]), /no browser shard has a measured wall/);
+});
+
+test("a browser shard's wall is the suite's own time from its log, and a cancelled one has none", () => {
+  const line = (time, text) => `browser (1/4)\tUNKNOWN STEP\t2026-11-20T04:${time}Z ${text}`;
+  const tests = [
+    line('50:00.0000000', '  ✓    1 [chromium] › tests/e2e/a.spec.ts:3:1 › one (300.0s)'),
+    line('55:00.0000000', '  ✓    2 [chromium] › tests/e2e/b.spec.ts:3:1 › two (300.0s)'),
+  ];
+  const done = [...tests, line('56:00.0000000', '[ci] browser passed in 450.0s')].join('\n');
+  const cut = tests.join('\n');
+  assert.equal(wallOf(done), 450);
+  assert.equal(wallOf(cut), null);
+  // 600 s of tests at two workers plan 300 s; the suite took 450.
+  assert.deepEqual(
+    wallRatios(
+      [
+        { log: 'done.log', text: done },
+        { log: 'cut.log', text: cut },
+      ],
+      2,
+    ),
+    [{ log: 'done.log', wall: 450, planned: 600, ratio: 1.5 }],
+  );
 });
 
 function workspace(yaml, dirs) {
