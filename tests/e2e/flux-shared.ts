@@ -5,7 +5,7 @@ import { parse, stringify } from 'yaml';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import type { Page } from '@playwright/test';
-import { expect } from '../harness/fixtures';
+import { expect, test } from '../harness/fixtures';
 
 // What Flux's browser specs share (flux.spec.ts, flux-long-text.spec.ts and
 // the flux-contact-title-*.spec.ts files): a contract fixture served with Flux
@@ -223,9 +223,18 @@ const dockName = () => {
       };
     });
   const fx = getComputedStyle(document.querySelector('.fx')!);
+  // How the bar is placed, by its computed position, and how far its box sits from its flow box.
+  const bar = document.querySelector<HTMLElement>('#fx--bar')!;
+  const placed = bar.getBoundingClientRect();
+  const position = getComputedStyle(bar).position;
+  bar.style.setProperty('position', 'static', 'important');
+  const flow = bar.getBoundingClientRect();
+  bar.style.removeProperty('position');
   return {
     words,
-    bar: document.querySelector('#fx--bar')!.getBoundingClientRect().height,
+    bar: placed.height,
+    position,
+    flowShift: Math.max(Math.abs(placed.top - flow.top), Math.abs(placed.left - flow.left)),
     reach:
       parseFloat(fx.getPropertyValue('--ui-focus-offset')) +
       parseFloat(fx.getPropertyValue('--ui-focus-width')),
@@ -239,9 +248,11 @@ const dockName = () => {
  * in the page, never runs past its tab on a line, takes a second line only where one line
  * wouldn't fit its box, shows at most two and is cut only on its second, and keeps the label
  * role's type and leading; the link is shown with the whole name as its accessible name, or gone
- * whole (no box, not focusable); and the root reserves at
- * least the bar's height and a focus ring's reach at the window's block end, so Tab scrolls a
- * control clear of it. With script on or off: it waits by the clock, not by frames.
+ * whole (no box, not focusable); and while the bar is docked (its computed position fixed) the
+ * root reserves at least its height and a focus ring's reach at the window's block end, so Tab
+ * scrolls a control clear of it, and where it isn't (large text on a phone) it sits where the
+ * page's flow puts it. Each state's branch is logged and attached. With script on or off: it waits
+ * by the clock, not by frames.
  */
 export async function expectDockHoldsItsName(
   page: Page,
@@ -304,9 +315,21 @@ export async function expectDockHoldsItsName(
       expect(word.fontSize, `${at} type`).toBe(word.roleType.fontSize);
       expect(word.lineHeight, `${at} leading`).toBe(word.roleType.lineHeight);
     }
-    expect(
-      dock.reserve,
-      `${state}: the reserve holds the bar (${dock.bar}px) and a ring`,
-    ).toBeGreaterThanOrEqual(dock.bar + dock.reach);
+    const branch = dock.position === 'fixed' ? 'docked' : 'in the flow';
+    console.log(
+      `flux dock fit ${width}x${height} root text ${text * 100}% ${state}: ${branch} (${dock.position}, bar ${dock.bar.toFixed(1)}px, reserve ${dock.reserve}px)`,
+    );
+    test.info().annotations.push({ type: 'dock', description: `${state}: ${branch}` });
+    if (dock.position === 'fixed')
+      expect(
+        dock.reserve,
+        `${state}: the reserve holds the bar (${dock.bar}px) and a ring`,
+      ).toBeGreaterThanOrEqual(dock.bar + dock.reach);
+    // Not docked, there's nothing at the foot to reserve for: the bar is in the page's flow.
+    else
+      expect(
+        dock.flowShift,
+        `${state}: the bar, not docked (${dock.position}), off where the page's flow puts it (px)`,
+      ).toBeLessThan(0.5);
   }
 }

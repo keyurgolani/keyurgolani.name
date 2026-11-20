@@ -2589,6 +2589,11 @@
     inset-inline: 0;
   }
 
+  /* The page measures its own width in the root's rem, for the bar under large text (below). */
+  [data-variant='flux'] .fx {
+    container: fx-page / inline-size;
+  }
+
   [data-variant='flux'] .fx-bar::before {
     background-color: var(--color-surface-default);
     border-radius: var(--ui-radius-overlay) var(--ui-radius-overlay) 0 0;
@@ -3246,6 +3251,22 @@
     grid-column: 9 / span 4;
     grid-row: 1 / span 2;
     align-self: center;
+  }
+}
+
+/* A phone's page narrower than 17rem of the root's text holds the bar in the flow at its top, its
+   row and its tools wrapping: docked at the foot, its one row ran the tools past the window under
+   200% root text, and two rows outgrew the reserve at the foot, over controls focus reached. The
+   query's rem is the root's, so this acts under large text alone: at default text a phone's page
+   is 20rem or more. */
+@container fx-page (inline-size < 17rem) {
+  [data-variant='flux'] .fx-bar {
+    position: relative;
+  }
+
+  [data-variant='flux'] .fx-bar__in,
+  [data-variant='flux'] .fx-bar__tools {
+    flex-wrap: wrap;
   }
 }
 
