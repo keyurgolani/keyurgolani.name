@@ -3,7 +3,7 @@ import { COLOR_ROLES } from '../../packages/appearance/src/roles';
 import { BUSY_LIMIT_MS, notBusy, STILL_BUSY } from './lib/a11y/conditions';
 import { axeFor } from './lib/axe';
 import { EGRESS_GUARD_URL, FIXED_CLOCK_URL, FIXED_TIME } from './lib/clock';
-import { elementDetailsScript } from './lib/probes';
+import { elementDetails, elementDetailsScript } from './lib/probes';
 import { startApp } from '../harness/app-server.mjs';
 import { defaultTuple } from './cells';
 import { canaryPassword } from './lib/artifacts.mjs';
@@ -132,6 +132,27 @@ test(
     expect(hard?.tokenRole).toBe('hard-coded');
     expect(outside?.found).toBe(true);
     expect(outside?.tokenRole).toBeUndefined();
+  },
+);
+
+test(
+  "a record names its element as the browser's accessibility tree does: on Chromium, a link whose two flex items read More and 1 is More 1, where axe's own accname joins them",
+  { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+  async ({ page, browserName }) => {
+    // Two spans, blockified as flex items. axe spaces a child only when its tag isn't phrasing
+    // content, so it reads them as one word; Chromium's accessibility tree reads two.
+    await page.setContent(
+      '<main><a id="more" href="#more" style="display: flex"><span>More</span><span>1</span></a></main>',
+    );
+    await axeFor(page).analyze();
+    const [link] = await elementDetails(page, {
+      selectors: ['#more'],
+      property: null,
+      roles: [...COLOR_ROLES],
+    });
+    expect(link?.found).toBe(true);
+    expect(link?.semanticRole).toBe('link');
+    expect(link?.accessibleName).toBe(browserName === 'chromium' ? 'More 1' : 'More1');
   },
 );
 
