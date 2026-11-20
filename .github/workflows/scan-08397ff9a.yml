@@ -1,11 +1,11 @@
 name: scan-08397ff9a
 
-# The release scan's image check on one base image, before a candidate's tag: Grype on
-# node:22.23.5-alpine at its multi-arch index digest, the Dockerfile's base at 08397ff9a, on
-# linux/amd64 and linux/arm64, judged by ci/release/scan-gate.mjs image as release.yml's rc-scan
-# judges a candidate. Never merged. It runs on a push of its own branch alone: the commit plus this
-# file. The image is public on Docker Hub, so the job logs in nowhere; it reads the repository and
-# uploads the scan's reports, and nothing else.
+# The release scan's image check on the image main published for 08397ff9a, before a candidate's
+# tag: Grype on ghcr.io/keyurgolani/keyurgolani.name:sha-08397ff, the digest ci.yml's publish job
+# tested and tagged, on linux/amd64 and linux/arm64, judged by ci/release/scan-gate.mjs image as
+# release.yml's rc-scan judges a candidate. Never merged. It runs on a push of its own branch
+# alone: the commit plus this file. It reads the repository, pulls the image from GHCR as rc-scan
+# does, and uploads the scan's reports, and nothing else.
 on:
   push:
     branches: ['kgn-proof/scan-08397ff9a']
@@ -22,19 +22,20 @@ env:
   NODE_VERSION: 22.23.5
   TZ: UTC
   PLATFORMS: linux/amd64,linux/arm64
-  # The Dockerfile's three FROM lines at 08397ff9a.
-  BASE_IMAGE: node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a
+  # The sha-<short> tag ci.yml's publish job gave 08397ff9a's tested digest.
+  IMAGE_REF: ghcr.io/keyurgolani/keyurgolani.name:sha-08397ff
 
 jobs:
-  # release.yml's rc-scan, its image steps as they are, with the base image in place of the
-  # candidate's digest: no GHCR login and no packages permission, and no dependency scan, which
-  # ci.yml's deps-scan runs on the same lockfile.
+  # release.yml's rc-scan, its image steps as they are, with main's published image in place of
+  # the candidate's digest, and no dependency scan, which ci.yml's deps-scan runs on the same
+  # lockfile.
   scan:
-    name: scan (node:22.23.5-alpine)
+    name: scan (main's image at 08397ff9a)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read # check out the commit
+      packages: read # pull the image from GHCR while the package is private
     env:
       REPORTS: reports/release
     steps:
@@ -49,6 +50,12 @@ jobs:
         run: corepack enable
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
       - name: Install Grype
         run: |
           node ci/release/install-grype.mjs "$RUNNER_TEMP/grype"
@@ -57,14 +64,14 @@ jobs:
         run: |
           mkdir -p "$REPORTS"
           for platform in ${PLATFORMS//,/ }; do
-            grype -q "registry:$BASE_IMAGE" --platform "$platform" -o json --file "$REPORTS/grype-image-${platform//\//-}.json"
+            grype -q "registry:$IMAGE_REF" --platform "$platform" -o json --file "$REPORTS/grype-image-${platform//\//-}.json"
           done
           node ci/release/scan-gate.mjs image "$REPORTS"/grype-image-*.json --report="$REPORTS/image-scan.md"
       - name: Upload reports
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: reports-scan-08397ff9a
+          name: reports-scan-08397ff9a-image
           path: reports/
           if-no-files-found: ignore
           retention-days: 7
