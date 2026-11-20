@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FINAL_SCOPES } from './release-records.mjs';
 import { finalScopeRefusal, readScope, SCOPE_FILE, scopeMismatch } from './verify-scope.mjs';
 
 const scope = (release) => ({ release, scope: 'default-packs', records: 'records.json' });
@@ -130,4 +131,19 @@ test("a final's scope refuses any timingReported that isn't an empty list, and t
     finalScopeRefusal({ ...full, timingReported: [{ target: 'composition:flux' }] }, []) ?? '',
     /its timingReported lists 1 timing reported, not gated\./,
   );
+});
+
+test('the release docs say what a final promotes on: every final scope by name, and no shard count the release plan has left behind', () => {
+  for (const doc of ['docs/releasing.md', 'CONTRIBUTING.md']) {
+    const text = readFileSync(new URL(`../../${doc}`, import.meta.url), 'utf8');
+    const refusals = text.split(/(?<=\.)\s+/).filter((line) => /promotion refuses/i.test(line));
+    assert.ok(refusals.length > 0, `${doc} says what promotion refuses`);
+    for (const line of refusals)
+      for (const scope of FINAL_SCOPES)
+        assert.ok(
+          line.includes(`\`${scope}\``),
+          `${doc}: "${line.slice(0, 120)}" names no ${scope}`,
+        );
+    assert.doesNotMatch(text, /about 718 shards/, doc);
+  }
 });
