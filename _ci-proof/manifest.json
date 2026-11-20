@@ -1,0 +1,74 @@
+{
+  "name": "rg-316-head-tabs",
+  "summary": "Raw Grid's header tabs keep their focus rings inside their cells under a wider face",
+  "head": "3fe9f01726a2ccfca3754ecfc8701f060da43e1e",
+  "base": "af00f7e4a0953b3a5e04e4a82910ebc42c7d050a",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "every variant's compiled stylesheet, the kit's layout included, is inside its manifest's css budget",
+      "every bundled variant and pack declares budgets within its ceilings",
+      "the first sentence: never after an abbreviation or an initial, nor inside a link or code",
+      "the poster cell and the practice cell stand side by side, ruled in the ink, under the tape",
+      "every core kind renders bespoke, and the manifest says so",
+      "the opening and the close: subtitles under their tapes, the CTA subtitle, the email, a custom caption",
+      "every case page passes the outline check: one h1, the title; every part at its anchor; nothing shared"
+    ]
+  },
+  "budgets": true,
+  "reds": [
+    {
+      "label": "head-tabs-fit",
+      "at": "10e8308cdcf1856384f8d377ffafedac1c5a7057",
+      "specs": ["tests/e2e/raw-grid-head-tabs-fit.spec.ts"],
+      "tests": 5,
+      "files": 1,
+      "failed": 4
+    }
+  ],
+  "e2e": [
+    {
+      "label": "rg-full",
+      "specs": ["tests/e2e/raw-grid*.spec.ts"],
+      "tests": 100,
+      "files": 6,
+      "skipped": "record"
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": []
+  },
+  "cells": [
+    {
+      "label": "rg-ar",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:raw-grid complete / raw-grid/platform-neutral/warm-parchment/accessible-reading/system 1440x900 (default|contrast-more|forced-colors) ",
+      "shards": ["find"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "rg-sample",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:raw-grid complete / raw-grid/platform-neutral/warm-parchment/((paste-up|console-mono|geometric-display|editorial-serif)/system 1440x900|humanist-ui/system (1440x900|1024x768|390x844)) default ",
+      "shards": ["find"],
+      "tests": 7,
+      "passed": 7,
+      "failed": 0
+    }
+  ],
+  "look": [
+    {
+      "label": "rg-default",
+      "spec": "look/look-316-default.spec.ts",
+      "project": "chromium",
+      "tests": 4,
+      "files": 1
+    }
+  ],
+  "kit": "150a0a7d54d9",
+  "kitScripts": "7964ce4b1c36"
+}
