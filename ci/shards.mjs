@@ -285,7 +285,7 @@ const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * Root scripts read the generated registry the web package's test writes
  * first, so a shard without that package writes it itself.
  */
-export function commandsFor(suite, items, packages = []) {
+export function commandsFor(suite, items, packages = [], env = process.env) {
   if (suite === 'unit') {
     const pkgs = items.filter((i) => i.startsWith('pkg:')).map((i) => i.slice(4));
     const scripts = items.filter((i) => i.startsWith('script:')).map((i) => i.slice(7));
@@ -312,8 +312,18 @@ export function commandsFor(suite, items, packages = []) {
     return commands;
   }
   if (suite === 'browser') {
+    // The browser job's limit for the run, a few minutes inside its own: a stuck shard ends with
+    // Playwright's report, naming what was running, where a cancel at the job's limit writes none.
+    // Unset, as for the proof kit's e2e sets, the run has no suite limit.
+    const minutes = env.SHARD_GLOBAL_TIMEOUT_MINUTES ?? '';
+    if (minutes !== '' && !/^[1-9]\d*$/.test(minutes)) {
+      throw new Error(
+        `SHARD_GLOBAL_TIMEOUT_MINUTES is "${minutes}", not a whole number of minutes`,
+      );
+    }
+    const limit = minutes ? [`--global-timeout=${Number(minutes) * 60_000}`] : [];
     // Playwright reads each file argument as a pattern over the full path.
-    return [[PLAYWRIGHT, 'test', ...items.map((f) => `${escapeRegExp(f)}$`)]];
+    return [[PLAYWRIGHT, 'test', ...limit, ...items.map((f) => `${escapeRegExp(f)}$`)]];
   }
   if (suite === 'variants') {
     return [

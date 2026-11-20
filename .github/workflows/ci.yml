@@ -311,6 +311,8 @@ jobs:
       - name: pnpm test:shard browser ${{ matrix.shard }}/4
         env:
           SHARD: ${{ matrix.shard }}/4
+          # Three minutes inside the job's limit: a stuck shard ends with its report.
+          SHARD_GLOBAL_TIMEOUT_MINUTES: 37
           CI_REPRO_COMMAND: pnpm test:shard browser ${{ matrix.shard }}/4
         run: node ci/run.mjs browser -- node ci/shards.mjs run browser "$SHARD"
       - name: Failure summary
