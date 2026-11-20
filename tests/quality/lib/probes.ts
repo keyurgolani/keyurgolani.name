@@ -5,6 +5,7 @@
 // renders in #19's document boundary (#19, Slice 4), so an element inside
 // it has a token role; one outside any boundary, as Studio's are, has
 // none.
+import type { Page } from '@playwright/test';
 
 /** The color properties a token role is matched on, by the rule that failed. */
 export type ColorProperty = 'color' | 'background-color' | 'border-color' | 'outline-color';
@@ -90,6 +91,14 @@ export function elementDetailsScript(args: {
   } finally {
     if (axe) axe.teardown();
   }
+}
+
+/** The details of each element `args.selectors` names in `page`, read by elementDetailsScript. */
+export async function elementDetails(
+  page: Page,
+  args: Parameters<typeof elementDetailsScript>[0],
+): Promise<ElementDetails[]> {
+  return page.evaluate(elementDetailsScript, args);
 }
 
 /** The resolved tokens of each boundary on the page: its kind, its selection, and every --color-*, --ui-*, and --type-* value. Runs in the browser. */

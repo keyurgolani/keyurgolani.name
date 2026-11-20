@@ -39,7 +39,7 @@ import {
 import { FIXED_TIME } from './clock';
 import { checkDisplayMode, checkEmulation } from './emulation';
 import type { PreferenceRow, Viewport } from './matrix';
-import { elementDetailsScript, resolvedTokensScript, type ElementDetails } from './probes';
+import { elementDetails, resolvedTokensScript, type ElementDetails } from './probes';
 import {
   exceptionFor,
   failureTarget,
@@ -665,7 +665,7 @@ export async function runPass(
   ran.add('axe');
   const details: Record<string, ElementDetails[]> = {};
   for (const rule of results.violations) {
-    details[rule.id] = await page.evaluate(elementDetailsScript, {
+    details[rule.id] = await elementDetails(page, {
       selectors: rule.nodes.map((node) => nodeSelector(node) ?? ':not(*)'),
       property: colorPropertyFor(rule.id),
       roles: [...COLOR_ROLES],
@@ -703,9 +703,11 @@ export async function runPass(
   const found: CellFailure[] = [];
   const record = async (findings: readonly Finding[], surface?: { id: string; route: string }) => {
     const paths = [...new Set(findings.flatMap((finding) => (finding.path ? [finding.path] : [])))];
-    const elements = await page
-      .evaluate(elementDetailsScript, { selectors: paths, property: null, roles: [...COLOR_ROLES] })
-      .catch(() => [] as ElementDetails[]);
+    const elements = await elementDetails(page, {
+      selectors: paths,
+      property: null,
+      roles: [...COLOR_ROLES],
+    }).catch(() => [] as ElementDetails[]);
     for (const finding of findings) {
       const element = finding.path ? elements[paths.indexOf(finding.path)] : undefined;
       found.push({
