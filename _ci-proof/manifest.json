@@ -1,0 +1,111 @@
+{
+  "name": "horizontal-cinema-315",
+  "summary": "Horizontal Cinema's scene keeps its one column to its own width, and the bottom bar wraps and breaks its words, so its credit or note and Next link keep inside the scene",
+  "head": "4d846116c00fcc850dab9a1af417b054b6baf7df",
+  "base": "af00f7e4a0953b3a5e04e4a82910ebc42c7d050a",
+  "gate": true,
+  "unit": {
+    "titles": [
+      "a scene’s one column is its own width, and the bottom bar wraps and breaks its words, never cutting them short, so its credit or note and Next link keep inside the scene"
+    ]
+  },
+  "reds": [
+    {
+      "label": "r315",
+      "at": "4ff685ce83c6861b9f4cebe75a1b9a2bc25c05b8",
+      "specs": [
+        "tests/e2e/horizontal-cinema-bar-fit-long-text.spec.ts",
+        "tests/e2e/horizontal-cinema-bar-fit.spec.ts"
+      ],
+      "tests": 10,
+      "files": 2,
+      "failed": 8
+    }
+  ],
+  "e2e": [
+    {
+      "label": "hc-full",
+      "specs": [
+        "tests/e2e/horizontal-cinema-appearance-panel.spec.ts",
+        "tests/e2e/horizontal-cinema-appearance-ring.spec.ts",
+        "tests/e2e/horizontal-cinema-bar-fit-long-text.spec.ts",
+        "tests/e2e/horizontal-cinema-bar-fit.spec.ts",
+        "tests/e2e/horizontal-cinema-below-strip-text-size.spec.ts",
+        "tests/e2e/horizontal-cinema-chapter-ring.spec.ts",
+        "tests/e2e/horizontal-cinema-credits-ring.spec.ts",
+        "tests/e2e/horizontal-cinema-fold-ring.spec.ts",
+        "tests/e2e/horizontal-cinema-hover-parity.spec.ts",
+        "tests/e2e/horizontal-cinema-hydrate-shift.spec.ts",
+        "tests/e2e/horizontal-cinema-laptop.spec.ts",
+        "tests/e2e/horizontal-cinema-list-name.spec.ts",
+        "tests/e2e/horizontal-cinema-load-reads.spec.ts",
+        "tests/e2e/horizontal-cinema-long-text.spec.ts",
+        "tests/e2e/horizontal-cinema-mixed.spec.ts",
+        "tests/e2e/horizontal-cinema-nojs-room.spec.ts",
+        "tests/e2e/horizontal-cinema-packs.spec.ts",
+        "tests/e2e/horizontal-cinema-print-coarse.spec.ts",
+        "tests/e2e/horizontal-cinema-print-flow.spec.ts",
+        "tests/e2e/horizontal-cinema-print-sparse.spec.ts",
+        "tests/e2e/horizontal-cinema-print.spec.ts",
+        "tests/e2e/horizontal-cinema-record-reflow-academic.spec.ts",
+        "tests/e2e/horizontal-cinema-record-reflow-consulting.spec.ts",
+        "tests/e2e/horizontal-cinema-record-reflow-engineering.spec.ts",
+        "tests/e2e/horizontal-cinema-record.spec.ts",
+        "tests/e2e/horizontal-cinema-root-text-window-complete.spec.ts",
+        "tests/e2e/horizontal-cinema-root-text-window-design.spec.ts",
+        "tests/e2e/horizontal-cinema-root-text-window.spec.ts",
+        "tests/e2e/horizontal-cinema-rtl-bars.spec.ts",
+        "tests/e2e/horizontal-cinema-rtl.spec.ts",
+        "tests/e2e/horizontal-cinema-scene-corners.spec.ts",
+        "tests/e2e/horizontal-cinema-scrubber.spec.ts",
+        "tests/e2e/horizontal-cinema-short.spec.ts",
+        "tests/e2e/horizontal-cinema-sideways-kept.spec.ts",
+        "tests/e2e/horizontal-cinema-stacked-bar.spec.ts",
+        "tests/e2e/horizontal-cinema-stacked-steps-short.spec.ts",
+        "tests/e2e/horizontal-cinema-text-size-stage-scroll.spec.ts",
+        "tests/e2e/horizontal-cinema-text-size-wheel.spec.ts",
+        "tests/e2e/horizontal-cinema-title-card.spec.ts",
+        "tests/e2e/horizontal-cinema.spec.ts"
+      ],
+      "tests": 280,
+      "files": 40
+    }
+  ],
+  "variants": {
+    "shards": 4,
+    "tests": 3027,
+    "changed": ["^horizontal-cinema/long-text > fixtures\\.spec\\.ts > (desktop|mobile) >"]
+  },
+  "cells": [
+    {
+      "label": "hc-bar-315",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:horizontal-cinema complete / horizontal-cinema/(primer-inspired/sunset-ember/book-serif/system|terminal-chrome/blue-orange-color-safe/shell-mono/dark) 1024x768 (default|contrast-more|forced-colors) ",
+      "shards": ["find"],
+      "tests": 6,
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "label": "hc-focus-1",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:horizontal-cinema complete / horizontal-cinema/(raw-brutalist/sepia-film/console-mono/light (1440x900|390x844) default|claymorphic/cool-color-safe/field-serif/high-contrast 1024x768 (default|contrast-more|forced-colors)|platform-neutral/jewel-twilight/humanist-ui/system (1440x900|1024x768|390x844) default|platform-neutral/night-terminal/humanist-ui/light (1440x900|1024x768|390x844) default|blueprint/iridescent-pearl/multilingual-system/high-contrast (1440x900|390x844) default|platform-neutral/poster-primaries/humanist-ui/high-contrast (1440x900|1024x768|390x844) default) ",
+      "shards": ["find"],
+      "tests": 16,
+      "passed": 16,
+      "failed": 0
+    },
+    {
+      "label": "hc-focus-362",
+      "scope": "quality/release/scope.json",
+      "grep": "composition:horizontal-cinema complete / horizontal-cinema/paper-tactile/poster-primaries/console-mono/high-contrast (1440x900 default|1024x768 (default|contrast-more|forced-colors)|390x844 default) ",
+      "shards": ["find"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  ],
+  "budgets": true,
+  "kit": "150a0a7d54d9",
+  "kitScripts": "7964ce4b1c36"
+}
