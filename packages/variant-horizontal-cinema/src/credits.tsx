@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { sameTarget, type FooterOutline } from '@portfolio/kit/sections';
+import { CreditsName } from './credits-name';
 import { uiLang, Words } from './parts';
 
 // The end credits (redesign): a roll on the matte after the film. The name
@@ -126,9 +127,7 @@ export function Credits({
   return (
     <footer id={id} className="hc-credits" aria-labelledby={headingId} tabIndex={-1}>
       <div className="hc-credits__head">
-        <p id={headingId} className="hc-credits__name" data-type-role="display">
-          {footer.name}
-        </p>
+        <CreditsName id={headingId} name={footer.name} />
         {footer.tagline ? (
           <p className="hc-credits__tagline" data-type-role="title">
             {footer.tagline}

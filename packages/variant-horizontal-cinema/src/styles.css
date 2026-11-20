@@ -2325,6 +2325,12 @@
   margin: 0;
 }
 
+/* The name at the display size, set smaller where its widest word is wider than its line
+   (credits-name.tsx). */
+[data-variant='horizontal-cinema'] .hc-credits__name {
+  font-size: calc(var(--type-display-font-size) * var(--layout-credits-fit, 1));
+}
+
 [data-variant='horizontal-cinema'] .hc-credits__tagline {
   color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
 }
