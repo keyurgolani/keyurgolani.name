@@ -1,0 +1,77 @@
+name: scan-591645c7a
+
+# The release scan's image check on the image main published for 591645c7a, before a candidate's
+# tag: Grype on ghcr.io/keyurgolani/keyurgolani.name:sha-591645c, the digest ci.yml's publish job
+# tested and tagged, on linux/amd64 and linux/arm64, judged by ci/release/scan-gate.mjs image as
+# release.yml's rc-scan judges a candidate. Never merged. It runs on a push of its own branch
+# alone: the commit plus this file. It reads the repository, pulls the image from GHCR as rc-scan
+# does, and uploads the scan's reports, and nothing else.
+on:
+  push:
+    branches: ['kgn-proof/scan-591645c7a']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scan-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  # As release.yml's: the Node release the image ships, and the platforms rc-scan scans.
+  NODE_VERSION: 22.23.5
+  TZ: UTC
+  PLATFORMS: linux/amd64,linux/arm64
+  # The sha-<short> tag ci.yml's publish job gave 591645c7a's tested digest.
+  IMAGE_REF: ghcr.io/keyurgolani/keyurgolani.name:sha-591645c
+
+jobs:
+  # release.yml's rc-scan, its image steps as they are, with main's published image in place of
+  # the candidate's digest, and no dependency scan, which ci.yml's deps-scan runs on the same
+  # lockfile.
+  scan:
+    name: scan (main's image at 591645c7a)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # check out the commit
+      packages: read # pull the image from GHCR while the package is private
+    env:
+      REPORTS: reports/release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Install Grype
+        run: |
+          node ci/release/install-grype.mjs "$RUNNER_TEMP/grype"
+          echo "$RUNNER_TEMP/grype" >> "$GITHUB_PATH"
+      - name: Scan the image
+        run: |
+          mkdir -p "$REPORTS"
+          for platform in ${PLATFORMS//,/ }; do
+            grype -q "registry:$IMAGE_REF" --platform "$platform" -o json --file "$REPORTS/grype-image-${platform//\//-}.json"
+          done
+          node ci/release/scan-gate.mjs image "$REPORTS"/grype-image-*.json --report="$REPORTS/image-scan.md"
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-scan-591645c7a-image
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 7
