@@ -706,7 +706,7 @@ test("only release.yml's, rc-preflight.yml's and inventory.yml's quality jobs na
   );
 });
 
-test('each sharded suite runs as many shards as ci/shards.mjs splits it into, and the browser suite in four within 30 minutes (#175)', () => {
+test('each sharded suite runs as many shards as ci/shards.mjs splits it into, and the browser suite in four within 40 minutes (#175)', () => {
   for (const suite of ['unit', 'browser', 'variants']) {
     const job = CI.jobs[suite];
     const { count } = SUITES[suite];
@@ -725,11 +725,11 @@ test('each sharded suite runs as many shards as ci/shards.mjs splits it into, an
       suite,
     );
   }
-  // Four browser shards, each within 30 minutes. verify-rc reads the shards by their names,
+  // Four browser shards, each within 40 minutes. verify-rc reads the shards by their names,
   // `browser (k/4)`, so the count holds and the limit takes the suite's growth.
   const browser = CI.jobs.browser;
   assert.deepEqual(browser.strategy.matrix.shard, [1, 2, 3, 4]);
-  assert.equal(browser['timeout-minutes'], 30);
+  assert.equal(browser['timeout-minutes'], 40);
   assert.equal(browser.strategy['fail-fast'], false);
   // A plain literal, so rc-verify can read the count from a tag commit's own ci.yml.
   const source = readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
