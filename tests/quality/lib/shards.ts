@@ -489,12 +489,16 @@ export function mergeShards(
     },
     ...(releaseList !== undefined ? { listed: releaseList } : {}),
   });
-  failures.push(...judged.failures);
-  const unique = failures.filter(
-    (each, index) =>
-      failures.findIndex((other) => other.rule === each.rule && other.message === each.message) ===
-      index,
-  );
+  // Each failure once, the first of each rule and message kept where it came, in one pass: a
+  // release that fails widely has as many failures as tests. Joined rather than pushed, since a
+  // push takes each one as an argument and runs out of stack past about 110,000.
+  const keys = new Set<string>();
+  const unique = failures.concat(judged.failures).filter((each) => {
+    const key = JSON.stringify([each.rule, each.message]);
+    if (keys.has(key)) return false;
+    keys.add(key);
+    return true;
+  });
   return {
     ok: unique.length === 0,
     failures: unique,
