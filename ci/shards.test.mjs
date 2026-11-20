@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 import {
   assign,
   attributeHarness,
@@ -334,6 +335,68 @@ test('the measured durations cover the suites CI shards', () => {
   const durations = loadDurations();
   for (const suite of ['unit', 'browser', 'variants']) {
     assert.ok(Object.keys(durations[suite] ?? {}).length > 5, suite);
+  }
+});
+
+/** The most of the browser suite's planned time its unmeasured specs may hold. */
+const UNMEASURED_SHARE = 0.1;
+/**
+ * A browser shard's wall time over its planned time at the suite's workers, at most, as CI ran
+ * them: the files' own times summed don't see the tail where one worker waits on a long test, the
+ * files whose tests run in turn, or each file's servers starting. The worst of push runs 44676670022
+ * and 44248643119, browser 1/4 to 4/4 each, was 1.49 (44248643119's 1/4), rounded up.
+ */
+const WALL_RATIO = 1.5;
+/** The most of a browser job's test time a shard's wall may take: the rest is a slow runner's and growth's. */
+const WALL_SHARE = 0.75;
+/** What a browser job spends before its test step: install, caches and the build. */
+const SETUP_MINUTES = 2;
+
+/** Each spec's planned weight, as plan() weighs it: a harness module's time goes to its callers. */
+function browserPlanWeights(items, durations = loadDurations()) {
+  const weights = attributeHarness(durations.browser ?? {}, items, (spec) =>
+    readFileSync(path.join(ROOT, spec), 'utf8'),
+  );
+  const known = items.map((item) => weights[item]).filter((w) => Number.isFinite(w) && w > 0);
+  const sorted = [...known].sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 1;
+  const measured = (item) => Number.isFinite(weights[item]) && weights[item] > 0;
+  return { weights, median, measured };
+}
+
+test("the durations file measures CI's browser specs: those it doesn't, each weighed at the median, plan at most a tenth of the suite", () => {
+  const items = specFiles('tests/e2e');
+  const { weights, median, measured } = browserPlanWeights(items);
+  const unmeasured = items.filter((item) => !measured(item));
+  const total = items.reduce((sum, item) => sum + (measured(item) ? weights[item] : median), 0);
+  const share = (unmeasured.length * median) / total;
+  assert.ok(
+    share <= UNMEASURED_SHARE,
+    `${unmeasured.length} of ${items.length} specs unmeasured, each at the median ${median.toFixed(1)} s: ${Math.round(share * 100)}% of the ${Math.round(total)} s planned, over ${UNMEASURED_SHARE * 100}%`,
+  );
+});
+
+test("every browser shard's wall, its planned time at the suite's workers times the wall ratio CI shows, takes at most three quarters of its job's test time", () => {
+  const ci = parseYaml(readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
+  const limit = ci.jobs.browser['timeout-minutes'];
+  const workers = Number(
+    /\n {2}workers: (\d+),\n/.exec(
+      readFileSync(path.join(ROOT, 'playwright.config.ts'), 'utf8'),
+    )?.[1],
+  );
+  assert.ok(
+    Number.isInteger(limit) && workers > 0,
+    'the browser job sets a limit, the config its workers',
+  );
+  const budget = WALL_SHARE * (limit - SETUP_MINUTES);
+  const items = specFiles('tests/e2e');
+  for (let index = 1; index <= SUITES.browser.count; index++) {
+    const { mine } = plan('browser', `${index}/${SUITES.browser.count}`, items);
+    const wall = (mine.weight / workers / 60) * WALL_RATIO;
+    assert.ok(
+      wall <= budget,
+      `browser ${index}/${SUITES.browser.count} plans ${mine.weight} s: ${wall.toFixed(1)} min of wall at ${workers} workers and ${WALL_RATIO}x, over ${WALL_SHARE} of ${limit - SETUP_MINUTES} (${budget.toFixed(1)} min)`,
+    );
   }
 });
 
