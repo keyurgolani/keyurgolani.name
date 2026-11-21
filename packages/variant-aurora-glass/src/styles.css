@@ -753,10 +753,17 @@
   inset: calc(-1 * var(--layout-capsule-pad));
   z-index: -1;
   /* Its edge is a second ring in the focus colour, round the pill: a pill's ring is mostly
-     antialiased curve, and the two together clear the focus perimeter (the quality cells). */
+     antialiased curve, and the two together clear the focus perimeter (the quality cells). Inside
+     that edge, out from the control's own box, it is the on-accent colour, which every set holds to
+     4.5:1 on the accent: a language's raised shadow can paint the capsule's foot in the accent under
+     the ring's lower part, and the capsule's surface can sit under 3:1 on the accent. Under the
+     control's label it stays the surface, which its text is set on. */
   border: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);
   border-radius: var(--ui-radius-badge);
-  background-color: var(--color-surface-default);
+  padding: calc(var(--layout-capsule-pad) - var(--ui-focus-width));
+  background:
+    linear-gradient(var(--color-surface-default), var(--color-surface-default)) content-box,
+    var(--color-on-accent);
 }
 
 /* Pause is the ornament's above 75rem and the capsule's last item below it (ornament.tsx). */
@@ -869,10 +876,11 @@
  * capsule's border and the sky. It also lays a band under itself, out to the capsule's padding: a
  * language's raised shadow can paint the capsule's foot in the accent, taller than the padding, and
  * the ring is in the accent's colour or under 3:1 on it, so over that foot the ring alone changed
- * nothing. The band is the on-accent colour, which every set holds to 4.5:1 on the accent, so over
- * the foot it changes the ground by that much on every scheme; the capsule's surface, the Index's
- * and Pause's band, can sit under 3:1 on the accent. The band sits under the call's own fill (the
- * capsule's frost makes it the stacking context), and the ring stays the platform's.
+ * nothing. The band is the on-accent colour, as the Index's and Pause's are out from their boxes,
+ * which every set holds to 4.5:1 on the accent, so over the foot it changes the ground by that much
+ * on every scheme; the capsule's surface can sit under 3:1 on the accent. The band sits under the
+ * call's own fill (the capsule's frost makes it the stacking context), and the ring stays the
+ * platform's.
  */
 [data-variant='aurora-glass'] .ag-capsule > .ag-capsule__cta:focus-visible {
   position: relative;
