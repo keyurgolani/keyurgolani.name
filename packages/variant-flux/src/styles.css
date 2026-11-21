@@ -3062,11 +3062,12 @@
   --layout-fx-frame: 8 / 5;
 }
 
-/* An unavailable picture's box holds its label, not media: its overflow shows, so the 8:5 box keeps
-   its automatic minimum and grows to the label where the label outgrows it (72px tall,
-   the label 79px at 320). Its clip-path still shapes it: clip-path clips painting whatever overflow
-   is, and the label stays inside the shape's padding. */
-[data-variant='flux'] .fx-case__pictures .pf-figure--unavailable > .pf-media-box {
+/* An unavailable picture's box, in any frame, holds its label, not media: its overflow shows, so the
+   8:5 box keeps its automatic minimum and grows to the label where the label outgrows it (a case
+   picture's 72px box under its 79px label at 320; a home frame's 110px box under its 324px label at
+   320 under 200% root text). Its clip-path still shapes it: clip-path clips painting whatever
+   overflow is, and the label stays inside the shape's padding. */
+[data-variant='flux'] .fx-frame .pf-figure--unavailable > .pf-media-box {
   overflow: visible;
 }
 
