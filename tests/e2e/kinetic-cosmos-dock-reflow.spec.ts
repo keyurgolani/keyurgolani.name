@@ -8,8 +8,9 @@ import { kineticOptions, openHome } from './kinetic-cosmos-reading';
 // carries its stops in a row; at 200% text that row is far wider than the window, and the rings'
 // wrapper is a grid whose one track took its items' widest min-content, so every ring laid out
 // past the window's edge behind the wrapper's clip. Two ways the dock shows:
-// - at load, before the observer that hides it at the stage has reported: the moment the quality
-//   cell's probe met on a busy runner, held here by an observer that never reports;
+// - at load, with the stage reported out of the window at once, by an observer that reports every
+//   target out of view (the moment the quality cell's probe met on a busy runner, when the dock
+//   showed until the stage's first report);
 // - past the stage, on a reader's scroll.
 
 test.use({
@@ -45,16 +46,24 @@ async function reflowProblems(page: Page): Promise<string[]> {
 }
 
 test(
-  'at 1024 by 768 under 200% root text, at load with the dock showing before its observer reports, nothing leaves the window',
+  'at 1024 by 768 under 200% root text, at load with the dock showing, nothing leaves the window',
   { annotation },
   async ({ page }) => {
-    // An observer that never reports: the dock stays as it renders, showing.
+    // An observer that reports each target out of view as it's observed: the dock shows at load.
     await page.addInitScript(() => {
       window.IntersectionObserver = class {
         readonly root = null;
         readonly rootMargin = '';
         readonly thresholds = [];
-        observe() {}
+        constructor(private readonly callback: IntersectionObserverCallback) {}
+        observe(target: Element) {
+          setTimeout(() =>
+            this.callback(
+              [{ target, isIntersecting: false } as IntersectionObserverEntry],
+              this as unknown as IntersectionObserver,
+            ),
+          );
+        }
         unobserve() {}
         disconnect() {}
         takeRecords() {
@@ -64,7 +73,7 @@ test(
     });
     await openHome(page, { width: 1024, height: 768, row: 'default' });
     await largeText(page);
-    await expect(page.locator('.kc-dock')).not.toHaveAttribute('hidden');
+    await expect(page.locator('.kc-dock')).toBeVisible();
     expect(
       await reflowProblems(page),
       'nothing clipped or out of view, the dock showing at load',

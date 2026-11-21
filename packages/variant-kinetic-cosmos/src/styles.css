@@ -3200,12 +3200,12 @@
  * focus and anchors land above it (WCAG 2.4.11, technique C43).
  */
 /*
- * Without script the dock never steps aside, so it sits in the flow after the closing
- * contact instead of over the page's foot, where it covered the first ring's stops. A browser
- * without :has() keeps the sticky dock, as before: no regression, so no fallback.
+ * Without script the dock never steps aside, so it shows, in the flow after the closing
+ * contact instead of over the page's foot, where it covered the first ring's stops.
  */
 [data-variant='kinetic-cosmos']:has([data-kc-nojs]) .kc-dock {
   position: static;
+  display: flex;
 }
 
 [data-variant='kinetic-cosmos'] .kc-dock {
@@ -3217,7 +3217,7 @@
   position: sticky;
   inset-block-end: 0;
   z-index: 2;
-  display: flex;
+  display: none;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2xs);
@@ -3234,9 +3234,13 @@
   margin-inline-start: auto;
 }
 
-/* While the opening stage is in view the dock steps aside, out of view and out of the tab order. */
-[data-variant='kinetic-cosmos'] .kc-dock[hidden] {
-  display: none;
+/*
+ * With script it shows once the observer reports the stage out of the window (data-shown), so
+ * first load paints no dock over the page, and while the stage is in view it steps aside, out of
+ * view and out of the tab order.
+ */
+[data-variant='kinetic-cosmos'] .kc-dock[data-shown] {
+  display: flex;
 }
 
 [data-variant='kinetic-cosmos'] .kc-dock__where {

@@ -11,7 +11,9 @@ import { currentStop } from './tracking';
 // links, and the index. The stylesheet makes it sticky inside the rings'
 // own wrapper, so it shows only after the stage and rests at the end of the
 // rings, with no script. With one, it's hidden, out of view and out of the
-// tab order, while the stage is in view, and an IntersectionObserver marks the ring
+// tab order, while the stage is in view; the stylesheet holds it aside until
+// the observer first reports the stage out of the window (data-shown), so
+// first load paints no dock over the page; and an IntersectionObserver marks the ring
 // under a line 40% down the window as the location, aria-current on its
 // link and its name beside the marker; no scroll listener, and in a plate
 // none at all.
@@ -44,23 +46,30 @@ export interface DockProps {
   readonly unit?: string;
 }
 
-/** Whether the opening stage is in the window, so the dock steps aside. False before the observer reports. */
-function useStageInView(stageId: string, plate: boolean): boolean {
-  const [inView, setInView] = useState(false);
+/**
+ * Where the observer last reported the opening stage: in the window, out of it, or null before its
+ * first report. With no observer, or no stage to watch, it has gone out of it, from the next frame.
+ */
+function useStageReport(stageId: string, plate: boolean): 'in' | 'out' | null {
+  const [report, setReport] = useState<'in' | 'out' | null>(null);
   useEffect(() => {
-    if (plate || typeof IntersectionObserver === 'undefined') return;
+    if (plate) return;
     const stage = document.getElementById(stageId);
-    if (!stage) return;
+    if (typeof IntersectionObserver === 'undefined' || !stage) {
+      const frame = requestAnimationFrame(() => setReport('out'));
+      return () => cancelAnimationFrame(frame);
+    }
     // A delivery holds every entry queued since the last, oldest first: the stage can come into
     // view and leave it again before the observer's task runs (a busy main thread, or Shift+Tab
     // into the stage and Tab out of it), so the last entry is where the stage is now.
-    const observer = new IntersectionObserver((entries) =>
-      setInView(entries.at(-1)?.isIntersecting ?? false),
-    );
+    const observer = new IntersectionObserver((entries) => {
+      const last = entries.at(-1);
+      if (last) setReport(last.isIntersecting ? 'in' : 'out');
+    });
     observer.observe(stage);
     return () => observer.disconnect();
   }, [stageId, plate]);
-  return inView;
+  return report;
 }
 
 /**
@@ -182,9 +191,11 @@ export function Dock({
   const { plate } = useBoundary();
   const tracked = track ?? stops;
   const current = useCurrent(tracked, plate);
-  const stageInView = useStageInView(stageId, plate);
+  const report = useStageReport(stageId, plate);
+  // In a plate there's no observer and no stage to step aside for: it shows.
+  const shown = plate || report === 'out';
   const ref = useRef<HTMLElement>(null);
-  useScrollClearance(ref, !stageInView, plate);
+  useScrollClearance(ref, shown, plate);
   // A work's page marks the stop you're at on its own list of stops, the arc's links.
   useEffect(() => {
     if (!track || plate) return;
@@ -204,7 +215,8 @@ export function Dock({
       className="kc-dock"
       aria-label={label}
       data-current={current ?? undefined}
-      hidden={stageInView || undefined}
+      hidden={report === 'in' || undefined}
+      data-shown={shown ? '' : undefined}
     >
       <p className="kc-dock__where" data-shown={here ? '' : undefined}>
         <span className="kc-dock__marker" aria-hidden="true" data-at={at >= 0 ? at : undefined}>
