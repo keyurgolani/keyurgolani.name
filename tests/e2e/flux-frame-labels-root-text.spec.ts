@@ -1,0 +1,133 @@
+import { readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { Page } from '@playwright/test';
+import { viewportSize } from '../../quality/thresholds';
+import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
+import { expect, test } from '../harness/fixtures';
+import { reflowConditions } from '../quality/lib/a11y/conditions';
+import { frames } from '../quality/lib/a11y/interaction';
+import { inPage } from '../quality/lib/a11y/probe';
+import { sweepSiteText } from '../quality/lib/server';
+import { appFor } from './flux-shared';
+
+// Flux's home page under 200% root text, as the reflow check sets it. A picture that can't be shown
+// fills its frame's box with a label, and the box keeps the frame's 8:5 and hides its overflow, so
+// on a phone the label outgrew the box and the box cut it: the works gallery's and the about
+// section's pictures, on every typography at 320 and on some at 390. On every typography, asked for
+// by the visitor's appearance cookie on a site that lets the visitor choose it (the page's boundary
+// must render the one asked for), at 320, at 390 and at the reflow check's own viewport: the reflow
+// check's probe finds nothing in a home sheet, and each line of an unavailable picture's label sits
+// inside the shape its box is clipped to.
+
+const annotation = [
+  { type: 'route', description: '/' },
+  { type: 'profile', description: 'read-only' },
+];
+
+/** The visitor's preference cookie (apps/web/src/lib/document-appearance.ts). */
+const APPEARANCE_COOKIE = 'portfolio_appearance';
+
+/** The reflow check's root-text condition, from quality/thresholds.json. */
+const ROOT_TEXT = reflowConditions().find((condition) => condition.rule === 'root-text')!;
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const TYPOGRAPHIES = readdirSync(path.join(ROOT, 'packages/appearance-typography/packs'), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort();
+
+// The visitor may choose the typography here, as the quality runner's sites let them.
+const APP = appFor(contractFixture('complete'));
+test.use({ appOptions: { ...APP, siteText: sweepSiteText(APP.siteText) } });
+
+/** Each line of an unavailable picture's label in a frame that leaves the shape its box is clipped to (px). */
+const cutLabels = () => {
+  const cut: string[] = [];
+  for (const label of document.querySelectorAll(
+    '.fx-sheet .fx-frame .pf-figure--unavailable .pf-media-box__label',
+  )) {
+    const box = label.closest<HTMLElement>('.pf-media-box')!;
+    const b = box.getBoundingClientRect();
+    const shape = [...getComputedStyle(box).clipPath.matchAll(/(-?[\d.]+)%\s+(-?[\d.]+)%/g)].map(
+      (m) => [(Number(m[1]) / 100) * b.width, (Number(m[2]) / 100) * b.height] as const,
+    );
+    // Where the shape crosses the height y: its leftmost and rightmost edge there.
+    const across = (y: number): readonly [number, number] => {
+      if (shape.length === 0) return [0, b.width];
+      const xs: number[] = [];
+      for (let i = 0; i < shape.length; i += 1) {
+        const [x1, y1] = shape[i]!;
+        const [x2, y2] = shape[(i + 1) % shape.length]!;
+        if ((y1 <= y && y < y2) || (y2 <= y && y < y1))
+          xs.push(x1 + ((y - y1) * (x2 - x1)) / (y2 - y1));
+      }
+      return xs.length > 0 ? [Math.min(...xs), Math.max(...xs)] : [Infinity, -Infinity];
+    };
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    for (const r of [...range.getClientRects()].filter((rect) => rect.width > 0)) {
+      for (const y of [r.top - b.top, r.bottom - b.top - 0.01]) {
+        const [left, right] = across(y);
+        const clear = Math.min(r.left - b.left - left, right - (r.right - b.left));
+        if (clear < 0)
+          cut.push(
+            `${box.closest('[id]')?.id ?? '-'}: ${clear.toFixed(1)}px at ${y.toFixed(1)}px down`,
+          );
+      }
+    }
+  }
+  return cut;
+};
+
+/** What the reflow check's probe finds in a home sheet, as it reads the page now. */
+const reflowInSheets = async (page: Page) => {
+  const problems = await inPage<{ rule: string; path: string; detail: string }[]>(page, {
+    kind: 'reflow',
+  });
+  return page.evaluate(
+    (all) =>
+      all
+        .filter((problem) => document.querySelector(problem.path)?.closest('.fx-sheet'))
+        .map((problem) => `${problem.rule} ${problem.path}: ${problem.detail}`),
+    problems,
+  );
+};
+
+for (const { width, height } of [
+  { width: 320, height: 568 },
+  { width: 390, height: 844 },
+  viewportSize(ROOT_TEXT.id),
+])
+  for (const typography of TYPOGRAPHIES)
+    test(
+      `at ${width}x${height} under ${ROOT_TEXT.text * 100}% root text on ${typography}, an unavailable picture's label in a home frame shows whole inside its shape`,
+      { annotation },
+      async ({ page, baseURL }) => {
+        await page.setViewportSize({ width, height });
+        await page
+          .context()
+          .addCookies([{ name: APPEARANCE_COOKIE, value: `type=${typography}`, url: baseURL! }]);
+        await page.goto('/', { waitUntil: 'networkidle' });
+        await page.evaluate(() => document.fonts.ready.then(() => true));
+        await expect(page.locator('[data-appearance-boundary]').first()).toHaveAttribute(
+          'data-typography',
+          typography,
+        );
+        // The root text as the reflow check sets it (conditions.ts, reflowFindings).
+        await page.evaluate(
+          (scale) =>
+            document.documentElement.style.setProperty('font-size', `${scale * 100}%`, 'important'),
+          ROOT_TEXT.text,
+        );
+        await frames(page);
+        await page.evaluate(() => document.fonts.ready.then(() => true));
+        expect(await reflowInSheets(page), "the reflow check's probe in a home sheet").toEqual([]);
+        expect(
+          await page.evaluate(cutLabels),
+          'lines of a label past the shape its box is clipped to',
+        ).toEqual([]);
+      },
+    );
