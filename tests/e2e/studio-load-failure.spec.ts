@@ -280,7 +280,12 @@ async function holdLateAlert(
   const gate = new Promise<void>((resolve) => (settle = resolve));
   await page.route(/\/_next\/static\/chunks\/.*\.js/, (route) =>
     unlessGone(page, async () => {
-      const response = await route.fetch();
+      // Each chunk on a connection of its own, which closes, as the harness's request fixture does
+      // (#52): the test waits past PAST_TIMEOUT_MS before its reload, and a socket left idle that
+      // long can be one the server has closed, so a fetch on it fails with a reset or a hang up.
+      const response = await route.fetch({
+        headers: { ...(await route.request().allHeaders()), connection: 'close' },
+      });
       const body = await response.text();
       if (LATE_ALERT_CHUNK.test(body)) {
         held.push(route.request().url());
