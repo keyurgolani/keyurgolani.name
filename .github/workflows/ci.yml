@@ -139,13 +139,14 @@ jobs:
   # `pnpm test` in three shards, split by workspace package and root test
   # script on their measured durations (ci/shards.mjs,
   # ci/shard-durations.json). Together they run exactly what `pnpm ci:unit`
-  # runs.
+  # runs. Each has 20 minutes, a quarter spare over the slowest shard main
+  # has run, 14 minutes (ci/workflows.test.mjs).
   unit:
     name: unit (${{ matrix.shard }}/3)
     needs: [changes]
     if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'unit') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
