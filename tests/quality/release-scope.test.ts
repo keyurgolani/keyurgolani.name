@@ -120,9 +120,9 @@ function verdict(failures: readonly SummaryFailure[] | 'passed', listed: Verdict
 
 const rules = (failures: readonly { rule: string }[]) => failures.map((each) => each.rule).sort();
 
-test("the checked-in scope is 1.0.0-rc.6's final gate: the reachable scope as the inventory runs it, an empty records list, no timing reported instead of gated, and it loads", () => {
+test("the checked-in scope is 1.0.0-rc.7's final gate: the reachable scope as the inventory runs it, an empty records list, no timing reported instead of gated, and it loads", () => {
   const loaded = loadReleaseScope({ [SCOPE_ENV]: SCOPE_FILE })!;
-  assert.equal(loaded.scope.release, '1.0.0-rc.6');
+  assert.equal(loaded.scope.release, '1.0.0-rc.7');
   assert.equal(loaded.scope.scope, 'reachable');
   // The candidate a final promotes from runs the matrix the inventory ran, whole: nothing listed as
   // failing, and every timing gated.
@@ -497,7 +497,7 @@ test("the merge judges a release's shards against the list, as a single run's ve
 
 test('only quality:full judged whole takes a release scope: a PR run, a night, or a merge of either refuses one, by rule', (t) => {
   const named = { [SCOPE_ENV]: SCOPE_FILE };
-  assert.equal(releaseScopeFor('full', true, named)?.scope.release, '1.0.0-rc.6');
+  assert.equal(releaseScopeFor('full', true, named)?.scope.release, '1.0.0-rc.7');
   assert.equal(releaseScopeFor('pr', false, {}), null);
   assert.throws(
     () => releaseScopeFor('pr', true, named),
@@ -586,7 +586,7 @@ test("run.ts's scope: a whole full run takes the one its env names; a PR run or 
   assert.deepEqual(runReleaseScope('pr', null, {}), { scope: null, refused: null });
   const whole = runReleaseScope('full', null, named);
   assert.equal(whole.refused, null);
-  assert.equal(whole.scope?.scope.release, '1.0.0-rc.6');
+  assert.equal(whole.scope?.scope.release, '1.0.0-rc.7');
   assert.deepEqual(runReleaseScope('pr', null, named), {
     scope: null,
     refused: {
