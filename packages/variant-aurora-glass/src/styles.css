@@ -3042,15 +3042,17 @@
   }
 
   /*
-   * While an action above it has focus, the sheet casts nothing above its own top edge. It paints
-   * over the pane, and its card shadow reaches up over the bottom of the action's ring wherever a
-   * language throws it upward or blurs it past its offset (neumorphic's light highlight, a glow);
-   * under it the ring reads short of 3:1 against the same pixels at rest. At rest it is as before.
+   * While an action above it has focus, the sheet casts nothing over the action's ring. It paints
+   * over the pane, and its raised shadow reaches up over the bottom of the ring wherever a language
+   * throws it upward or blurs it past its offset (neumorphic's light highlight, a glow); under it the
+   * ring reads short of 3:1 against the same pixels at rest. The foot leaves one ring's width
+   * between the ring's outer edge and the sheet, so the sheet is clipped that far above its top:
+   * what it draws there, such as a frame of spread lines, stays. At rest it is as before.
    */
   [data-variant='aurora-glass']
     .ag-opening[data-sheet='yes']:has(.ag-id__acts > a:focus-visible)
     .ag-sig {
-    clip-path: inset(0 -100vmax -100vmax);
+    clip-path: inset(calc(-1 * var(--ui-focus-width)) -100vmax -100vmax);
   }
 
   [data-variant='aurora-glass'] .ag-tiles {
