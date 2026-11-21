@@ -866,11 +866,13 @@
  * The capsule's contact action, focused, the same way: it keeps the capsule's radius, the badge's,
  * so its ring follows the capsule's round end a padding inside its edge. Above 75rem it is the
  * capsule's last item, and with the control radius its ring's corners ran past that end onto the
- * capsule's border and the sky. It also lays a band of the capsule's surface under itself, out to
- * the capsule's padding, as the Index's and Pause's do: a language's raised shadow can paint the
- * capsule's foot in the accent, taller than the padding, and the ring is in the accent's colour or
- * under 3:1 on it, so over that foot the ring alone changed nothing. The band sits under the call's
- * own fill (the capsule's frost makes it the stacking context), and the ring stays the platform's.
+ * capsule's border and the sky. It also lays a band under itself, out to the capsule's padding: a
+ * language's raised shadow can paint the capsule's foot in the accent, taller than the padding, and
+ * the ring is in the accent's colour or under 3:1 on it, so over that foot the ring alone changed
+ * nothing. The band is the on-accent colour, which every set holds to 4.5:1 on the accent, so over
+ * the foot it changes the ground by that much on every scheme; the capsule's surface, the Index's
+ * and Pause's band, can sit under 3:1 on the accent. The band sits under the call's own fill (the
+ * capsule's frost makes it the stacking context), and the ring stays the platform's.
  */
 [data-variant='aurora-glass'] .ag-capsule > .ag-capsule__cta:focus-visible {
   position: relative;
@@ -883,7 +885,7 @@
   inset: calc(-1 * var(--layout-capsule-pad));
   z-index: -1;
   border-radius: var(--ui-radius-badge);
-  background-color: var(--color-surface-default);
+  background-color: var(--color-on-accent);
 }
 
 /*
