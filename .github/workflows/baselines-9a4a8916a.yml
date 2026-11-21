@@ -1,0 +1,117 @@
+name: baselines-9a4a8916a
+
+# The variants baselines of one commit as main's push run compares them, captured on CI Linux,
+# never merged. It runs on a push of its own branch alone: the commit plus this file. Its job is
+# ci.yml's variants job, step for step in the pinned image with PORTFOLIO_SCREENSHOTS=compare, but
+# Playwright writes each baseline the run reads as changed or missing (--update-snapshots=changed).
+# Each shard uploads the baseline files the run changed or added, git status of the baselines
+# folder, and the run's list and result lines. Read-only, no secrets, and it uploads no build.
+on:
+  push:
+    branches: ['kgn-proof/baselines-9a4a8916a']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baselines-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  # As ci.yml's: the Node release the image ships.
+  NODE_VERSION: 22.23.5
+  TZ: UTC
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  # ci.yml's variants job. The shard runs its own projects as ci/shards.mjs runs them, with the
+  # one flag added; it reports its status rather than failing, so the upload always runs. The
+  # job and the run have more time than ci.yml's 45 minutes, since each changed shot waits out
+  # its comparison before Playwright writes it, and the upload must still run.
+  variants:
+    name: variants (${{ matrix.shard }}/4)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      PORTFOLIO_SCREENSHOTS: compare
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # As ci.yml's install, which keeps the ./ form: the pinned actionlint rejects `$/`.
+      - name: Install
+        id: install
+        uses: ./.github/actions/install # zizmor: ignore[self-repository]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # The build job's Next cache, restored only, under ci.yml's own key.
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Next build cache hit
+        if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}
+        run: echo "Next build cache restored for these build inputs"
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      # The shard's projects from ci/shards.mjs's own plan, listed, then run as its run command
+      # runs them (tests/variants/playwright.config.ts, one --project each) under ci/run.mjs, plus
+      # --update-snapshots=changed. Then git status of the baselines folder names every file the
+      # run changed or added, and each one is copied out with its path.
+      - name: Variants shard ${{ matrix.shard }}/4, writing the baselines it reads as changed
+        timeout-minutes: 65
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}/4
+          CI_REPRO_COMMAND: pnpm test:shard variants ${{ matrix.shard }}/4
+        run: |
+          out=baselines-out
+          mkdir -p "$out/files"
+          node ci/shards.mjs list variants "$SHARD" | tee "$out/shard.txt"
+          mapfile -t projects < <(awk '/^  [^ ]/ { print "--project=" $1 }' "$out/shard.txt")
+          echo "${#projects[@]} projects in shard $SHARD"
+          status=0
+          if [ "${#projects[@]}" -gt 0 ]; then
+            config=tests/variants/playwright.config.ts
+            node_modules/.bin/playwright test --config "$config" "${projects[@]}" --list > "$out/list.txt" 2>&1 || status=$?
+            grep -E '^Total: ' "$out/list.txt" || echo "no Total line in the list (rc $status)"
+            status=0
+            node ci/run.mjs variants -- node_modules/.bin/playwright test --config "$config" "${projects[@]}" --update-snapshots=changed 2>&1 | tee "$out/run.log" || status=$?
+          fi
+          echo "$status" > "$out/status.txt"
+          grep -E '^ +[0-9]+ (passed|failed|flaky|skipped|did not run|interrupted)' "$out/run.log" > "$out/results.txt" 2> /dev/null || true
+          git -c core.quotePath=false status --porcelain --untracked-files=all -- tests/variants/__screenshots__ > "$out/status-porcelain.txt"
+          while IFS= read -r -d '' entry; do
+            file=${entry:3}
+            if [ -f "$file" ]; then
+              mkdir -p "$out/files/$(dirname "$file")"
+              cp -p "$file" "$out/files/$file"
+            fi
+          done < <(git status --porcelain=v1 -z --untracked-files=all -- tests/variants/__screenshots__)
+          echo "The shard ended $status; $(wc -l < "$out/status-porcelain.txt") baseline files changed or added:"
+          cat "$out/status-porcelain.txt"
+          cat "$out/results.txt"
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload the changed baselines
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: baselines-9a4a8916a-${{ matrix.shard }}
+          path: baselines-out/
+          if-no-files-found: error
+          retention-days: 7
