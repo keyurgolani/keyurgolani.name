@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useBoundary } from '@portfolio/appearance/react';
+import { ENHANCEMENT_PENDING, enhancementSettled } from '@portfolio/variant-contract/settle';
 import { hashId } from './fold';
 import { IndexTrigger } from './system-index';
 import { currentStop } from './tracking';
@@ -46,30 +47,54 @@ export interface DockProps {
   readonly unit?: string;
 }
 
+/** The dock's own hold on the page's settle, until the stage's first report is on the page. */
+const HOLD = 'dock';
+
 /**
  * Where the observer last reported the opening stage: in the window, out of it, or null before its
  * first report. With no observer, or no stage to watch, it has gone out of it, from the next frame.
+ * Until the first report is on the page, the dock holds the page unsettled.
  */
-function useStageReport(stageId: string, plate: boolean): 'in' | 'out' | null {
-  const [report, setReport] = useState<'in' | 'out' | null>(null);
+function useStageReport(
+  stageId: string,
+  plate: boolean,
+  dock: RefObject<HTMLElement | null>,
+): 'in' | 'out' | null {
+  // A fresh value per report, so each one renders and lets the page settle after it.
+  const [report, setReport] = useState<readonly ['in' | 'out'] | null>(null);
   useEffect(() => {
     if (plate) return;
+    // As the script starts to watch, the dock carries the settle signal, which shots and quality
+    // reads wait on: before the first report the dock isn't shown, and that report may show it.
+    // The script sets it, never the server, so with no script nothing waits.
+    const holder = dock.current;
+    holder?.setAttribute(ENHANCEMENT_PENDING, HOLD);
     const stage = document.getElementById(stageId);
     if (typeof IntersectionObserver === 'undefined' || !stage) {
-      const frame = requestAnimationFrame(() => setReport('out'));
-      return () => cancelAnimationFrame(frame);
+      const frame = requestAnimationFrame(() => setReport(['out']));
+      return () => {
+        cancelAnimationFrame(frame);
+        enhancementSettled(holder, HOLD);
+      };
     }
     // A delivery holds every entry queued since the last, oldest first: the stage can come into
     // view and leave it again before the observer's task runs (a busy main thread, or Shift+Tab
     // into the stage and Tab out of it), so the last entry is where the stage is now.
     const observer = new IntersectionObserver((entries) => {
       const last = entries.at(-1);
-      if (last) setReport(last.isIntersecting ? 'in' : 'out');
+      if (last) setReport([last.isIntersecting ? 'in' : 'out']);
     });
     observer.observe(stage);
-    return () => observer.disconnect();
-  }, [stageId, plate]);
-  return report;
+    return () => {
+      observer.disconnect();
+      enhancementSettled(holder, HOLD);
+    };
+  }, [stageId, plate, dock]);
+  // Once a report is on the page, the dock lets it settle.
+  useEffect(() => {
+    if (report) enhancementSettled(dock.current, HOLD);
+  }, [report, dock]);
+  return report?.[0] ?? null;
 }
 
 /**
@@ -191,10 +216,10 @@ export function Dock({
   const { plate } = useBoundary();
   const tracked = track ?? stops;
   const current = useCurrent(tracked, plate);
-  const report = useStageReport(stageId, plate);
+  const ref = useRef<HTMLElement>(null);
+  const report = useStageReport(stageId, plate, ref);
   // In a plate there's no observer and no stage to step aside for: it shows.
   const shown = plate || report === 'out';
-  const ref = useRef<HTMLElement>(null);
   useScrollClearance(ref, shown, plate);
   // A work's page marks the stop you're at on its own list of stops, the arc's links.
   useEffect(() => {
