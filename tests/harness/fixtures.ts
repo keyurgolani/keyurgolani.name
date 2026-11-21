@@ -135,6 +135,19 @@ export function serverEgressMessage(attempts: readonly string[]): string {
   ].join('\n');
 }
 
+/**
+ * Lets go of an app request's continue that finds the route already handled, and nothing else. A
+ * spec's page route can still be deciding the request when the test lets its routes go
+ * (page.unrouteAll's ignoreErrors, in an afterEach): Playwright then sends the request on itself,
+ * the page route's own answer fails, and the route comes to the context's routes already handled,
+ * with nothing left to let through (tests/e2e/context-route-already-handled.spec.ts). Any other
+ * failure fails the test.
+ */
+function unlessAlreadyHandled(error: unknown): void {
+  if (/Route is already handled!/.test(String(error))) return;
+  throw error;
+}
+
 // Playwright's fixture callback is conventionally named `use`; it is `provide`
 // here because the React Hooks lint rule mistakes `use(...)` for React's use().
 export const test = base.extend<TestFixtures, WorkerFixtures>({
@@ -185,7 +198,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       await context.route('**/*', (route) => {
         const url = route.request().url();
         const { origin } = new URL(url);
-        if (origin === app.origin || origin === app.previewOrigin) return route.continue();
+        // An outside request already handled still fails below: it may have left the app.
+        if (origin === app.origin || origin === app.previewOrigin)
+          return route.continue().catch(unlessAlreadyHandled);
         blocked.push(url);
         return route.abort('blockedbyclient');
       });
