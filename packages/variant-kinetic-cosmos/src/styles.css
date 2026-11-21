@@ -1108,8 +1108,10 @@
 
 /* ---- The rings ------------------------------------------------------- */
 
+/* One track the window's width: no ring's or the dock's widest line can widen it past the window. */
 [data-variant='kinetic-cosmos'] .kc-orbitals {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   overflow-x: clip;
   padding-block-end: var(--space-s);
 }
@@ -3216,6 +3218,7 @@
   inset-block-end: 0;
   z-index: 2;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2xs);
   margin-block-start: var(--space-xl);
@@ -3289,9 +3292,14 @@
   font-size: var(--type-label-font-size);
 }
 
-/* The stops stand apart by more than a focus ring's reach, so a ring never lands on the current stop's ground. */
+/*
+ * The stops stand apart by more than a focus ring's reach, so a ring never lands on the current stop's ground.
+ * The dock and its stops wrap when a row is wider than the window (large root text), so the dock's
+ * widest line is one stop.
+ */
 [data-variant='kinetic-cosmos'] .kc-dock__stops {
   display: none;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2xs);
 }
