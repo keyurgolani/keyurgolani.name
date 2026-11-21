@@ -1,0 +1,127 @@
+{
+  "name": "rc3-replay-08",
+  "summary": "rc.3's failing cells replayed at the release commit, part 8 of 24: each cell passed or failed on CI Linux",
+  "head": "591645c7a32e2307437d1ade4c65f095cfef4478",
+  "base": "591645c7a32e2307437d1ade4c65f095cfef4478",
+  "cells": [
+    {
+      "label": "s54",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/sepia\\-film/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/sepia\\-film/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/sepia\\-film/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["54/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "s59",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/bauhaus\\-geometric/forest\\-moss/accessible\\-reading/dark\\ 1440x900\\ default\\ )",
+      "shards": ["59/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s81",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/primer\\-inspired/liquid\\-dusk/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/primer\\-inspired/liquid\\-dusk/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/primer\\-inspired/liquid\\-dusk/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["81/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "s307",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/control\\-room/humanist\\-ui/light\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/control\\-room/humanist\\-ui/light\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/control\\-room/humanist\\-ui/light\\ 390x844\\ default\\ |composition:flux\\ complete\\ /\\ flux/platform\\-neutral/drafting\\-blue/humanist\\-ui/system\\ 390x844\\ contrast\\-more\\ |composition:horizontal\\-cinema\\ complete\\ /\\ horizontal\\-cinema/pixel\\-interface/arctic\\-aurora/technical\\-sans\\-mono/dark\\ 1024x768\\ no\\-javascript\\ )",
+      "shards": ["307/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "label": "s321",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/primer\\-inspired/graphite/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/primer\\-inspired/graphite/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/primer\\-inspired/graphite/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["321/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "s337",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:flux\\ complete\\ /\\ flux/platform\\-neutral/ocean\\-abyss/humanist\\-ui/system\\ 390x844\\ contrast\\-more\\ )",
+      "shards": ["337/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s378",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:obsidian\\-atelier\\ complete\\ /\\ obsidian\\-atelier/glassmorphism/lavender\\-dusk/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:obsidian\\-atelier\\ complete\\ /\\ obsidian\\-atelier/glassmorphism/lavender\\-dusk/accessible\\-reading/dark\\ 390x844\\ contrast\\-more\\ )",
+      "shards": ["378/611"],
+      "tests": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "label": "s393",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:flux\\ complete\\ /\\ flux/platform\\-neutral/reduced\\-chroma/humanist\\-ui/system\\ 390x844\\ contrast\\-more\\ )",
+      "shards": ["393/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s420",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/blue\\-orange\\-color\\-safe/accessible\\-reading/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/blue\\-orange\\-color\\-safe/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/blue\\-orange\\-color\\-safe/accessible\\-reading/dark\\ 390x844\\ default\\ )",
+      "shards": ["420/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "label": "s437",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:flux\\ complete\\ /\\ flux/platform\\-neutral/paper\\-ink/humanist\\-ui/system\\ 390x844\\ contrast\\-more\\ )",
+      "shards": ["437/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s485",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:horizontal\\-cinema\\ complete\\ /\\ horizontal\\-cinema/platform\\-neutral/pastel\\-sorbet/humanist\\-ui/light\\ 1440x900\\ no\\-javascript\\ )",
+      "shards": ["485/611"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "s505",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/blue\\-orange\\-color\\-safe/humanist\\-ui/system\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/blue\\-orange\\-color\\-safe/humanist\\-ui/system\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/platform\\-neutral/blue\\-orange\\-color\\-safe/humanist\\-ui/system\\ 390x844\\ default\\ |composition:obsidian\\-atelier\\ complete\\ /\\ obsidian\\-atelier/platform\\-neutral/sepia\\-film/accessible\\-reading/dark\\ 1440x900\\ default\\ |composition:obsidian\\-atelier\\ complete\\ /\\ obsidian\\-atelier/platform\\-neutral/sepia\\-film/accessible\\-reading/dark\\ 390x844\\ contrast\\-more\\ )",
+      "shards": ["505/611"],
+      "tests": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "label": "s519",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/control\\-room/technical\\-sans\\-mono/dark\\ 1024x768\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/control\\-room/technical\\-sans\\-mono/dark\\ 1440x900\\ default\\ |composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/glassmorphism/control\\-room/technical\\-sans\\-mono/dark\\ 390x844\\ default\\ )",
+      "shards": ["519/611"],
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    }
+  ],
+  "kit": "150a0a7d54d9",
+  "kitScripts": "7964ce4b1c36"
+}
