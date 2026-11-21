@@ -261,8 +261,9 @@ export function Dock({
         ) : null}
       </p>
       <ul className="kc-dock__stops" role="list">
-        {stops.map((stop) => (
-          <li key={stop.key}>
+        {stops.map((stop, index) => (
+          // The stops past the rings are the way out, which a dock too narrow for the rings keeps.
+          <li key={stop.key} data-out={index >= rings ? '' : undefined}>
             <a
               className="kc-dock__stop"
               href={stop.href}

@@ -3228,6 +3228,7 @@
   color: var(--layout-ink);
   background-color: var(--color-canvas);
   border-block-start: var(--ui-border-divider);
+  container-type: inline-size;
 }
 
 [data-variant='kinetic-cosmos'] .kc-dock .kc-index-trigger--dock {
@@ -3339,6 +3340,17 @@
 @media (min-width: 64rem) {
   [data-variant='kinetic-cosmos'] .kc-dock__stops {
     display: flex;
+  }
+}
+
+/*
+ * Narrower than 50rem of the root's text the row of rings, where you are and the index doesn't
+ * fit (it needs about 49; large root text: 1600 px at 200%): the dock keeps where you are, the
+ * way out and the index, which reaches every ring, so it stays one line at the window's foot.
+ */
+@container (inline-size < 50rem) {
+  [data-variant='kinetic-cosmos'] .kc-dock__stops > :not([data-out]) {
+    display: none;
   }
 }
 
@@ -4521,8 +4533,7 @@
 
 /*
  * With no script: a link to a section in a closed fold shows its content, as
- * the island would open it, and focus and anchors stop clear of the dock,
- * as the island's scroll padding does.
+ * the island would open it.
  */
 [data-variant='kinetic-cosmos']:has([data-kc-nojs]) :target > details.kc-fold > :not(summary) {
   display: block;
@@ -4531,10 +4542,6 @@
 [data-variant='kinetic-cosmos']:has([data-kc-nojs]) :target > details.kc-fold::details-content {
   content-visibility: visible;
   block-size: auto;
-}
-
-[data-variant='kinetic-cosmos']:has([data-kc-nojs]) .kc-orbitals :is(a, button, summary, [id]) {
-  scroll-margin-block-end: calc(var(--ui-control-height) + var(--space-s));
 }
 
 @media print {

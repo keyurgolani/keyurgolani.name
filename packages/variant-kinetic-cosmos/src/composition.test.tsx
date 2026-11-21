@@ -691,13 +691,11 @@ test("with no script the stylesheet keys on main's noscript mark, never on a scr
     );
     assert.equal(count(markup, /data-kc-nojs/g), 1, `${name}: one mark`);
   }
-  // Each no-script rule is the mark's: no Pause with nothing turning, a link's fold open, focus
-  // clear of the dock.
+  // Each no-script rule is the mark's: no Pause with nothing turning, a link's fold open.
   const NOJS = "[data-variant='kinetic-cosmos']:has([data-kc-nojs])";
   for (const rule of [
     `${NOJS} .kc-pause {\n  display: none;`,
     `${NOJS} :target > details.kc-fold > :not(summary) {`,
-    `${NOJS} .kc-orbitals :is(a, button, summary, [id]) {\n  scroll-margin-block-end:`,
     `${NOJS} .kc-talk-dialog {`,
     `${NOJS} :is(.kc-talk-dialog__head, .kc-object__more) {\n  display: none;`,
   ])
