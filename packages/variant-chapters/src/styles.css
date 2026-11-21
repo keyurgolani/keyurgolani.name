@@ -172,6 +172,8 @@
   background: var(--color-canvas);
   border-block-end: var(--layout-line-hair);
   view-transition-name: chapters-runhead;
+  /* Its own width decides where the name and the ways out take a row each (large text). */
+  container: ch-head / inline-size;
 }
 [data-variant='chapters'] :is(.ch-runhead__verso, .ch-runhead__recto, .ch-runhead__recto ul) {
   display: flex;
@@ -224,6 +226,17 @@
 }
 [data-variant='chapters'] .ch-runhead__recto a {
   text-decoration-color: transparent;
+}
+/*
+ * Where the head is narrow for its text, as on a phone with the text at 200%, the name beside
+ * Contents and Write had a sliver of it and set a letter or two a line: under 14rem the name takes
+ * the head's whole width and the ways out go on a row under it, so the name breaks only between
+ * its words.
+ */
+@container ch-head (width < 14rem) {
+  [data-variant='chapters'] :is(.ch-runhead__verso, .ch-runhead__recto) {
+    grid-column: 1 / -1;
+  }
 }
 
 /* The fore-edge: the whole book in segments sized by their pages, your place marked. */
