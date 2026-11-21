@@ -3200,24 +3200,17 @@
  * focus and anchors land above it (WCAG 2.4.11, technique C43).
  */
 /*
- * Without script the dock never steps aside, so it shows, in the flow after the closing
- * contact instead of over the page's foot, where it covered the first ring's stops.
+ * Until a script reports where the stage is, and with no script or a script that never runs, the
+ * dock rests in the flow after the closing contact, not over the page's foot, where it covered the
+ * first ring's stops: below the window on load, and a nav that reads where scripts fail.
  */
-[data-variant='kinetic-cosmos']:has([data-kc-nojs]) .kc-dock {
-  position: static;
-  display: flex;
-}
-
 [data-variant='kinetic-cosmos'] .kc-dock {
   --layout-ink: var(--color-text-primary);
   --layout-ink-quiet: var(--color-text-secondary);
   --layout-ink-line: var(--color-border-default);
   --layout-ink-faint: var(--color-border-strong);
 
-  position: sticky;
-  inset-block-end: 0;
-  z-index: 2;
-  display: none;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2xs);
@@ -3236,12 +3229,18 @@
 }
 
 /*
- * With script it shows once the observer reports the stage out of the window (data-shown), so
- * first load paints no dock over the page, and while the stage is in view it steps aside, out of
- * view and out of the tab order.
+ * With script, while the stage is in view the dock steps aside, out of view and out of the tab
+ * order (hidden); once the observer reports the stage out of the window (data-shown), it holds to
+ * the window's foot.
  */
+[data-variant='kinetic-cosmos'] .kc-dock[hidden] {
+  display: none;
+}
+
 [data-variant='kinetic-cosmos'] .kc-dock[data-shown] {
-  display: flex;
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 2;
 }
 
 [data-variant='kinetic-cosmos'] .kc-dock__where {

@@ -554,15 +554,17 @@ test(
   },
 );
 
-// The dock leaves the viewport's foot only under the mark: with script there's no mark, the dock
-// stays sticky at the foot (the runtime moves it aside while the stage is in view), and the
-// scripted page is what it was.
+// With script there's no mark, and once the stage has gone by the runtime shows the dock, held to
+// the window's foot (it moves it aside while the stage is in view); without script the dock rests
+// in the flow.
 test(
-  'with script there is no noscript mark and the dock stays sticky; without, it is in the flow',
+  'with script there is no noscript mark and the shown dock is sticky; without, it is in the flow',
   { annotation },
   async ({ browser, page }) => {
     await page.goto('/', { waitUntil: 'networkidle' });
     await expect(page.locator('[data-kc-nojs]')).toHaveCount(0);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight / 2));
+    await expect(page.locator('.kc-dock')).toHaveAttribute('data-shown', '');
     expect(await page.locator('.kc-dock').evaluate((dock) => getComputedStyle(dock).position)).toBe(
       'sticky',
     );

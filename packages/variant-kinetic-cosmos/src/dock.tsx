@@ -9,12 +9,13 @@ import { currentStop } from './tracking';
 
 // The dock (redesign, stream E): once the opening stage has gone by, a bar
 // low on the screen holds where you are, the rings and the way out as
-// links, and the index. The stylesheet makes it sticky inside the rings'
-// own wrapper, so it shows only after the stage and rests at the end of the
-// rings, with no script. With one, it's hidden, out of view and out of the
-// tab order, while the stage is in view; the stylesheet holds it aside until
-// the observer first reports the stage out of the window (data-shown), so
-// first load paints no dock over the page; and an IntersectionObserver marks the ring
+// links, and the index. Until the observer first reports, and with no
+// script or one that never runs, the stylesheet rests it in the flow at the
+// end of the rings, below the window on load, so first load paints no dock
+// over the page. With script, it's hidden, out of view and out of the tab
+// order, while the stage is in view, and once the stage is out of the window
+// (data-shown) it's sticky inside the rings' own wrapper, at the window's
+// foot; and an IntersectionObserver marks the ring
 // under a line 40% down the window as the location, aria-current on its
 // link and its name beside the marker; no scroll listener, and in a plate
 // none at all.
