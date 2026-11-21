@@ -1,0 +1,37 @@
+{
+  "name": "final-replay-14",
+  "summary": "a cell that failed once in rc.6 replayed at this commit in three separate runs: each passed or failed on CI Linux",
+  "head": "9a4a8916a30f8237204c5871974c8437a1d12469",
+  "base": "9a4a8916a30f8237204c5871974c8437a1d12469",
+  "cells": [
+    {
+      "label": "ag97-a",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neumorphic/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ )",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "ag97-b",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neumorphic/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ )",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "label": "ag97-c",
+      "scope": "quality/release/scope.json",
+      "grep": "(composition:aurora\\-glass\\ complete\\ /\\ aurora\\-glass/neumorphic/warm\\-parchment/humanist\\-ui/system\\ 390x844\\ default\\ )",
+      "shards": ["find"],
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "kit": "150a0a7d54d9",
+  "kitScripts": "7964ce4b1c36"
+}
