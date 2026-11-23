@@ -35,7 +35,7 @@
   font-family: var(--type-body-font-family);
   font-size: var(--type-step-0);
   line-height: var(--type-body-line-height);
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 [data-variant='pull-request']
@@ -1497,7 +1497,34 @@
 [data-variant='pull-request']
   :is(.pr-merge__o, .pr-src, .pr-mini, .pr-crumbs, .pr-links, .pr-repos, .pr-labels)
   a {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
   min-block-size: 1.5rem;
+}
+
+/* Every one-column grid holds its track to the column, so a long word wraps rather than widens it. */
+[data-variant='pull-request']
+  :is(
+    .pr-post__body,
+    .pr-ev__b,
+    .pr-groups,
+    .pr-items,
+    .pr-item,
+    .pr-commit__b,
+    .pr-check__b,
+    .pr-timeline,
+    .pr-files,
+    .pr-work,
+    .pr-head,
+    .pr-mini,
+    .pr-src,
+    .pr-trailers,
+    .pr-figs,
+    .pr-repos
+  ) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='pull-request'] [data-pr-merged] .pr-head .pr-state {
+  background: var(--color-emphasis);
+  color: var(--color-on-emphasis);
 }
