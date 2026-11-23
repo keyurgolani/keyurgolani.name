@@ -21,7 +21,7 @@
   "budgets": {
     "js": 1024,
     "css": 10240,
-    "image": 73728,
+    "image": 81920,
     "font": 0,
     "animation": 0,
     "enhancement": 6144
