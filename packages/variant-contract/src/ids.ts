@@ -33,6 +33,7 @@ export const COMPOSITION_IDS = [
   'schematic',
   'flux',
   'chapters',
+  'pull-request',
 ] as const;
 
 /** Ids only `@portfolio/*` packages may take. */
@@ -112,6 +113,7 @@ export const FIRST_PARTY_PINS: Readonly<
   schematic: { performanceTier: 'light', motionIntent: 'subtle' },
   flux: { performanceTier: 'medium', motionIntent: 'kinetic' },
   chapters: { performanceTier: 'light', motionIntent: 'directed' },
+  'pull-request': { performanceTier: 'light', motionIntent: 'subtle' },
 };
 
 /**

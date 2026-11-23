@@ -1,0 +1,107 @@
+{
+  "id": "pull-request",
+  "name": "Pull Request",
+  "promise": "The portfolio as a pull request to the reader's team, read as a review page.",
+  "description": "A review page titled for the reader's team: the conversation is About, the commits are the record, each claim a passing check with its source, the works are files changed as diffs with review notes pinned to their lines, and the merge box is Contact.",
+  "contract": "2.1",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "subtle",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 1024,
+    "css": 10240,
+    "image": 81920,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 6144
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "works",
+    "evidence",
+    "chronology",
+    "practice",
+    "contact",
+    "now",
+    "quote",
+    "focus",
+    "fun-facts",
+    "cta",
+    "github",
+    "custom"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [],
+    "migrations": []
+  },
+  "enhancements": [
+    {
+      "id": "review",
+      "export": "./enhancements/review",
+      "requires": []
+    }
+  ],
+  "scrollReserve": {
+    "blockEnd": "calc(3.5rem + 1rem)",
+    "media": "(max-width: 47.99rem)"
+  },
+  "visitorControl": {
+    "placement": "footer"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "studio": {
+    "signature": "A pull request to your team"
+  },
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The proof of concept for issue #270 (gist 133fd86d948cccff62f6bf89eaab718b)",
+        "disposition": "preserved",
+        "note": "Its review page, rebuilt on the v3 records: the branches and title, vertical tabs with a file tree and a Viewed bar, the description and timeline, commits by year with short hashes, checks with sources, files as unified or split diffs with pinned notes, and the merge box."
+      },
+      {
+        "source": "The proof of concept's deep merge green, Charter and PT Mono",
+        "disposition": "folded-into-pack",
+        "note": "Colour and type are the appearance's: the composition reads the positive and danger roles for added and removed lines, the body role for what people wrote and the code role for what machines print."
+      },
+      {
+        "source": "The proof of concept's drafted before and after lines and case study",
+        "disposition": "retired",
+        "note": "The composition writes none of the owner's words: a work with a challenge and outcomes reads as its before and after, any other as a new file, until a content extension gives each work its own."
+      }
+    ]
+  }
+}

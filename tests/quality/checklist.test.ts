@@ -89,6 +89,7 @@ test('an id nothing registers fails, naming what is registered', () => {
     'kinetic-cosmos',
     'mission-control',
     'obsidian-atelier',
+    'pull-request',
     'raw-grid',
     'schematic',
     'shell',
@@ -99,7 +100,7 @@ test('an id nothing registers fails, naming what is registered', () => {
   ]);
   assert.throws(
     () => checklist('no-such-surface', registrations, compositions),
-    /Nothing registers no-such-surface\. Registered: demo-studio, login, studio, aurora-glass, chapters, editorial-evidence, fallback, flux, horizontal-cinema, kinetic-cosmos, mission-control, obsidian-atelier, raw-grid, schematic, shell, singular, spatial-bento, swiss-signal, terra-field\./,
+    /Nothing registers no-such-surface\. Registered: demo-studio, login, studio, aurora-glass, chapters, editorial-evidence, fallback, flux, horizontal-cinema, kinetic-cosmos, mission-control, obsidian-atelier, pull-request, raw-grid, schematic, shell, singular, spatial-bento, swiss-signal, terra-field\./,
   );
 });
 

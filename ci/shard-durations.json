@@ -17,6 +17,7 @@
     "pkg:packages/variant-kinetic-cosmos": 3.1,
     "pkg:packages/variant-mission-control": 11,
     "pkg:packages/variant-obsidian-atelier": 5.1,
+    "pkg:packages/variant-pull-request": 3,
     "pkg:packages/variant-raw-grid": 7.7,
     "pkg:packages/variant-schematic": 4.2,
     "pkg:packages/variant-shell": 4.6,

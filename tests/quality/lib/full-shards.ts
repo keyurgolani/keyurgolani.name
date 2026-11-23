@@ -6,7 +6,7 @@
 // The caps. A night holds no more than FULL_SHARDS of the account's 20 job
 // slots at once, 12, and a release candidate no more than RELEASE_PARALLEL
 // (its rc-quality jobs' max-parallel together), 16, so other work keeps the
-// rest: the nightly's scope in a 7-night cycle (lib/nightly-scope.ts). The
+// rest: the nightly's scope in a 14-night cycle (lib/nightly-scope.ts). The
 // nightly pauses while a release or an inventory run is in flight
 // (ci/big-run.mjs), so the two never stand together.
 //
@@ -75,7 +75,8 @@ export const VISUAL_SPEC = 'visual.spec.ts';
 /**
  * The nightly's cap: the most shard jobs of a night at once, and the nightly's shard count: 12, the
  * most jobs this repository's CI holds at once, so the account's 20 keep room for other work. The nightly's
- * scope runs in a 7-night cycle at 12 (nightly-scope.test.ts), and would at 16 too.
+ * scope runs in a 14-night cycle at 12 since the 16th public composition (nightly-scope.test.ts),
+ * and would in 7 at 16.
  */
 export const FULL_SHARDS = 12;
 /**

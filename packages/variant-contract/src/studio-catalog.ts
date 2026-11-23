@@ -21,6 +21,7 @@ export const COMPOSITION_FAMILY: Readonly<Record<string, CompositionFamily>> = O
   shell: 'technical',
   'mission-control': 'technical',
   schematic: 'technical',
+  'pull-request': 'technical',
   'kinetic-cosmos': 'stage',
   'obsidian-atelier': 'stage',
   'horizontal-cinema': 'stage',

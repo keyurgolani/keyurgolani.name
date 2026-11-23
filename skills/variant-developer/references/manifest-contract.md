@@ -57,7 +57,7 @@ The fallback composition's, `packages/fallback-composition/manifest.json`, which
 
 ## Identity
 
-- **`id`** (required): `^[a-z][a-z0-9-]{1,47}$`, the id `site.yml`'s `appearance.variant` selects. `fallback`, the first-party composition ids in `COMPOSITION_IDS` (`editorial-evidence`, `kinetic-cosmos`, `obsidian-atelier`, `spatial-bento`, `horizontal-cinema`, `swiss-signal`, `raw-grid`, `shell`, `terra-field`, `aurora-glass`, `singular`, `mission-control`, `schematic`, `flux`, `chapters`), and `missing-variant` are reserved for `@portfolio/*`. A package under another scope starts its id with the scope: `@acme/ocean` is `acme-ocean`.
+- **`id`** (required): `^[a-z][a-z0-9-]{1,47}$`, the id `site.yml`'s `appearance.variant` selects. `fallback`, the first-party composition ids in `COMPOSITION_IDS` (`editorial-evidence`, `kinetic-cosmos`, `obsidian-atelier`, `spatial-bento`, `horizontal-cinema`, `swiss-signal`, `raw-grid`, `shell`, `terra-field`, `aurora-glass`, `singular`, `mission-control`, `schematic`, `flux`, `chapters`, `pull-request`), and `missing-variant` are reserved for `@portfolio/*`. A package under another scope starts its id with the scope: `@acme/ocean` is `acme-ocean`.
 - **`name`** (required): plain text, up to 60 characters. Shown wherever the platform lists variants.
 - **`promise`** (required): one sentence, up to 140 characters. The composition idea from DESIGN.md.
 - **`description`** (required): up to 1000 characters.
@@ -96,6 +96,7 @@ The first-party compositions have pinned tiers and motion, `FIRST_PARTY_PINS` in
 - `schematic`: light and subtle
 - `flux`: medium and kinetic
 - `chapters`: light and directed
+- `pull-request`: light and subtle
 
 ## Budgets
 
