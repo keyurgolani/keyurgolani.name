@@ -160,8 +160,8 @@ export const NIGHTLY_TIMEOUT_MINUTES = 120;
  * rc-quality's and rc-preflight's preflight-quality's timeout-minutes, the release shard's cap. It
  * stays at 120 (the coordinator's release-path ruling, 2026-11-07): the shard target,
  * RELEASE_CEILING, is fitted to this cap, never the cap to the target. RELEASE_PARALLEL went from
- * 10 to 16 with the split into three jobs (the sizing ruling, 2026-11-11), and to 18 with each
- * job at 6.
+ * 10 to 16 with the split into three jobs (the sizing ruling, 2026-11-11), to 18 with each job
+ * at 6, and to 19 with the first at 7 (c496dda5), so 1 of the account's 20 job slots stays free.
  */
 export const RELEASE_TIMEOUT_MINUTES = 120;
 
