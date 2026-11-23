@@ -538,6 +538,23 @@
   line-height: 0.98;
   letter-spacing: max(var(--type-display-letter-spacing), -0.03em);
 }
+/*
+ * On a title page under 14rem (on a phone, only past 100% root text) the title sets at its step or
+ * the size at which its longest word (--layout-ch-title-word, in code points, a trailing full stop
+ * with it) fits at 0.62em a letter, whichever is smaller, never under body size: at its step at
+ * 200% its longer words were wider than the page and broke inside them, a full stop on its own line.
+ */
+[data-variant='chapters'] .tp {
+  container: ch-tp / inline-size;
+}
+@container ch-tp (width < 14rem) {
+  [data-variant='chapters'] .tp-title {
+    font-size: max(
+      var(--type-body-font-size),
+      min(var(--type-step-7), calc(100cqi / (var(--layout-ch-title-word, 8) * 0.62)))
+    );
+  }
+}
 [data-variant='chapters'] .tp-sub {
   margin-block-start: var(--space-m);
   max-inline-size: var(--type-measure-compact);
