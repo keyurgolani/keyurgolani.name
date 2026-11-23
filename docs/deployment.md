@@ -154,7 +154,7 @@ docker compose up --build
 
 ### Migrating from the one-file format
 
-Earlier releases read one unversioned `portfolio.yml` that held the content and the appearance together. This release splits it into a portfolio document and a site document, both at `schemaVersion: 2`, and refuses the old file. `pnpm config:migrate` converts it, and changes nothing until you ask it to:
+Earlier releases read one unversioned `portfolio.yml` that held the content and the appearance together. This release splits it into a portfolio document at `schemaVersion: 3` and a site document at `schemaVersion: 2`, and refuses the old file. `pnpm config:migrate` converts it, and changes nothing until you ask it to:
 
 ```sh
 pnpm config:migrate config/portfolio.yml
