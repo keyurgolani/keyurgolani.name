@@ -1,0 +1,114 @@
+name: portfolio-copy
+
+# v1.0.0 into the published package, never merged: on a push of kgn-proof/portfolio-copy alone,
+# it copies v1.0.0's index by digest from the repository's private build package to
+# ghcr.io/keyurgolani/portfolio as 1.0.0, 1.0, 1 and latest, with `docker buildx imagetools
+# create`, which builds nothing. Then it checks every tag is that same digest, the index is the
+# source's byte for byte with both platforms and both attestation manifests, the provenance and
+# SBOMs are there as the release checks them, and the signed provenance still verifies against
+# this repository's release.yml. It refuses to move a tag the target already points elsewhere.
+on:
+  push:
+    branches: [kgn-proof/portfolio-copy]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portfolio-copy
+  cancel-in-progress: false
+
+jobs:
+  copy:
+    name: copy v1.0.0
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read # check out the release helpers
+      packages: write # read the build package, write the published one
+      attestations: read # verify the signed provenance
+    env:
+      SOURCE: ghcr.io/keyurgolani/keyurgolani.name
+      TARGET: ghcr.io/keyurgolani/portfolio
+      # v1.0.0's index: the digest v1.0.0-rc.7's release run built, scanned and attested, which
+      # promotion points 1.0.0 at.
+      DIGEST: sha256:59c0d7c5835c17e2e1f6b6b25abf886e760423c0d4b6e1ad46d7e7528e003aa9
+      TAGS: 1.0.0 1.0 1 latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.5
+          package-manager-cache: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GHCR with this run's token
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: The source's 1.0.0 is that digest, so v1.0.0 is promoted
+        run: |
+          set -euo pipefail
+          got=$(docker buildx imagetools inspect "$SOURCE:1.0.0" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "$SOURCE:1.0.0 -> $got"
+          test "$got" = "$DIGEST"
+      - name: No target tag points anywhere else already
+        run: |
+          set -euo pipefail
+          for tag in $TAGS; do
+            if out=$(docker buildx imagetools inspect "$TARGET:$tag" --format '{{json .Manifest}}' 2>/dev/null); then
+              got=$(echo "$out" | jq -r .digest)
+              echo "$TARGET:$tag exists -> $got"
+              test "$got" = "$DIGEST"
+            else
+              echo "$TARGET:$tag doesn't exist yet"
+            fi
+          done
+      - name: Copy the index by digest, with every tag
+        run: |
+          set -euo pipefail
+          args=()
+          for tag in $TAGS; do args+=(--tag "$TARGET:$tag"); done
+          docker buildx imagetools create "${args[@]}" "$SOURCE@$DIGEST"
+      - name: Every tag is the source's digest, and the index is the source's byte for byte
+        run: |
+          set -euo pipefail
+          for tag in $TAGS; do
+            got=$(docker buildx imagetools inspect "$TARGET:$tag" --format '{{json .Manifest}}' | jq -r .digest)
+            echo "$TARGET:$tag -> $got"
+            test "$got" = "$DIGEST"
+          done
+          docker buildx imagetools inspect --raw "$TARGET@$DIGEST" > "$RUNNER_TEMP/target-index.json"
+          docker buildx imagetools inspect --raw "$SOURCE@$DIGEST" > "$RUNNER_TEMP/source-index.json"
+          cmp "$RUNNER_TEMP/target-index.json" "$RUNNER_TEMP/source-index.json"
+          test "sha256:$(sha256sum < "$RUNNER_TEMP/target-index.json" | cut -d' ' -f1)" = "$DIGEST"
+          jq -r '.manifests[] | [.platform.os + "/" + .platform.architecture, (.annotations["vnd.docker.reference.type"] // "image")] | @tsv' "$RUNNER_TEMP/target-index.json" | tee "$RUNNER_TEMP/entries.tsv"
+          test "$(grep -c $'\timage$' "$RUNNER_TEMP/entries.tsv")" = 2
+          test "$(grep -c $'\tattestation-manifest$' "$RUNNER_TEMP/entries.tsv")" = 2
+          grep -q $'^linux/amd64\timage$' "$RUNNER_TEMP/entries.tsv"
+          grep -q $'^linux/arm64\timage$' "$RUNNER_TEMP/entries.tsv"
+      - name: Each platform's provenance, at mode=max, and its SBOM
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$TARGET@$DIGEST" --format '{{ json .Provenance }}' > "$RUNNER_TEMP/provenance.json"
+          docker buildx imagetools inspect "$TARGET@$DIGEST" --format '{{ json .SBOM }}' > "$RUNNER_TEMP/sbom.json"
+          node ci/release/attestations.mjs "$RUNNER_TEMP/provenance.json" "$RUNNER_TEMP/sbom.json" --platforms=linux/amd64,linux/arm64
+      - name: The signed provenance verifies against this repository's release.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "oci://$TARGET@$DIGEST" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --source-ref refs/tags/v1.0.0-rc.7
+      - name: The published package's visibility and repository, as the registry reports them
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api /users/keyurgolani/packages/container/portfolio --jq '{visibility, repository: .repository.full_name, created_at}'
