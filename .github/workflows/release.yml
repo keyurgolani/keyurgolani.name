@@ -1082,6 +1082,70 @@ jobs:
           node ci/release/notes.mjs > "$RUNNER_TEMP/notes.md"
           gh release create "$TAG" --verify-tag --prerelease --latest=false --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "$SBOMS"/*.spdx.json
 
+  # The candidate's last job. A final tag already pushed on this commit had
+  # its promotion refused while this run was still going, since promote-check
+  # promotes only a candidate whose release run has ended green. So once the
+  # pre-release is out, this asks GitHub to re-run the final tag's release
+  # run, and promote-check decides again, as for a final pushed now. It never
+  # makes a tag, a release, or an image, and it never fails this run: what it
+  # can't do it logs, and the fallback is the final run's Re-run all jobs
+  # (docs/releasing.md, Promotion).
+  rc-promote-rerun:
+    name: rc-promote-rerun
+    needs: [classify, rc-release]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # read the final tag
+      actions: write # re-run the final tag's release run
+    steps:
+      - name: Re-run the final tag's release run, if that tag is on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          final="${TAG%-rc.*}"
+          if ! [[ "$final" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::warning title=promotion::$TAG names no final tag, so there is nothing to re-run"
+            exit 0
+          fi
+          if ! ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$final" --jq '[.object.type, .object.sha] | @tsv' 2>/dev/null); then
+            echo "No $final tag yet: push it on $SHA to promote this candidate."
+            exit 0
+          fi
+          read -r type commit <<< "$ref"
+          if [[ "$type" == tag ]]; then
+            if ! commit=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$commit" --jq '.object.sha'); then
+              echo "::warning title=promotion::$final's tag object can't be read; re-run its release run from Actions"
+              exit 0
+            fi
+          fi
+          if [[ "$commit" != "$SHA" ]]; then
+            echo "::warning title=promotion::$final is on $commit, not on this candidate's $SHA, so its run isn't re-run"
+            exit 0
+          fi
+          if ! run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow release.yml --event push --branch "$final" --limit 1 --json databaseId,headSha,status,conclusion --jq '.[0] // empty | [.databaseId, .headSha, .status, .conclusion] | @tsv'); then
+            echo "::warning title=promotion::$final's release runs can't be listed; re-run its release run from Actions"
+            exit 0
+          fi
+          if [[ -z "$run" ]]; then
+            echo "$final has no release run to re-run."
+            exit 0
+          fi
+          read -r id head status conclusion <<< "$run"
+          if [[ "$head" != "$SHA" || "$status" != completed || "$conclusion" == success ]]; then
+            echo "$final's release run $id ($head, $status, ${conclusion:-no conclusion}) isn't one to re-run."
+            exit 0
+          fi
+          if gh run rerun "$id" --repo "$GITHUB_REPOSITORY"; then
+            echo "Re-ran $final's release run $id: promote-check decides again."
+          else
+            echo "::warning title=promotion::$final's release run $id couldn't be re-run; re-run it from Actions"
+          fi
+          exit 0
+
   # ---- a final release, vX.Y.Z --------------------------------------------
 
   promote-verify:

@@ -27,6 +27,7 @@ Pushing `vX.Y.Z-rc.N` runs these jobs in order (the quality gate and the rehears
 8. **rc-rehearsal** runs beside the build, after `rc-verify`: the upgrade rehearsal ([The rehearsal](#the-rehearsal)), on an image of the tagged commit it builds itself with no cache and never pushes, so nothing comes from GHCR.
 9. **rc-tag** tags the scanned digest `X.Y.Z-rc.N` on GHCR once `rc-smoke`, `rc-scan`, `rc-quality-verdict`, and `rc-rehearsal` all passed, and checks the tag resolves to it.
 10. **rc-release** creates the GitHub pre-release, with notes that name the pull source by digest and the two SBOMs attached.
+11. **rc-promote-rerun**, last, re-runs the final tag's release run when `vX.Y.Z` is already on this commit ([Promotion](#promotion)). It holds `actions: write` alone, never makes a tag, a release, or an image, and never fails the run: what it can't do it logs.
 
 ## The quality scope
 
@@ -69,7 +70,13 @@ Pushing `vX.Y.Z` on the newest candidate's commit runs:
 4. **promote** points `X.Y.Z` at the digest with `docker buildx imagetools create`, which copies the index by reference and builds nothing. It moves `X.Y`, `X`, and `latest` too, unless a final release already out is newer in that line, so a patch to an older line never moves them backwards ([`ci/release/tags.mjs`](../ci/release/tags.mjs)). It reads the tags again right before it moves anything, and runs one at a time across every final tag (the `release-promote` concurrency group), so two promotions never race for `latest`. GitHub keeps one waiting job per group, so a third final pushed while one promotion runs and another waits cancels the waiting one. Re-run that run's failed jobs, within GitHub's 30-day window. It's the only job that moves `latest`. Then it copies the same index by digest to the published package, `ghcr.io/keyurgolani/portfolio`, under the same tags, and checks the copy as promote-scan checked the build package: every tag resolves to the digest, the index is the source's byte for byte, with both platforms' images and both attestation manifests, the provenance and SBOMs pass [`ci/release/attestations.mjs`](../ci/release/attestations.mjs), and the signed provenance verifies for the candidate's tag and this commit ([The published package](#the-published-package)).
 5. **promote-release** creates the GitHub Release with the same notes.
 
-Promotion starts only from a final tag, and only an admin can create one: the release-tag-creation ruleset keeps the run's own token from creating `vX.Y.Z`, and a credential that could would put that power in every run that reads it. So once a candidate's run passes, an admin creates the final tag on its commit ([Owner steps](#owner-steps)), and the run does the rest.
+Promotion starts only from a final tag, and only an admin can create one: the release-tag-creation ruleset keeps the run's own token from creating `vX.Y.Z`, and a credential that could would put that power in every run that reads it. So the admin pushes the final tag on the candidate's commit as soon as the candidate's `rc-verify` passes, and GitHub finishes:
+
+- The final tag's run starts at once. `promote-check` refuses it while the candidate's run is still going, since it promotes only a candidate whose release run has ended green, so that run publishes nothing.
+- When the candidate's run reaches its end, `rc-promote-rerun` re-runs the final tag's release run on the same commit, and `promote-check` decides again, as for a final pushed then. A candidate that failed never gets there, so nothing is re-run and nothing is published.
+- If the final's re-run doesn't promote, because it reached `promote-check` before the candidate's run had ended or GitHub refused the re-run, open the final tag's release run in Actions and choose **Re-run all jobs** once the candidate's run is green. That is the one manual step left.
+
+Wait for `rc-verify` before pushing the final tag: a release tag can't be moved or deleted, so a final pushed on a commit whose candidate `rc-verify` refuses can never promote.
 
 ## The published package
 
@@ -83,14 +90,15 @@ Image builds aren't byte-for-byte reproducible. The runtime stage runs `apk upgr
 
 The workflow's token is `contents: read`. Each job that writes gets only what it writes, and only on a tag push:
 
-| Job               | Writes                                 |
-| ----------------- | -------------------------------------- |
-| `rc-build`        | `packages`                             |
-| `rc-merge`        | `packages`, `id-token`, `attestations` |
-| `rc-tag`          | `packages`                             |
-| `rc-release`      | `contents`, for the pre-release        |
-| `promote`         | `packages`, in both packages           |
-| `promote-release` | `contents`, for the release            |
+| Job                | Writes                                 |
+| ------------------ | -------------------------------------- |
+| `rc-build`         | `packages`                             |
+| `rc-merge`         | `packages`, `id-token`, `attestations` |
+| `rc-tag`           | `packages`                             |
+| `rc-release`       | `contents`, for the pre-release        |
+| `rc-promote-rerun` | `actions`, to re-run the final's run   |
+| `promote`          | `packages`, in both packages           |
+| `promote-release`  | `contents`, for the release            |
 
 `rc-verify` and `promote-verify` add `actions: read`; `rc-smoke`, `rc-scan` and `promote-scan` add `packages: read` to pull the private package, and `promote-scan` and `promote` add `attestations: read`, to verify the candidate's and the published copy's provenance. No job reads or writes a cache: the installs are fresh, setup-node and setup-buildx run with their caches off, and no build names `cache-from`. No job uses a repository secret.
 
@@ -169,13 +177,13 @@ An entry matches a finding by its id, or one of the aliases Grype lists, in the 
 
   A final, `vX.Y.Z`, promotes only a candidate whose scope is a whole matrix, `full` or `reachable`, with an empty records list and no `timingReported`; v1.0.0 promotes on `reachable` ([The quality scope](#the-quality-scope)). Push it on that candidate's commit once its release run passes, and never on a candidate that can't promote: a release tag can't be moved or deleted.
 
-- **Promote a candidate.** The one manual step of a final release. Once the candidate's release run passes, create the final tag on its commit, from any machine with the GitHub CLI and no clone:
+- **Promote a candidate.** Push the final tag on the candidate's commit once its `rc-verify` passes, and GitHub does the rest ([Promotion](#promotion)). From any machine with the GitHub CLI and no clone:
 
   ```sh
   gh api repos/keyurgolani/keyurgolani.name/git/refs -f ref=refs/tags/vX.Y.Z -f sha=<the candidate's commit>
   ```
 
-  or with git, as above. The tag's push runs the promotion, the copy to the published package, and the release. Don't create it from the web's Draft a new release: publishing that creates the release with the tag, and `promote-release` then refuses to create it again.
+  or with git, as above. Once the candidate's run is green, its last job re-runs the final's run, which promotes, copies to the published package, and creates the release. If that re-run doesn't promote, choose **Re-run all jobs** on the final tag's release run in Actions. Don't create the tag from the web's Draft a new release: publishing that creates the release with the tag, and `promote-release` then refuses to create it again.
 
 - **Apply the two tag rulesets.** [`release-tags.json`](../.github/rulesets/release-tags.json) keeps release tags (`v[0-9]*`) from moving or being deleted, with no bypass. [`release-tag-creation.json`](../.github/rulesets/release-tag-creation.json) lets only a repository admin create one. They're separate so the admin bypass on creation never reaches the other rules.
 
