@@ -794,3 +794,10 @@ test("each quality shard's reports and verdict files keep seven days, so a run a
     );
   }
 });
+
+test("promote-release's notes name the published package, the one the release points readers at", () => {
+  const notes = stepsOf('promote-release').find((s) => /ci\/release\/notes\.mjs/.test(s.run ?? ''));
+  assert.ok(notes, 'promote-release writes its notes with notes.mjs');
+  assert.equal(notes.env.IMAGE, '${{ needs.promote.outputs.published }}');
+  assert.equal(JOBS.promote.outputs.published, '${{ env.PUBLISHED }}');
+});

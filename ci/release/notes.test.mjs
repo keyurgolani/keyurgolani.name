@@ -46,3 +46,21 @@ test('notes need a release tag and a digest', () => {
   assert.throws(() => renderNotes({ ...base, tag: 'main' }), /not a release tag/);
   assert.throws(() => renderNotes({ ...base, tag: 'v1.0.0', digest: 'latest' }), /not a sha256/);
 });
+
+test('promotion notes pull from the published package with no login, since only a candidate is private', () => {
+  const notes = renderNotes({
+    ...base,
+    image: 'ghcr.io/owner/portfolio',
+    tag: 'v1.2.0',
+    candidate: 'v1.2.0-rc.3',
+    targets: ['1.2.0', '1.2', '1', 'latest'],
+  });
+  assert.ok(notes.includes(`docker pull ghcr.io/owner/portfolio@${DIGEST}`));
+  assert.match(notes, /The package is public, so pulling needs no login\./);
+  assert.doesNotMatch(notes, /private for now/);
+  assert.ok(
+    notes.includes(
+      `gh attestation verify oci://ghcr.io/owner/portfolio@${DIGEST} --repo owner/repo`,
+    ),
+  );
+});
