@@ -9,10 +9,10 @@
 # the owner's password hash, and it never runs unless you choose it.
 services:
   web:
-    # The published image, any 1.x release. Pin a release or a digest by
-    # setting PORTFOLIO_IMAGE in .env, such as
-    # ghcr.io/keyurgolani/portfolio@sha256:<digest>.
-    image: ${PORTFOLIO_IMAGE:-ghcr.io/keyurgolani/portfolio:1}
+    # The published image, release 1.0.0 by its digest. To follow every 1.x
+    # release instead, set PORTFOLIO_IMAGE in .env to
+    # ghcr.io/keyurgolani/portfolio:1.
+    image: ${PORTFOLIO_IMAGE:-ghcr.io/keyurgolani/portfolio:1.0.0@sha256:59c0d7c5835c17e2e1f6b6b25abf886e760423c0d4b6e1ad46d7e7528e003aa9}
     container_name: portfolio
     restart: unless-stopped
     # Loopback only: the TLS-terminating proxy on this host publishes the site

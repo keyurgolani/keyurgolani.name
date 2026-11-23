@@ -1,6 +1,6 @@
 # Self-hosting
 
-You don't need this repository's toolchain to run your own portfolio. The published image, `ghcr.io/keyurgolani/portfolio:1`, is the server, and [`selfhost/`](../selfhost/) holds everything else Docker Compose needs:
+You don't need this repository's toolchain to run your own portfolio. The published image, `ghcr.io/keyurgolani/portfolio`, is the server, and [`selfhost/`](../selfhost/) holds everything else Docker Compose needs:
 
 | File                   | What it is                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------- |
@@ -49,10 +49,10 @@ docker compose pull
 docker compose up -d
 ```
 
-`:1` follows every 1.x release. To stay on one, set `PORTFOLIO_IMAGE` in `.env` to a release tag, such as `ghcr.io/keyurgolani/portfolio:1.0.0`, or to a digest, `ghcr.io/keyurgolani/portfolio@sha256:<digest>`. Each release is the image this repository's release workflow built and signed, copied here by its digest with no rebuild. To check one before you run it, with the GitHub CLI:
+The Compose files ship pinned to release 1.0.0 by its digest, `ghcr.io/keyurgolani/portfolio:1.0.0@sha256:59c0d7c5835c17e2e1f6b6b25abf886e760423c0d4b6e1ad46d7e7528e003aa9`, so `docker compose pull` changes nothing until you change the pin. To follow every 1.x release, set `PORTFOLIO_IMAGE` in `.env` to `ghcr.io/keyurgolani/portfolio:1`, and the two commands above bring in the newest. Each release is the image this repository's release workflow built and signed, copied here by its digest with no rebuild. To check one before you run it, with the GitHub CLI:
 
 ```sh
-gh attestation verify oci://ghcr.io/keyurgolani/portfolio:1.0.0 \
+gh attestation verify oci://ghcr.io/keyurgolani/portfolio:1.0.0@sha256:59c0d7c5835c17e2e1f6b6b25abf886e760423c0d4b6e1ad46d7e7528e003aa9 \
   --repo keyurgolani/keyurgolani.name \
   --signer-workflow keyurgolani/keyurgolani.name/.github/workflows/release.yml
 ```
@@ -115,7 +115,8 @@ Both answer the site's other names with a permanent redirect to the one origin. 
 
    ```sh
    mkdir -m 0700 secrets && sudo chown 1001:1001 secrets
-   docker run --rm -it --user 1001:1001 -v "$PWD/secrets:/out" ghcr.io/keyurgolani/portfolio:1 \
+   docker run --rm -it --user 1001:1001 -v "$PWD/secrets:/out" \
+     ghcr.io/keyurgolani/portfolio:1.0.0@sha256:59c0d7c5835c17e2e1f6b6b25abf886e760423c0d4b6e1ad46d7e7528e003aa9 \
      node apps/web/bin/owner.mjs hash-password --out /out/owner_password_hash
    ```
 

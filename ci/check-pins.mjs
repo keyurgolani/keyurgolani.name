@@ -251,6 +251,9 @@ export function checkDockerfile(text, file) {
 
 // `${VAR}` or `${VAR:?message}`: the image under test, supplied by the caller.
 const IMAGE_UNDER_TEST = /^\$\{[A-Z_][A-Z0-9_]*(?::?\?[^}]*)?\}$/;
+// `${VAR:-default}` or `${VAR-default}`: Compose runs the default whenever the
+// variable is unset, so the default is what must be pinned.
+const DEFAULTED_IMAGE = /^\$\{[A-Z_][A-Z0-9_]*:?-(.*)\}$/s;
 
 export function checkCompose(text, file) {
   const { data, lineAt } = yamlDoc(text);
@@ -259,7 +262,7 @@ export function checkCompose(text, file) {
     const image = service?.image;
     // A service with `build:` names its own build output with `image:`.
     if (!image || service.build || IMAGE_UNDER_TEST.test(image)) continue;
-    const problem = imageProblem(image);
+    const problem = imageProblem(DEFAULTED_IMAGE.exec(image)?.[1] ?? image);
     if (problem) {
       problems.push({
         file,

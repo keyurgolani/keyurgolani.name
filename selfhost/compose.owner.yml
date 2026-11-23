@@ -10,7 +10,8 @@
 name: portfolio-owner
 services:
   web:
-    image: ${PORTFOLIO_IMAGE:-ghcr.io/keyurgolani/portfolio:1}
+    # Release 1.0.0 by its digest, as compose.yml pins it.
+    image: ${PORTFOLIO_IMAGE:-ghcr.io/keyurgolani/portfolio:1.0.0@sha256:59c0d7c5835c17e2e1f6b6b25abf886e760423c0d4b6e1ad46d7e7528e003aa9}
     # A fixed name also stops `--scale`: one server per data volume.
     container_name: portfolio-owner
     restart: unless-stopped

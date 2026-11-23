@@ -16,8 +16,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => readFileSync(path.join(ROOT, file), 'utf8');
 const compose = (file) => parseYaml(read(file));
 
-/** The published image the self-host files pull, by its major version tag. */
-const IMAGE = 'ghcr.io/keyurgolani/portfolio:1';
+/** The published image the self-host files pull by default: release 1.0.0, by its digest. */
+const IMAGE =
+  'ghcr.io/keyurgolani/portfolio:1.0.0@sha256:59c0d7c5835c17e2e1f6b6b25abf886e760423c0d4b6e1ad46d7e7528e003aa9';
 
 /** The repository's own build package, which stays private: self-hosting never names it. */
 const BUILD_PACKAGE = 'ghcr.io/keyurgolani/keyurgolani.name';
