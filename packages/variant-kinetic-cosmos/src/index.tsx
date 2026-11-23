@@ -16,3 +16,6 @@ import { RENDERERS } from './renderers';
 export const sections: SectionComposition = { renderers: RENDERERS, Frame: OpeningFrame };
 
 export default composePages({ HomePage, CaseStudyPage });
+
+// Row 129 evidence only, not for merge: this line makes quality:pr change-direct Kinetic Cosmos,
+// so the evidence PR plans its cells as a push to it would (default row at every viewport).
