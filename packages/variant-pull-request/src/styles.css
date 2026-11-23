@@ -713,6 +713,9 @@
 }
 
 [data-variant='pull-request'] .pr-label {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.5rem;
   padding: 0 var(--space-xs);
   border: 1px solid color-mix(in oklab, var(--color-positive) 45%, var(--color-canvas));
   border-radius: var(--ui-radius-badge);
@@ -1145,7 +1148,6 @@
 [data-variant='pull-request'] .pr-hunk td {
   padding-block: var(--space-3xs);
   background: var(--layout-hunk);
-  color: var(--color-text-secondary);
 }
 
 [data-variant='pull-request'] .pr-hash,
@@ -1487,6 +1489,15 @@
 
 @media (forced-colors: active) {
   [data-variant='pull-request'] :is([data-l='add'], [data-l='del']) {
-    border-inline-start: 3px solid CanvasText;
+    border-inline-start: 3px solid currentColor;
   }
+}
+
+/* Every link in a list of links holds a 24px target in its own box (WCAG 2.5.8). */
+[data-variant='pull-request']
+  :is(.pr-merge__o, .pr-src, .pr-mini, .pr-crumbs, .pr-links, .pr-repos, .pr-labels)
+  a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.5rem;
 }
