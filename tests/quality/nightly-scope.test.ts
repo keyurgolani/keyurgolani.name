@@ -23,7 +23,9 @@ import { checkoutMeta } from './plan-fixtures';
 // The nightly's scope (lib/nightly-scope.ts, row 151, the coordinator's (b1)): cut from the
 // reachable plan, every public composition's default-pack pairs at 390 and 1440 and the whole
 // pairwise array at 1440, default row, with the every-night harness, perf and visual groups, in a
-// 7-night cycle at 12 shards of 120 minutes, by the release's measured weights and pace.
+// 14-night cycle at 12 shards of 120 minutes, by the release's measured weights and pace, since
+// the 16th public composition, Pull Request, took it past 7 (rotationFor doubles it, as
+// NIGHT_COUNTS says); 16 shards would still hold 7.
 
 const ENGINES = RUN_ENGINES.full;
 const WEB = fileURLToPath(new URL('../../apps/web/', import.meta.url));
@@ -84,9 +86,9 @@ test('(b1) every (c′) pair is in a test the 7-night cycle runs', () => {
   assert.equal(keys.length, night.tests.length);
 });
 
-test('(b1) each of the 7 nights fits the ceiling at 12 shards, and its slowest shard ends within 120 minutes at the release pace', () => {
+test('(b1) each of the 14 nights fits the ceiling at 12 shards, and its slowest shard ends within 120 minutes at the release pace', () => {
   const cycle = rotation(fullShards.FULL_SHARDS);
-  assert.equal(cycle.slices.length, 7);
+  assert.equal(cycle.slices.length, 14);
   for (const [at, slice] of cycle.slices.entries()) {
     assert.equal(slice.length, 12);
     for (const shard of slice) {
@@ -118,7 +120,7 @@ test('the nightly scope: default-pack pairs at 390 and 1440, the pairwise array 
   }
   // 114 pairs a public composition, at both viewports.
   const compositions = reachable.targets.filter((t) => t.kind === 'composition');
-  assert.equal(compositions.length, 15);
+  assert.equal(compositions.length, 16);
   for (const { id } of compositions) {
     const pairs = night.tests.filter(
       (each) =>

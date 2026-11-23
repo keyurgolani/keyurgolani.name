@@ -10,8 +10,9 @@
 //
 // The whole of (c′) (every viewport and row, the [37] rule's pairs, every route, state and surface
 // cell) is the release run's, and `full` stays the harness's regression run. At the release's
-// measured weights and pace it's a 7-night cycle at FULL_SHARDS (16) shards of
-// NIGHTLY_TIMEOUT_MINUTES (120), and still 7 at 12 (nightly-scope.test.ts).
+// measured weights and pace it's a 14-night cycle at FULL_SHARDS (12) shards of
+// NIGHTLY_TIMEOUT_MINUTES (120) since the 16th public composition, and would be 7 at 16
+// (nightly-scope.test.ts).
 
 import { PLATFORM_DEFAULTS } from '../../../packages/appearance/src/index';
 import type { Cell, Plan, PlannedTest } from '../cells';

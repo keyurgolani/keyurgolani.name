@@ -19,7 +19,7 @@ import { loadPlan } from './plan';
 import { checkoutMeta, withTierPacks } from './plan-fixtures';
 
 // The release scope (c′), the coordinator's ruling for v1.0.0 (cells.ts's `reachable`): a
-// covering array pairwise over what a visitor or the owner can reach, the 15 public compositions
+// covering array pairwise over what a visitor or the owner can reach, the 16 public compositions
 // and the shipping packs of every tier, beside every public composition's 114 scheme and mode
 // pairs on its default packs, with the [37] rule's pairs kept, and no fixture pack, no
 // acme-reference and no fallback composition. Each proof below works the reachable set out on its
@@ -98,7 +98,7 @@ const compositions = (plan: Plan) => plan.cells.filter((cell) => cell.kind === '
 
 test('(c′) every pair of reachable factor values is in at least one tuple of the reachable scope', () => {
   const values = reachableValues(meta);
-  assert.equal(values.variant.length, 15, values.variant.join(', '));
+  assert.equal(values.variant.length, 16, values.variant.join(', '));
   const registry = createAppearanceRegistry(meta);
   // Every pair some tuple a person can reach holds: each tuple of the cross product the resolver
   // renders as asked, enumerated here on its own.
@@ -114,7 +114,7 @@ test('(c′) every pair of reachable factor values is in at least one tuple of t
             tuples += 1;
             for (const pair of pairsOf(tuple)) reachablePairs.add(pair);
           }
-  // 15 compositions x 33 languages x 15 typographies x 114 scheme and mode pairs.
+  // 16 compositions x 33 languages x 15 typographies x 114 scheme and mode pairs.
   assert.equal(
     tuples,
     values.variant.length * values.designLanguage.length * values.typography.length * 114,
