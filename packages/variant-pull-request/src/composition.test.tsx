@@ -158,6 +158,16 @@ test("a work's own page: its title the h1, its whole diff with nothing behind Ex
   }
 });
 
+test("the tabs' list holds only the panel links, so it can be a tab list; Merge, a link to the merge box, follows it", () => {
+  const markup = html(inputOf(pairOf('complete')));
+  const nav = /<nav class="pr-tabs"[\s\S]*?<\/nav>/.exec(markup)![0];
+  const list = /<ul class="pr-tabs__l"[\s\S]*?<\/ul>/.exec(nav)![0];
+  const items = [...list.matchAll(/<li[\s>]/g)].length;
+  assert.equal(items, count(list, /data-pr-tab="/g), 'every item is a panel link');
+  assert.doesNotMatch(list, /data-pr-to-merge/);
+  assert.match(nav.slice(nav.indexOf('</ul>')), /data-pr-to-merge=""/);
+});
+
 test('the tabs move with the arrow keys, Home and End, round the ends', () => {
   assert.equal(nextTab('ArrowRight', 3, 4), 0);
   assert.equal(nextTab('ArrowDown', 1, 4), 2);
