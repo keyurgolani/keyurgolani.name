@@ -6,7 +6,7 @@
 # default branch's workflows take. inventory-plan counts (c′)'s release plan
 # (quality/inventory/scope.json, an empty records list) as rc-quality-plan does, and hands its
 # shards to inventory-1 to inventory-3, release.yml's rc-quality-1 to -3 step for step but for
-# their names, scope file and artifacts: three matrices of at most 256, 6 at a time each, at
+# their names, scope file and artifacts: three matrices of at most 256, 7, 6, and 6 at a time, at
 # rc-quality's 120 minutes, at the worker count quality/inventory/workers.json names, which the
 # worker probe settles and the release run keeps too. Unlike rc-quality's, no shard uploads its
 # reports: its verdict files, its failure records among them, upload for seven days, and its
@@ -79,7 +79,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 7
       matrix:
         shard: ${{ fromJSON(needs.inventory-plan.outputs.shards1) }}
     container:

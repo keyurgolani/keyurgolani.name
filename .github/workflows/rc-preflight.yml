@@ -140,9 +140,9 @@ jobs:
         run: pnpm exec tsx tests/quality/full-plan.ts
 
   # release.yml's rc-quality-1 to rc-quality-3, on the commit: each the
-  # shards preflight-plan hands it, skipping with none, 6 at a time each,
-  # 18 together, as a candidate runs them, so 2 of the account's 20 job
-  # slots stay free. Each shard's reports are scrubbed however the run ended, and
+  # shards preflight-plan hands it, skipping with none, 7, 6, and 6 at a
+  # time, 19 together, as a candidate runs them, so 1 of the account's 20
+  # job slots stays free. Each shard's reports are scrubbed however the run ended, and
   # upload only when that scrub succeeds, for seven days.
   preflight-quality-1:
     name: preflight-quality (${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }})
@@ -152,7 +152,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 7
       matrix:
         shard: ${{ fromJSON(needs.preflight-plan.outputs.shards1) }}
     container:
@@ -218,7 +218,7 @@ jobs:
           name: reports-quality-preflight-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Seven days: at 18 at a time the first wave's reports must outlast the last wave's
+          # Seven days: at 19 at a time the first wave's reports must outlast the last wave's
           # end before the verdict downloads them, about 45 hours at the release scope's 611
           # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
           retention-days: 7
@@ -290,7 +290,7 @@ jobs:
           name: reports-quality-preflight-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Seven days: at 18 at a time the first wave's reports must outlast the last wave's
+          # Seven days: at 19 at a time the first wave's reports must outlast the last wave's
           # end before the verdict downloads them, about 45 hours at the release scope's 611
           # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
           retention-days: 7
@@ -362,7 +362,7 @@ jobs:
           name: reports-quality-preflight-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Seven days: at 18 at a time the first wave's reports must outlast the last wave's
+          # Seven days: at 19 at a time the first wave's reports must outlast the last wave's
           # end before the verdict downloads them, about 45 hours at the release scope's 611
           # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
           retention-days: 7

@@ -394,10 +394,10 @@ jobs:
   # (releaseDurations). One matrix makes at most 256 jobs, so the shards are
   # split across three jobs, rc-quality-1 to rc-quality-3, each running the
   # consecutive shards rc-quality-plan hands it (shards1 to shards3), and
-  # skipping when it hands it none. They run 6 at a time each, 18
-  # together, the release's cap (RELEASE_PARALLEL, RELEASE_JOBS), so in
-  # waves that end together, and 2 of the account's 20 job slots stay free
-  # for other work. The three are one job but for their id, list and
+  # skipping when it hands it none. They run 7, 6, and 6 at a time, 19
+  # together, the release's cap (RELEASE_PARALLEL, RELEASE_JOBS), each
+  # handed shards in proportion, so in waves that end together, and 1 of
+  # the account's 20 job slots stays free for other work. The three are one job but for their id, list and
   # max-parallel (ci/release/release-workflow.test.mjs). The timeout is
   # releaseTimeoutMinutes(), the release
   # ceiling with its margin, and each shard fails before any test when the
@@ -414,7 +414,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 7
       matrix:
         shard: ${{ fromJSON(needs.rc-quality-plan.outputs.shards1) }}
     container:
@@ -479,7 +479,7 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Seven days: at 18 at a time the first wave's reports must outlast the last wave's
+          # Seven days: at 19 at a time the first wave's reports must outlast the last wave's
           # end before the verdict downloads them, about 45 hours at the release scope's 611
           # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
           retention-days: 7
@@ -550,7 +550,7 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Seven days: at 18 at a time the first wave's reports must outlast the last wave's
+          # Seven days: at 19 at a time the first wave's reports must outlast the last wave's
           # end before the verdict downloads them, about 45 hours at the release scope's 611
           # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
           retention-days: 7
@@ -621,7 +621,7 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          # Seven days: at 18 at a time the first wave's reports must outlast the last wave's
+          # Seven days: at 19 at a time the first wave's reports must outlast the last wave's
           # end before the verdict downloads them, about 45 hours at the release scope's 611
           # shards, and about 67 at 12, which with a retag's wait comes within hours of three.
           retention-days: 7
@@ -1206,7 +1206,12 @@ jobs:
           retention-days: 1
 
   # The one job that moves latest: the candidate's digest gets the final
-  # tags, with no rebuild.
+  # tags, with no rebuild, in the build package, and then the same index,
+  # copied by digest, gets them in the published package, which anyone can
+  # pull (docs/releasing.md, The published package). The copy is checked as
+  # promote-scan checked the build package: every tag is the digest, the
+  # index is the source's byte for byte, and its signed provenance verifies
+  # for the candidate's tag and this commit.
   promote:
     name: promote
     needs: [classify, promote-verify, promote-scan]
@@ -1222,15 +1227,23 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read # check out the helpers and the tags
-      packages: write # move the final tags on GHCR
+      packages: write # move the final tags on GHCR, in both packages
+      attestations: read # verify the published copy's provenance attestation
     outputs:
       targets: ${{ steps.targets.outputs.targets }}
+    env:
+      # The package the self-host files and the release notes' readers pull.
+      PUBLISHED: ghcr.io/keyurgolani/portfolio
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # Every tag, to read the targets again just before moving them.
           fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
@@ -1258,6 +1271,57 @@ jobs:
           DIGEST: ${{ needs.promote-scan.outputs.digest }}
           TARGETS: ${{ steps.targets.outputs.targets }}
         run: node ci/release/retag.mjs "$IMAGE" "$DIGEST" "$TARGETS"
+      - name: Copy the index by digest to the published package, with the same tags
+        env:
+          SOURCE: ${{ needs.classify.outputs.image }}
+          DIGEST: ${{ needs.promote-scan.outputs.digest }}
+          TARGETS: ${{ steps.targets.outputs.targets }}
+        run: |
+          set -euo pipefail
+          args=()
+          for tag in ${TARGETS//,/ }; do args+=(--tag "$PUBLISHED:$tag"); done
+          docker buildx imagetools create "${args[@]}" "$SOURCE@$DIGEST"
+      - name: Every published tag is the digest, and the index is the source's byte for byte
+        env:
+          SOURCE: ${{ needs.classify.outputs.image }}
+          DIGEST: ${{ needs.promote-scan.outputs.digest }}
+          TARGETS: ${{ steps.targets.outputs.targets }}
+        run: |
+          set -euo pipefail
+          for tag in ${TARGETS//,/ }; do
+            got=$(docker buildx imagetools inspect "$PUBLISHED:$tag" --format '{{json .Manifest}}' | jq -r .digest)
+            echo "$PUBLISHED:$tag -> $got"
+            test "$got" = "$DIGEST"
+          done
+          docker buildx imagetools inspect --raw "$PUBLISHED@$DIGEST" > "$RUNNER_TEMP/published-index.json"
+          docker buildx imagetools inspect --raw "$SOURCE@$DIGEST" > "$RUNNER_TEMP/source-index.json"
+          cmp "$RUNNER_TEMP/published-index.json" "$RUNNER_TEMP/source-index.json"
+          test "sha256:$(sha256sum < "$RUNNER_TEMP/published-index.json" | cut -d' ' -f1)" = "$DIGEST"
+          jq -r '.manifests[] | [.platform.os + "/" + .platform.architecture, (.annotations["vnd.docker.reference.type"] // "image")] | @tsv' "$RUNNER_TEMP/published-index.json" | tee "$RUNNER_TEMP/entries.tsv"
+          test "$(grep -c $'\timage$' "$RUNNER_TEMP/entries.tsv")" = 2
+          test "$(grep -c $'\tattestation-manifest$' "$RUNNER_TEMP/entries.tsv")" = 2
+          grep -q $'^linux/amd64\timage$' "$RUNNER_TEMP/entries.tsv"
+          grep -q $'^linux/arm64\timage$' "$RUNNER_TEMP/entries.tsv"
+      - name: Check the published copy's provenance and SBOMs
+        env:
+          DIGEST: ${{ needs.promote-scan.outputs.digest }}
+        run: |
+          docker buildx imagetools inspect "$PUBLISHED@$DIGEST" --format '{{ json .Provenance }}' > "$RUNNER_TEMP/provenance.json"
+          docker buildx imagetools inspect "$PUBLISHED@$DIGEST" --format '{{ json .SBOM }}' > "$RUNNER_TEMP/sbom.json"
+          node ci/release/attestations.mjs "$RUNNER_TEMP/provenance.json" "$RUNNER_TEMP/sbom.json"
+      - name: Verify the published copy's provenance attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ needs.promote-scan.outputs.digest }}
+          SOURCE_REF: ${{ needs.promote-verify.outputs.source-ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          gh attestation verify "oci://$PUBLISHED@$DIGEST" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --source-ref "$SOURCE_REF" \
+            --source-digest "$SHA" \
+            --deny-self-hosted-runners
 
   promote-release:
     name: promote-release

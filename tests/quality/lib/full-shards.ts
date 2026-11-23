@@ -80,11 +80,11 @@ export const VISUAL_SPEC = 'visual.spec.ts';
 export const FULL_SHARDS = 12;
 /**
  * The release's rc-quality matrix jobs, by job id, each with its max-parallel: three, since one
- * matrix makes at most MAX_RELEASE_SHARDS jobs, at 6 at once each, 18 together, so 2 of the
- * account's 20 job slots stay free while a release runs.
+ * matrix makes at most MAX_RELEASE_SHARDS jobs, at 7, 6, and 6 at once, 19 together, so 1 of the
+ * account's 20 job slots stays free while a release runs.
  */
 export const RELEASE_JOBS: readonly { readonly id: string; readonly parallel: number }[] = [
-  { id: 'rc-quality-1', parallel: 6 },
+  { id: 'rc-quality-1', parallel: 7 },
   { id: 'rc-quality-2', parallel: 6 },
   { id: 'rc-quality-3', parallel: 6 },
 ];
