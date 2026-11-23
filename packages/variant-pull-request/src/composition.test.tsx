@@ -168,6 +168,13 @@ test("the tabs' list holds only the panel links, so it can be a tab list; Merge,
   assert.match(nav.slice(nav.indexOf('</ul>')), /data-pr-to-merge=""/);
 });
 
+test("Merge links the contact section, Contact's own anchor, so a navigation link jumps to it; with none, the merge box", () => {
+  const markup = html(inputOf(pairOf('complete')));
+  assert.match(markup, /<a class="pr-tab" href="#contact" data-pr-to-merge="">/);
+  const none = html(inputOf(pairOf('identity-only')));
+  assert.match(none, /<a class="pr-tab" href="#pr--merge" data-pr-to-merge="">/);
+});
+
 test('the tabs move with the arrow keys, Home and End, round the ends', () => {
   assert.equal(nextTab('ArrowRight', 3, 4), 0);
   assert.equal(nextTab('ArrowDown', 1, 4), 2);
