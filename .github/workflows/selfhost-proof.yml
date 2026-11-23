@@ -1,0 +1,89 @@
+name: selfhost-proof
+
+# selfhost/ on CI Linux, never merged: on a push of one of its three kgn-proof branches, it pulls
+# an image, starts it with selfhost/compose.yml and the starter config made someone's own, and
+# checks what a visitor reaches and where the server listens (.github/selfhost-proof/run.sh).
+#
+# - kgn-proof/selfhost-digest: v1.0.0's index by digest from the repository's private build
+#   package, with this run's token, before anything is copied or published.
+# - kgn-proof/selfhost: ghcr.io/keyurgolani/portfolio:1.0.0 once it's copied, with this run's
+#   token while the package is private.
+# - kgn-proof/selfhost-public: the same tag with no login at all, once the package is public.
+on:
+  push:
+    branches: [kgn-proof/selfhost-digest, kgn-proof/selfhost, kgn-proof/selfhost-public]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selfhost-proof-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  with-token:
+    name: selfhost (${{ github.ref_name }})
+    if: ${{ github.ref_name != 'kgn-proof/selfhost-public' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE: ${{ github.ref_name == 'kgn-proof/selfhost-digest' && 'ghcr.io/keyurgolani/keyurgolani.name@sha256:59c0d7c5835c17e2e1f6b6b25abf886e760423c0d4b6e1ad46d7e7528e003aa9' || 'ghcr.io/keyurgolani/portfolio:1.0.0' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Log in to GHCR with this run's token, read-only
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Start selfhost/ on ${{ env.IMAGE }}
+        run: bash .github/selfhost-proof/run.sh up
+      - name: What a visitor reaches, and where the server listens
+        run: bash .github/selfhost-proof/run.sh check
+      - name: The server's log
+        if: ${{ always() }}
+        run: bash .github/selfhost-proof/run.sh logs
+      - name: docker compose down
+        if: ${{ always() }}
+        run: bash .github/selfhost-proof/run.sh down
+
+  anonymous:
+    name: selfhost (anonymous pull)
+    if: ${{ github.ref_name == 'kgn-proof/selfhost-public' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      IMAGE: ghcr.io/keyurgolani/portfolio:1.0.0
+      # An empty Docker config: no credential of any kind reaches the pull.
+      DOCKER_CONFIG: ${{ github.workspace }}/.docker-anonymous
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The registry serves the image with no credentials
+        run: |
+          set -euo pipefail
+          mkdir -p "$DOCKER_CONFIG"
+          echo '{}' > "$DOCKER_CONFIG/config.json"
+          token=$(curl -fsS 'https://ghcr.io/token?service=ghcr.io&scope=repository:keyurgolani/portfolio:pull' | jq -r .token)
+          curl -fsS -o /dev/null -w 'anonymous manifest GET: %{http_code}\n' \
+            -H "Authorization: Bearer $token" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json' \
+            https://ghcr.io/v2/keyurgolani/portfolio/manifests/1.0.0
+      - name: Start selfhost/ on ${{ env.IMAGE }}, pulled anonymously
+        run: bash .github/selfhost-proof/run.sh up
+      - name: What a visitor reaches, and where the server listens
+        run: bash .github/selfhost-proof/run.sh check
+      - name: The server's log
+        if: ${{ always() }}
+        run: bash .github/selfhost-proof/run.sh logs
+      - name: docker compose down
+        if: ${{ always() }}
+        run: bash .github/selfhost-proof/run.sh down
