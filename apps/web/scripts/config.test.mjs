@@ -258,7 +258,7 @@ const ORIGIN = ['--origin', 'https://rowan.name'];
 const UNAVAILABLE = (file) => [
   `${file}: variant.unavailable (warning) at /appearance/variant`,
   "  /appearance/variant names a variant this build doesn't register, so the fallback composition renders instead. It blocks publishing, not preview.",
-  '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild, or select one this build registers: aurora-glass, chapters, editorial-evidence, flux, horizontal-cinema, kinetic-cosmos, mission-control, obsidian-atelier, raw-grid, schematic, shell, singular, spatial-bento, swiss-signal, terra-field.',
+  '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild, or select one this build registers: aurora-glass, chapters, editorial-evidence, flux, horizontal-cinema, kinetic-cosmos, mission-control, obsidian-atelier, pull-request, raw-grid, schematic, shell, singular, spatial-bento, swiss-signal, terra-field.',
   '',
 ];
 

@@ -49,6 +49,7 @@
     "@portfolio/variant-kinetic-cosmos": "workspace:*",
     "@portfolio/variant-mission-control": "workspace:*",
     "@portfolio/variant-obsidian-atelier": "workspace:*",
+    "@portfolio/variant-pull-request": "workspace:*",
     "@portfolio/variant-raw-grid": "workspace:*",
     "@portfolio/variant-schematic": "workspace:*",
     "@portfolio/variant-shell": "workspace:*",

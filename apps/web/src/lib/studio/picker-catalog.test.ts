@@ -56,11 +56,11 @@ test('the composition families are the picker chips, and every listed compositio
   }
 });
 
-test('the composition picker lists the 15, ready first, the ones in progress disabled with nothing to draw', () => {
+test('the composition picker lists the 16, ready first, the ones in progress disabled with nothing to draw', () => {
   const options = compositionOptions(catalog);
   const ids = options.map(({ id }) => id);
   assert.equal(new Set(ids).size, ids.length, 'no composition is listed twice');
-  assert.equal(options.length, 15);
+  assert.equal(options.length, 16);
   assert.equal(
     options.find(({ id }) => id === 'flux')?.family,
     'stage',

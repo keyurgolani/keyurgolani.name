@@ -59,6 +59,7 @@ test("every variant's compiled stylesheet, the kit's layout included, is inside 
     'kinetic-cosmos',
     'mission-control',
     'obsidian-atelier',
+    'pull-request',
     'raw-grid',
     'schematic',
     'shell',

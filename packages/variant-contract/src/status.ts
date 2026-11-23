@@ -32,6 +32,7 @@ export const COMPOSITION_STATUS: Readonly<Record<string, CompositionStatus>> = {
   schematic: 'ready',
   flux: 'ready',
   chapters: 'ready',
+  'pull-request': 'pending',
 };
 
 /** A variant's status: its COMPOSITION_STATUS line, or `ready` for a variant no lane gates. */

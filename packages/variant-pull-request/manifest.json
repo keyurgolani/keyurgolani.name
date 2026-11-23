@@ -1,0 +1,67 @@
+{
+  "id": "pull-request",
+  "name": "Pull Request",
+  "promise": "The portfolio as a pull request to the reader's team, read as a review page.",
+  "description": "A review page titled for the reader's team: the conversation is About, the commits are the record, each claim a passing check with its source, the works are files changed as diffs with review notes pinned to their lines, and the merge box is Contact.",
+  "contract": "2.0",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "subtle",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 1024,
+    "css": 10240,
+    "image": 61440,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 6144
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "shared",
+    "work": "shared",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [],
+    "migrations": []
+  },
+  "visitorControl": {
+    "placement": "header"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The fallback composition",
+        "disposition": "preserved"
+      }
+    ]
+  }
+}
