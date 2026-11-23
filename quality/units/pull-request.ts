@@ -20,10 +20,3 @@ export const notApplicable: readonly NotApplicable[] = [
 // fail it as stale once it differs from every other. Its lane removes this
 // line when its home slice passes design review.
 export const distinct = 'pending';
-
-// Pending its phase 2: it still renders some core
-// kinds through the kit's shared renderers, or hands its case-study page to
-// the fallback, so check:variants and the outline sweep report those instead
-// of failing it. Its lane removes this line once it renders every core kind
-// itself and its own case-study page.
-export const coverage = 'pending';

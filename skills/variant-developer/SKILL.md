@@ -55,7 +55,7 @@ Reference packages:
 - **`packages/variant-schematic`**: Schematic, a first-party composition, `document`, `subtle`, and `light`, scaffolded from the fallback composition. Its lane replaces this line with what it does.
 - **`packages/variant-flux`**: Flux, a first-party composition, `kinetic`, `kinetic`, and `medium`: liquid inks on a full-bleed field behind a two-line headline, the signature work in a drop on a pool, and sheets whose tabs melt out of their top edges.
 - **`packages/variant-chapters`**: Chapters, a first-party composition, `document`, `directed`, and `light`, scaffolded from the fallback composition. Its lane replaces this line with what it does.
-- **`packages/variant-pull-request`**: Pull Request, a first-party composition, `document`, `subtle`, and `light`, scaffolded from the fallback composition. Its lane replaces this line with what it does.
+- **`packages/variant-pull-request`**: Pull Request, a first-party composition, `document`, `subtle`, and `light`: the portfolio as a pull request to the reader's team, with tabs for the conversation, commits, checks and files changed as diffs, and a merge box for Contact, complete without a script, one island for the tabs, folds, Viewed and the split view.
 
 ## 2. What the host does around a variant
 

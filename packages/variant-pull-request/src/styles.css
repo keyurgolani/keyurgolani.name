@@ -1,286 +1,1492 @@
 /*
- * Pull Request's layout. Composition only: spacing and arrangement, with color,
- * type, and motion left to #19's appearance axes. Every rule sits under
- * [data-variant='pull-request'], and every property is logical.
+ * Pull Request: the portfolio as a pull request to the reader's team (issue
+ * #270). Composition only: the review page's columns, the header band, the
+ * tabs and the file tree, the timeline, the commit and check lists, the diff
+ * tables and their notes, and the merge box. Colour, type and material are
+ * the packs': added and removed lines are the positive and danger roles
+ * mixed into the canvas, what people wrote reads in the body role and what
+ * machines print (paths, hashes, numbers, diffs) in the code role.
  */
 
 [data-variant='pull-request'] {
+  --layout-rail: 14rem;
+  --layout-desk: 18rem;
+  --layout-av: 1.75rem;
+  --layout-mark: 2rem;
+  --layout-round: 50%;
+  --layout-bar: calc(3.5rem + 1rem);
+  --layout-edge: max(var(--layout-grid-margin), calc((100% - var(--layout-width-page)) / 2));
+  --layout-line-rule: 1px solid var(--color-border-subtle);
+  --layout-line-strong: 1px solid var(--color-border-default);
+  --layout-add: color-mix(in oklab, var(--color-positive) 13%, var(--color-canvas));
+  --layout-add-n: color-mix(in oklab, var(--color-positive) 22%, var(--color-canvas));
+  --layout-add-w: color-mix(in oklab, var(--color-positive) 34%, var(--color-canvas));
+  --layout-del: color-mix(in oklab, var(--color-danger) 11%, var(--color-canvas));
+  --layout-del-n: color-mix(in oklab, var(--color-danger) 19%, var(--color-canvas));
+  --layout-del-w: color-mix(in oklab, var(--color-danger) 30%, var(--color-canvas));
+  --layout-hunk: color-mix(in oklab, var(--color-information) 10%, var(--color-canvas));
+  --layout-wash: color-mix(in oklab, var(--color-surface-subtle) 70%, var(--color-canvas));
+  --layout-motion-curve: var(--ui-motion-easing);
+  --layout-motion-feedback: 200ms;
+  --layout-motion-scene: 700ms;
+
   display: block;
-  box-sizing: border-box;
-  padding-block: var(--space-m) var(--rhythm-section);
-  padding-inline: var(--layout-grid-margin);
-  /* A word too long for the line, such as a name or a URL, breaks rather than widening the page. */
-  overflow-wrap: anywhere;
+  color: var(--color-text-primary);
+  font-family: var(--type-body-font-family);
+  font-size: var(--type-step-0);
+  line-height: var(--type-body-line-height);
+  overflow-wrap: break-word;
 }
 
-/*
- * The reading column at the body measure, centred. The bar above it frames
- * the column rather than the window: the column and a 3xl step either side,
- * never under 48rem, where its one line still fits, nor over the page's width.
- */
-[data-variant='pull-request'] > * {
-  max-inline-size: var(--layout-width-text);
-  margin-inline: auto;
+[data-variant='pull-request']
+  :where(p, ul, ol, dl, dd, figure, blockquote, h1, h2, h3, h4, h5, h6) {
+  margin: 0;
+  padding: 0;
 }
 
-[data-variant='pull-request'] > .pr-header {
-  max-inline-size: min(
-    var(--layout-width-page),
-    max(48rem, calc(var(--layout-width-text) + 2 * var(--space-3xl)))
-  );
+[data-variant='pull-request'] :where(ul[role='list'], ol[role='list']) {
+  list-style: none;
 }
 
-/*
- * The chrome: the name, then the destinations as one short run beside it,
- * then the visitor control. On a narrow screen the destinations give way to
- * the Menu, on the content's end edge, and the control moves into it.
- */
-[data-variant='pull-request'] .pr-header {
+[data-variant='pull-request'] :where(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='pull-request']
+  :where(code, .pr-hash, .pr-n, .pr-mk, .pr-diff, .pr-tree, .pr-stat, .pr-ref) {
+  font-family: var(--type-code-font-family);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='pull-request'] :where(code) {
+  font-size: 0.9em;
+}
+
+[data-variant='pull-request'] a:not([data-ui-slot]) {
+  color: var(--color-accent-text);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='pull-request'] :is(a, button, summary, input, [tabindex]) {
+  scroll-margin-block: var(--space-m) var(--space-xl);
+}
+
+[data-variant='pull-request'] .pr-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='pull-request'] .pr-quiet {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='pull-request'] .pr-prose > * + *,
+[data-variant='pull-request'] .pr-md > * + * {
+  margin-block-start: var(--space-xs);
+}
+
+/* ── The page: the header band, then the body's columns, both to the page's width ── */
+
+[data-variant='pull-request'] .pr-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-l);
+  padding: var(--space-l) var(--layout-edge) var(--space-2xl);
+}
+
+[data-variant='pull-request'] .pr-head {
+  padding: var(--space-l) var(--layout-edge);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  display: grid;
+  gap: var(--space-s);
+  --color-focus: var(--color-on-accent);
+}
+
+[data-variant='pull-request'] .pr-head a:not([data-ui-slot]) {
+  color: inherit;
+}
+
+[data-variant='pull-request'] .pr-ref {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-xs) var(--space-l);
-  margin-block-end: var(--space-xl);
+  gap: var(--space-2xs);
+  font-size: var(--type-step--1);
 }
 
-/* An empty control slot, as on a page with no control or once the Menu holds it, takes no room. */
-[data-variant='pull-request'] .pr-header > [data-visitor-control-slot]:empty {
-  display: none;
+[data-variant='pull-request'] .pr-br {
+  padding: var(--space-3xs) var(--space-2xs);
+  border: 1px solid currentColor;
+  border-radius: var(--ui-radius-control);
+  font-size: inherit;
 }
 
-/* In the bar the control is one more item on its line, unruled: its chevron says it opens. */
-[data-variant='pull-request'] .pr-header > [data-visitor-control-slot] [data-ui-slot='disclosure'] {
-  border-block: none;
-  padding-block: 0;
+[data-variant='pull-request'] .pr-from {
+  inline-size: var(--space-m);
+  border-block-start: 1px solid currentColor;
 }
 
-[data-variant='pull-request'] .pr-nav {
+[data-variant='pull-request'] .pr-ref__no {
+  margin-inline-start: auto;
+  font-family: var(--type-body-font-family);
+}
+
+[data-variant='pull-request'] .pr-title {
+  font-family: var(--type-display-font-family);
+  font-weight: var(--type-display-font-weight);
+  font-size: var(--type-step-5);
+  line-height: var(--type-display-line-height);
+  letter-spacing: var(--type-display-letter-spacing);
+}
+
+[data-variant='pull-request'] :is(.pr-meta, .pr-size) {
   display: flex;
-  flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-xs) var(--space-l);
+  gap: var(--space-2xs);
 }
 
-/* The name leads the chrome: a step up, a title's weight, the primary ink, underlined only on hover. */
-[data-variant='pull-request'] .pr-home {
+[data-variant='pull-request'] .pr-meta code {
+  padding-inline: var(--space-3xs);
+  border-radius: var(--ui-radius-control);
+  background: color-mix(in oklab, var(--color-on-accent) 16%, var(--color-accent));
+}
+
+[data-variant='pull-request'] .pr-state {
   display: inline-flex;
   align-items: center;
-  font-size: var(--type-step-1);
-  font-weight: var(--type-title-font-weight);
+  gap: var(--space-2xs);
+  padding: var(--space-3xs) var(--space-xs);
+  border-radius: var(--ui-radius-badge);
+  background: var(--color-positive);
+  color: var(--color-on-status);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='pull-request'] .pr-state__dot {
+  inline-size: 0.6em;
+  block-size: 0.6em;
+  border: 2px solid currentColor;
+  border-radius: var(--layout-round);
+}
+
+[data-variant='pull-request'] [data-pr-merged] .pr-state {
+  background: var(--color-emphasis);
+  color: var(--color-on-emphasis);
+}
+
+[data-variant='pull-request'] [data-pr-merged] .pr-state__dot {
+  background: currentColor;
+}
+
+[data-variant='pull-request'] .pr-size {
+  font-family: var(--type-code-font-family);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-av {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: var(--layout-av);
+  block-size: var(--layout-av);
+  border-radius: var(--layout-round);
+  background: var(--color-text-primary);
+  color: var(--color-text-inverse);
+  font-size: var(--type-step--2);
+  font-weight: var(--type-label-font-weight);
+  vertical-align: middle;
+}
+
+[data-variant='pull-request'] .pr-av--you {
+  background: var(--color-surface-prominent);
   color: var(--color-text-primary);
 }
 
-/*
- * The links it designs, the closing block's primary action among them: no
- * underline at rest, one on hover, on focus, and on the Menu's current
- * destination.
- */
-[data-variant='pull-request']
-  :is(
-    .pr-home,
-    .pr-menu__destinations a,
-    .pr-index__head,
-    .pr-index__links a,
-    .pr-closing li:first-child > .pf-action
-  ) {
-  text-decoration-line: none;
+[data-variant='pull-request'] .pr-head .pr-av {
+  background: var(--color-on-accent);
+  color: var(--color-accent);
 }
 
-[data-variant='pull-request']
-  :is(
-    .pr-home,
-    .pr-menu__destinations a,
-    .pr-index__head,
-    .pr-index__links a,
-    .pr-closing li:first-child > .pf-action
-  ):is(:hover, :focus-visible, [aria-current]) {
-  text-decoration-line: underline;
+[data-variant='pull-request'] .pr-who {
+  margin-inline: var(--space-3xs);
 }
 
-/* Its own lists are bare. */
-[data-variant='pull-request'] :is(.pr-menu__destinations, .pr-index__groups, .pr-index__links) {
-  margin: 0;
+/* Sizes: +N in the positive role, −N in danger, each a square of its colour beside it. */
+
+[data-variant='pull-request'] .pr-stat {
+  display: inline-flex;
+  gap: var(--space-2xs);
+  white-space: nowrap;
+}
+
+[data-variant='pull-request'] :is(.pr-stat__a, .pr-stat__d)::before {
+  content: '';
+  display: inline-block;
+  inline-size: 0.5em;
+  block-size: 0.5em;
+  margin-inline-end: var(--space-3xs);
+  border-radius: 0;
+  background: var(--color-positive);
+}
+
+[data-variant='pull-request'] .pr-stat__d::before {
+  background: var(--color-danger);
+}
+
+[data-variant='pull-request'] .pr-sq {
+  display: inline-flex;
+  gap: 2px;
+}
+
+[data-variant='pull-request'] .pr-sq i {
+  inline-size: 0.6em;
+  block-size: 0.6em;
+  border-radius: 0;
+  background: var(--color-positive);
+}
+
+[data-variant='pull-request'] .pr-sq i[data-sq='d'] {
+  background: var(--color-danger);
+}
+
+[data-variant='pull-request'] .pr-head :is(.pr-sq i[data-sq='a'], .pr-stat__a::before) {
+  background: var(--color-on-accent);
+}
+
+[data-variant='pull-request'] .pr-head .pr-state {
+  background: var(--color-on-accent);
+  color: var(--color-accent);
+}
+
+/* ── The rail: the tabs and the file tree ── */
+
+[data-variant='pull-request'] .pr-tabs__l {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+  gap: var(--space-3xs);
   padding: 0;
   list-style: none;
 }
 
-/*
- * The destinations are #19's navigation primitive, which the platform
- * stylesheet sizes: a target of at least 24 by 24 CSS px, WCAG 2.2's AA
- * floor (2.5.8), and 32 by 32 at 768 px wide and below. The composition
- * spaces the list and sets no size of its own on a link.
- */
-[data-variant='pull-request'] .pr-destinations {
-  gap: var(--space-3xs) var(--space-m);
+[data-variant='pull-request'] .pr-tab {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  column-gap: var(--space-2xs);
+  min-block-size: 2.75rem;
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--ui-radius-control);
+  color: var(--color-text-primary);
+  text-decoration: none;
 }
 
-/*
- * The Menu is the kit's NavigationMenuSlot: the host's Dialog, or a plain
- * link to the index where no host fills it or no script runs.
- */
-[data-variant='pull-request'] .pr-menu {
+[data-variant='pull-request'] a.pr-tab:not([data-ui-slot]) {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='pull-request'] .pr-tab:hover {
+  background: var(--layout-wash);
+}
+
+[data-variant='pull-request'] .pr-tab[aria-selected='true'] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+[data-variant='pull-request'] .pr-tab__l {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='pull-request'] .pr-tab__n {
+  padding-inline: var(--space-2xs);
+  border-radius: var(--ui-radius-badge);
+  background: var(--color-surface-prominent);
+  color: var(--color-text-primary);
+  font-family: var(--type-code-font-family);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-tab__d {
+  grid-column: 1 / -1;
+  font-size: var(--type-step--1);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='pull-request'] .pr-tab[aria-selected='true'] .pr-tab__d {
+  color: inherit;
+}
+
+[data-variant='pull-request'] .pr-tree {
+  display: none;
+  margin-block-start: var(--space-m);
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-line-rule);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-tree__h {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2xs);
+  font-family: var(--type-body-font-family);
+}
+
+[data-variant='pull-request'] .pr-prog {
+  display: block;
+  block-size: 4px;
+  margin-block: var(--space-2xs) var(--space-s);
+  border-radius: var(--ui-radius-badge);
+  background: var(--color-border-subtle);
+  overflow: hidden;
+}
+
+[data-variant='pull-request'] .pr-prog i {
+  display: block;
+  block-size: 100%;
+  background: var(--color-positive);
+  transform: scaleX(var(--layout-viewed, 0));
+  transform-origin: 0 50%;
+  transition: transform var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='pull-request'] .pr-tree__d {
+  display: block;
+  padding-block: var(--space-2xs) var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='pull-request'] .pr-tree__f {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2xs);
+  min-block-size: 1.5rem;
+  padding-inline-start: var(--space-s);
+}
+
+[data-variant='pull-request'] a.pr-tree__f:not([data-ui-slot]) {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='pull-request'] .pr-tree__f:hover .pr-tree__name {
+  text-decoration: underline;
+}
+
+[data-variant='pull-request'] .pr-tree__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-variant='pull-request'] [data-pr-seen] .pr-tree__name {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='pull-request'] [data-pr-seen] .pr-tree__f::after {
+  content: '\2713';
+  color: var(--color-text-secondary);
+}
+
+/* ── Panels: in order without a script, one at a time with it ── */
+
+[data-variant='pull-request'] .pr-panels {
+  min-inline-size: 0;
+}
+
+[data-variant='pull-request'] .pr-panel + .pr-panel {
+  margin-block-start: var(--space-2xl);
+  padding-block-start: var(--space-l);
+  border-block-start: var(--layout-line-strong);
+}
+
+[data-variant='pull-request'] .pr-panel__h {
+  margin-block-end: var(--space-m);
+  font-size: var(--type-step-3);
+}
+
+[data-variant='pull-request'] [data-pr-tabbed] .pr-panel__h {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='pull-request'] [data-pr-tabbed] .pr-panel + .pr-panel {
+  margin-block-start: 0;
+  padding-block-start: 0;
+  border: 0;
+}
+
+@media screen {
+  [data-variant='pull-request'] [data-pr-off] {
+    display: none;
+  }
+}
+
+[data-variant='pull-request'] .pr-sec + .pr-sec {
+  margin-block-start: var(--space-xl);
+}
+
+[data-variant='pull-request'] .pr-yr + .pr-yr {
+  margin-block-start: var(--space-m);
+}
+
+[data-variant='pull-request'] .pr-sec__title {
+  margin-block-end: var(--space-s);
+  font-size: var(--type-step-2);
+}
+
+[data-variant='pull-request'] .pr-sub {
+  margin-block-end: var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+/* ── The conversation: the description, then the timeline ── */
+
+[data-variant='pull-request'] .pr-post {
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-card);
+  background: var(--color-canvas);
+  min-inline-size: 0;
+}
+
+[data-variant='pull-request'] .pr-post__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3xs);
+  padding: var(--space-2xs) var(--space-s);
+  border-block-end: var(--ui-border-divider);
+  border-start-start-radius: var(--ui-radius-card);
+  border-start-end-radius: var(--ui-radius-card);
+  background: var(--layout-wash);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-post__head .pr-who {
+  color: var(--color-text-primary);
+}
+
+[data-variant='pull-request'] .pr-post__body {
+  display: grid;
+  gap: var(--space-s);
+  padding: var(--space-s) var(--space-m) var(--space-m);
+}
+
+[data-variant='pull-request'] .pr-post__title {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='pull-request'] .pr-chip {
+  display: inline-block;
+  padding: 0 var(--space-2xs);
+  border: var(--ui-border-control);
+  border-radius: var(--ui-radius-badge);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--2);
+  font-weight: var(--type-label-font-weight);
+  white-space: nowrap;
+}
+
+[data-variant='pull-request'] .pr-desc__greet {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='pull-request'] .pr-desc__thesis {
+  font-size: var(--type-step-2);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='pull-request'] :is(.pr-desc__links, .pr-links, .pr-labels) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+
+[data-variant='pull-request'] .pr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 2.75rem;
+  padding: var(--space-2xs) var(--space-m);
+  border-radius: var(--ui-radius-control);
+  background: var(--color-accent);
+  font-weight: var(--type-label-font-weight);
+  text-align: center;
+}
+
+[data-variant='pull-request'] a.pr-btn:not([data-ui-slot]) {
+  color: var(--color-on-accent);
+  text-decoration: none;
+}
+
+[data-variant='pull-request'] a.pr-btn--quiet:not([data-ui-slot]) {
+  background: transparent;
+  border: var(--ui-border-control);
+  color: var(--color-text-primary);
+}
+
+[data-variant='pull-request'] a.pr-btn--merge:not([data-ui-slot]) {
+  background: var(--color-positive);
+  color: var(--color-on-status);
+}
+
+[data-variant='pull-request'] .pr-btn:hover {
+  text-decoration: underline;
+}
+
+[data-variant='pull-request'] .pr-timeline {
+  position: relative;
+  display: grid;
+  gap: var(--space-m);
+  margin-block-start: var(--space-m);
+}
+
+[data-variant='pull-request'] .pr-timeline::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--layout-mark) / 2 - 1px);
+  border-inline-start: 2px solid var(--color-border-subtle);
+}
+
+[data-variant='pull-request'] .pr-ev {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--layout-mark) minmax(0, 1fr);
+  gap: var(--space-s);
+  align-items: start;
+}
+
+[data-variant='pull-request'] .pr-ev__mark {
+  display: grid;
+  place-items: center;
+  inline-size: var(--layout-mark);
+  block-size: var(--layout-mark);
+  border: 2px solid var(--color-border-default);
+  border-radius: var(--layout-round);
+  background: var(--color-canvas);
+}
+
+[data-variant='pull-request'] .pr-ev__mark::after {
+  content: '';
+  inline-size: 0.6rem;
+  block-size: 0.6rem;
+  border: 2px solid var(--color-text-secondary);
+  border-radius: var(--layout-round);
+}
+
+[data-variant='pull-request'] .pr-ev[data-mark='comment'] .pr-ev__mark::after {
+  block-size: 0.45rem;
+  border-radius: 0;
+}
+
+[data-variant='pull-request'] .pr-ev[data-mark='label'] .pr-ev__mark::after {
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+
+[data-variant='pull-request'] .pr-ev[data-mark='check'] .pr-ev__mark {
+  border-color: var(--color-positive);
+}
+
+[data-variant='pull-request'] .pr-ev[data-mark='check'] .pr-ev__mark::after,
+[data-variant='pull-request'] .pr-ev[data-mark='merge'] .pr-ev__mark::after {
   display: none;
 }
 
-/* Whether the link shows is the slot's; its target grows with the line. */
-[data-variant='pull-request'] .pr-menu [data-navigation-menu-link] {
-  padding-block: var(--space-2xs);
+[data-variant='pull-request'] .pr-ev[data-mark='merge'] .pr-ev__mark {
+  border-color: var(--color-emphasis);
+  background: var(--color-emphasis);
 }
 
-@media (width < 48rem) {
-  [data-variant='pull-request'] .pr-destinations {
-    display: none;
-  }
-
-  [data-variant='pull-request'] .pr-menu {
-    display: block;
-    margin-inline-start: auto;
-  }
-}
-
-/* In the Menu: the five destinations first, as large targets, then every section behind one disclosure. */
-[data-variant='pull-request'] .pr-menu__destinations {
+[data-variant='pull-request'] .pr-ev__b {
   display: grid;
+  gap: var(--space-xs);
+  min-inline-size: 0;
+  padding-block-start: var(--space-3xs);
 }
 
-[data-variant='pull-request'] .pr-menu__destinations a {
-  display: flex;
-  align-items: center;
-  min-block-size: 44px;
-  padding-block: var(--space-2xs);
+[data-variant='pull-request'] .pr-ev__t {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='pull-request'] .pr-ev__t :is(b, .pr-who) {
   color: var(--color-text-primary);
 }
 
-[data-variant='pull-request'] .pr-menu__all {
-  margin-block-start: var(--space-m);
-}
-
-/* The visitor's control follows it in the Menu with a rule of its own, so the two rows share one. */
-[data-variant='pull-request'] .pr-menu__all:has(+ [data-navigation-menu-control]) {
-  border-block-end: none;
-}
-
-/* The page's end: the index, then the one closing block, so the invitation is the last thing. */
-[data-variant='pull-request'] .pr-footer {
+[data-variant='pull-request'] .pr-mini {
   display: grid;
-  gap: var(--space-2xl);
-  margin-block-start: var(--space-2xl);
+  gap: var(--space-3xs);
 }
 
-[data-variant='pull-request'] .pr-index__title {
-  margin-block: 0 var(--space-m);
+[data-variant='pull-request'] .pr-excerpt {
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-card);
+  overflow: hidden;
 }
 
-/*
- * Two columns at most: the groups run down in reading order, each whole in
- * one column under its own head, so no group's tail opens the next column
- * headless.
- */
-[data-variant='pull-request'] .pr-index__groups {
-  columns: 2 11rem;
-  column-gap: var(--space-l);
+[data-variant='pull-request'] .pr-excerpt__h {
+  padding: var(--space-2xs) var(--space-s);
+  border-block-end: var(--ui-border-divider);
+  background: var(--layout-wash);
+  font-size: var(--type-step--1);
 }
 
-[data-variant='pull-request'] .pr-index__group {
-  break-inside: avoid;
+[data-variant='pull-request'] .pr-checklist {
+  display: grid;
+  gap: var(--space-2xs);
 }
 
-[data-variant='pull-request'] .pr-index__group + .pr-index__group {
-  margin-block-start: var(--space-m);
+[data-variant='pull-request'] .pr-checklist li {
+  display: flex;
+  gap: var(--space-xs);
+  align-items: baseline;
 }
 
-/* Each head links where its destination does, in the primary ink; its entries follow, quieter. */
-[data-variant='pull-request'] .pr-index__head {
+[data-variant='pull-request'] .pr-cb {
+  position: relative;
+  flex: none;
+  inline-size: 1em;
+  block-size: 1em;
+  border-radius: var(--ui-radius-control);
+  background: var(--color-positive);
+  transform: translateY(0.15em);
+}
+
+[data-variant='pull-request'] .pr-cb::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0.33em;
+  inset-block-start: 0.12em;
+  inline-size: 0.25em;
+  block-size: 0.5em;
+  border-block-end: 2px solid var(--color-on-status);
+  border-inline-end: 2px solid var(--color-on-status);
+  transform: rotate(45deg);
+}
+
+[data-variant='pull-request'] .pr-list {
+  padding-inline-start: var(--space-m);
+}
+
+[data-variant='pull-request'] .pr-list > li + li {
+  margin-block-start: var(--space-3xs);
+}
+
+[data-variant='pull-request'] .pr-quote {
+  padding-inline-start: var(--space-s);
+  border-inline-start: 3px solid var(--color-border-default);
+  font-family: var(--type-quote-font-family);
+  font-size: var(--type-step-1);
+}
+
+[data-variant='pull-request'] .pr-quote figcaption {
+  margin-block-start: var(--space-2xs);
+  font-family: var(--type-body-font-family);
+  font-size: var(--type-step--1);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='pull-request'] .pr-groups,
+[data-variant='pull-request'] .pr-items {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='pull-request'] .pr-group__h,
+[data-variant='pull-request'] .pr-item__h {
+  margin-block-end: var(--space-2xs);
+  font-size: var(--type-step-0);
+}
+
+[data-variant='pull-request'] .pr-label {
+  padding: 0 var(--space-xs);
+  border: 1px solid color-mix(in oklab, var(--color-positive) 45%, var(--color-canvas));
+  border-radius: var(--ui-radius-badge);
+  background: var(--layout-add);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-item {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='pull-request'] :is(.pr-fig, .pr-logo) img {
   display: block;
-  break-after: avoid;
-  padding-block: var(--space-3xs);
-  color: var(--color-text-primary);
+  max-inline-size: 100%;
+  block-size: auto;
+  border-radius: var(--ui-radius-media);
 }
 
-[data-variant='pull-request'] .pr-index__links li {
-  break-inside: avoid;
-}
+/* ── Commits and checks: native disclosures in a ruled list ── */
 
-/* The quieter links, the index's entries and the closing block's other ways in: centred in a target a touch screen grows. */
-[data-variant='pull-request'] :is(.pr-index__links a, .pr-closing .pf-links a) {
-  display: inline-flex;
-  align-items: center;
-  padding-block: var(--space-3xs);
+[data-variant='pull-request'] .pr-yr__h {
+  margin-block-end: var(--space-2xs);
   color: var(--color-text-secondary);
+  font-family: var(--type-body-font-family);
+  font-size: var(--type-step--1);
 }
 
-/* Heads with nothing under them, as at a case study's end: one run of links at the body's size. */
-[data-variant='pull-request'] .pr-index__groups--flat {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs) var(--space-l);
+[data-variant='pull-request'] :is(.pr-commits, .pr-checks) {
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-card);
 }
 
-/*
- * The closing block: one heading, one message, the actions with the address
- * beside them, then the other ways to get in touch, a quieter row last. One
- * spacing step runs through it; the only larger gap is the footer's, above it.
- */
-[data-variant='pull-request'] .pr-closing {
+[data-variant='pull-request'] :is(.pr-commit, .pr-check) + :is(.pr-commit, .pr-check) {
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='pull-request'] :is(.pr-commit__s, .pr-check__s) {
   display: grid;
-  gap: var(--space-s);
-  justify-items: start;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3xs) var(--space-xs);
+  min-block-size: 2.75rem;
+  padding: var(--space-2xs) var(--space-s);
+  cursor: pointer;
+  list-style: none;
 }
 
-/* Its parts step down to the block's one gap, the kit's spacing between a section's parts included. */
-[data-variant='pull-request'] .pr-closing :is(p, ul, header, .pr-closing__ask) {
-  margin: 0;
+[data-variant='pull-request'] p.pr-check__s {
+  cursor: auto;
 }
 
-/* The call to action leads: its heading and message whole lines, its actions and the address one wrapping row. */
-[data-variant='pull-request'] .pr-closing__ask {
+[data-variant='pull-request'] .pr-commit__w {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+[data-variant='pull-request'] .pr-check__s {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+[data-variant='pull-request'] .pr-check__t {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+[data-variant='pull-request'] .pr-check__meta {
+  grid-column: 2;
+  grid-row: 2;
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3xs) var(--space-xs);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] summary.pr-check__s::after {
+  grid-column: 3;
+}
+
+[data-variant='pull-request'] :is(.pr-commit__s, .pr-check__s)::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='pull-request'] summary:is(.pr-commit__s, .pr-check__s)::after {
+  content: '';
+  grid-column: 4;
+  grid-row: 1;
+  inline-size: 0.45em;
+  block-size: 0.45em;
+  border-block-end: 2px solid var(--color-text-secondary);
+  border-inline-end: 2px solid var(--color-text-secondary);
+  transform: rotate(45deg);
+}
+
+[data-variant='pull-request'] details[open] > summary::after {
+  transform: rotate(-135deg);
+}
+
+[data-variant='pull-request'] .pr-dot {
+  inline-size: 0.7rem;
+  block-size: 0.7rem;
+  border: 2px solid var(--color-text-secondary);
+  border-radius: var(--layout-round);
+}
+
+[data-variant='pull-request'] .pr-hash {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-commit__m {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='pull-request'] .pr-commit__w {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] :is(.pr-commit__b, .pr-check__b) {
+  display: grid;
+  gap: var(--space-xs);
+  padding-block: 0 var(--space-s);
+  padding-inline: calc(var(--space-s) + var(--space-l)) var(--space-s);
+}
+
+[data-variant='pull-request'] .pr-trailers {
+  display: grid;
+  gap: var(--space-3xs);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-trailers > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+
+[data-variant='pull-request'] .pr-trailers dt {
+  color: var(--color-text-secondary);
+  font-family: var(--type-code-font-family);
+}
+
+[data-variant='pull-request'] .pr-checks-h {
+  display: flex;
+  gap: var(--space-xs);
   align-items: center;
-  gap: var(--space-s);
+  margin-block-end: var(--space-m);
+  padding: var(--space-s);
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-card);
+  background: var(--layout-add);
 }
 
-/* The call to action's title opens the message on a line of its own, at the message's size and line gap. */
-[data-variant='pull-request'] .pr-closing__ask > :is(header, .pf-message) {
-  flex-basis: 100%;
-  white-space: pre-line;
+[data-variant='pull-request'] .pr-tick {
+  flex: none;
+  inline-size: 1.1em;
+  block-size: 1.1em;
+  fill: var(--color-positive);
+  stroke: var(--color-on-status);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-[data-variant='pull-request'] :is(.pr-closing__address, .pr-closing .pf-action--quiet) {
+[data-variant='pull-request'] .pr-tick path {
+  fill: none;
+}
+
+[data-variant='pull-request'] .pr-ring {
+  flex: none;
+  inline-size: 1.1em;
+  block-size: 1.1em;
+  border: 2px dashed var(--color-text-secondary);
+  border-radius: var(--layout-round);
+}
+
+[data-variant='pull-request'] .pr-check__n {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-check__n {
+  overflow-wrap: anywhere;
+}
+
+[data-variant='pull-request'] .pr-check__v {
+  color: var(--color-text-primary);
+  font-family: var(--type-numeric-font-family);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='pull-request'] .pr-check__ok {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-src__h {
+  font-weight: var(--type-label-font-weight);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-src {
+  display: grid;
+  gap: var(--space-3xs);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-src__q {
+  display: block;
   color: var(--color-text-secondary);
 }
 
-[data-variant='pull-request'] .pr-closing .pf-actions {
-  align-items: center;
+[data-variant='pull-request'] :is(.pr-figs, .pr-repos) {
+  display: grid;
+  gap: var(--space-2xs);
 }
 
-[data-variant='pull-request'] .pr-closing li:first-child > .pf-action {
-  display: inline-flex;
+/* ── Files changed: the bar, each file, its diff ── */
+
+[data-variant='pull-request'] .pr-files-bar {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  min-block-size: 44px;
-  padding-inline: var(--space-m);
-  font-weight: var(--type-label-font-weight);
-  color: var(--color-text-primary);
+  justify-content: space-between;
+  gap: var(--space-xs);
+  margin-block-end: var(--space-m);
+}
+
+[data-variant='pull-request'] .pr-seg {
+  display: inline-flex;
   border: var(--ui-border-control);
   border-radius: var(--ui-radius-control);
+  overflow: hidden;
 }
 
-/* On a touch screen, every link the composition designs is a 44 px target at least (#11). */
-@media (pointer: coarse) {
-  [data-variant='pull-request']
-    :is(.pr-home, .pr-index__head, .pr-index__links a, .pr-closing .pf-links a) {
-    min-block-size: 44px;
+[data-variant='pull-request'] .pr-seg button {
+  min-block-size: 2.25rem;
+  padding: 0 var(--space-s);
+  border: 0;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-variant='pull-request'] .pr-seg button + button {
+  border-inline-start: var(--ui-border-control);
+}
+
+[data-variant='pull-request'] .pr-seg button[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+[data-variant='pull-request'] .pr-files {
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='pull-request'] .pr-file {
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-card);
+  background: var(--color-canvas);
+  min-inline-size: 0;
+}
+
+[data-variant='pull-request'] .pr-file__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs) var(--space-xs);
+  padding: var(--space-2xs) var(--space-s);
+  border-block-end: var(--ui-border-divider);
+  background: var(--layout-wash);
+  border-start-start-radius: var(--ui-radius-card);
+  border-start-end-radius: var(--ui-radius-card);
+}
+
+[data-variant='pull-request'] .pr-file__path {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+  font-size: var(--type-step--1);
+  overflow-wrap: anywhere;
+}
+
+[data-variant='pull-request'] .pr-file__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  font-family: var(--type-code-font-family);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-fold {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+[data-variant='pull-request'] .pr-fold::before {
+  content: '';
+  inline-size: 0.45em;
+  block-size: 0.45em;
+  border-block-end: 2px solid currentColor;
+  border-inline-end: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='pull-request'] .pr-fold[aria-expanded='false']::before {
+  transform: rotate(-45deg);
+}
+
+[data-variant='pull-request'] .pr-viewed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  min-block-size: 1.5rem;
+  padding: 0 var(--space-2xs);
+  border: var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  font-size: var(--type-step--1);
+  cursor: pointer;
+}
+
+[data-variant='pull-request'] [data-pr-seen] .pr-file__head {
+  border-block-end: 0;
+}
+
+[data-variant='pull-request'] .pr-diff {
+  inline-size: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--type-step--1);
+  line-height: var(--type-code-line-height);
+}
+
+[data-variant='pull-request'] .pr-c-n {
+  inline-size: 3.5ch;
+}
+
+[data-variant='pull-request'] .pr-c-mk {
+  inline-size: 2.5ch;
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='pull-request'] .pr-c-n {
+    inline-size: 2.75ch;
+  }
+
+  [data-variant='pull-request'] .pr-c-mk {
+    inline-size: 2ch;
+  }
+
+  [data-variant='pull-request'] .pr-diff td {
+    padding-inline: var(--space-3xs);
+  }
+
+  [data-variant='pull-request'] .pr-note-row > td {
+    padding-inline-start: var(--space-xs);
   }
 }
 
-/* On paper: the destinations in full, and no Menu. */
-@media print {
-  [data-variant='pull-request'] .pr-destinations {
-    display: flex;
-  }
+[data-variant='pull-request'] .pr-diff td {
+  padding: var(--space-3xs) var(--space-2xs);
+  vertical-align: top;
+}
 
-  [data-variant='pull-request'] .pr-menu {
+[data-variant='pull-request'] .pr-n {
+  color: var(--color-text-secondary);
+  text-align: end;
+  user-select: none;
+}
+
+[data-variant='pull-request'] .pr-mk {
+  text-align: center;
+  user-select: none;
+}
+
+[data-variant='pull-request'] .pr-tx {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+[data-variant='pull-request'] .pr-tx .pr-md {
+  margin-block-start: 0;
+  max-inline-size: none;
+  white-space: normal;
+}
+
+[data-variant='pull-request'] [data-l='add'] {
+  background: var(--layout-add);
+}
+
+[data-variant='pull-request'] [data-l='del'] {
+  background: var(--layout-del);
+}
+
+[data-variant='pull-request'] tr[data-l='add'] .pr-n {
+  background: var(--layout-add-n);
+}
+
+[data-variant='pull-request'] tr[data-l='del'] .pr-n {
+  background: var(--layout-del-n);
+}
+
+[data-variant='pull-request'] [data-l='none'] {
+  background: var(--layout-wash);
+}
+
+[data-variant='pull-request'] .pr-diff ins {
+  background: var(--layout-add-w);
+  text-decoration: underline 1px dotted;
+}
+
+[data-variant='pull-request'] .pr-diff del {
+  background: var(--layout-del-w);
+  text-decoration: underline 1px dotted;
+}
+
+[data-variant='pull-request'] .pr-hunk td {
+  padding-block: var(--space-3xs);
+  background: var(--layout-hunk);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='pull-request'] .pr-hash,
+[data-variant='pull-request'] .pr-tl {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='pull-request'] .pr-note-row > td {
+  padding-block: var(--space-2xs) var(--space-s);
+  padding-inline: calc(7ch + var(--space-s)) var(--space-s);
+}
+
+[data-variant='pull-request'] .pr-note {
+  display: grid;
+  gap: var(--space-2xs);
+  padding: var(--space-xs) var(--space-s);
+  border: var(--ui-border-card);
+  border-inline-start: 3px solid var(--color-information);
+  border-radius: var(--ui-radius-card);
+  background: var(--color-canvas);
+  font-family: var(--type-body-font-family);
+  font-size: var(--type-step--1);
+  white-space: normal;
+}
+
+[data-variant='pull-request'] .pr-note[data-kind='why'] {
+  border-inline-start-color: var(--color-accent);
+}
+
+[data-variant='pull-request'] .pr-note__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3xs);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-note ul {
+  padding-inline-start: var(--space-m);
+}
+
+[data-variant='pull-request'] .pr-exp-row {
+  border-block: var(--ui-border-divider);
+  background: var(--layout-hunk);
+}
+
+[data-variant='pull-request'] .pr-exp {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  inline-size: 100%;
+  min-block-size: 2.25rem;
+  padding: 0 var(--space-s);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent-text);
+  font: inherit;
+  font-size: var(--type-step--1);
+  cursor: pointer;
+}
+
+[data-variant='pull-request'] .pr-exp__n {
+  color: var(--color-text-secondary);
+  font-family: var(--type-code-font-family);
+}
+
+[data-variant='pull-request'] .pr-file__media {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+  padding: var(--space-s);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='pull-request'] .pr-file__media > * {
+  flex: 1 1 14rem;
+}
+
+/* The split view, which only the enhancement builds: the unified tables step aside. */
+
+[data-variant='pull-request'] [data-pr-split] table.pr-diff:not([data-pr-split-of]) {
+  display: none;
+}
+
+[data-variant='pull-request'] .pr-diff--split .pr-tx + .pr-n {
+  border-inline-start: var(--layout-line-rule);
+}
+
+/* ── The side column and the merge box ── */
+
+[data-variant='pull-request'] .pr-desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-m);
+  align-content: start;
+}
+
+[data-variant='pull-request'] :is(.pr-desk__merge, .pr-merge, .pr-side) {
+  grid-template-columns: minmax(0, 1fr);
+  min-inline-size: 0;
+}
+
+[data-variant='pull-request'] .pr-side {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='pull-request'] .pr-side__b + .pr-side__b {
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-line-rule);
+}
+
+[data-variant='pull-request'] .pr-side__h {
+  margin-block-end: var(--space-2xs);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-desk__merge {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='pull-request'] .pr-merge {
+  display: grid;
+  gap: var(--space-s);
+  padding: var(--space-m);
+  font-size: var(--type-step--1);
+  border-radius: var(--ui-radius-card);
+  background: var(--color-text-primary);
+  color: var(--color-text-inverse);
+  --color-focus: var(--color-focus-inverse);
+}
+
+[data-variant='pull-request'] .pr-merge a:not([data-ui-slot]):not(.pr-btn) {
+  color: inherit;
+}
+
+[data-variant='pull-request'] .pr-merge__h {
+  font-size: var(--type-step--1);
+  font-family: var(--type-body-font-family);
+  letter-spacing: var(--type-label-letter-spacing);
+}
+
+[data-variant='pull-request'] .pr-merge__state {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='pull-request'] .pr-merge__mail {
+  overflow-wrap: anywhere;
+}
+
+[data-variant='pull-request'] .pr-branch {
+  inline-size: 100%;
+  block-size: auto;
+  fill: none;
+  stroke-width: 2;
+}
+
+[data-variant='pull-request'] .pr-branch__main {
+  stroke: currentColor;
+}
+
+[data-variant='pull-request'] .pr-branch__head {
+  stroke: var(--color-positive);
+}
+
+[data-variant='pull-request'] .pr-branch__c {
+  fill: var(--color-text-primary);
+  stroke: var(--color-positive);
+}
+
+[data-variant='pull-request'] .pr-branch__join {
+  stroke: var(--color-positive);
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset var(--motion-scene) var(--motion-curve);
+}
+
+[data-variant='pull-request'] .pr-branch__m {
+  fill: currentColor;
+}
+
+[data-variant='pull-request'] [data-pr-merged] .pr-branch__join {
+  stroke-dashoffset: 0;
+}
+
+[data-variant='pull-request'] [data-pr-merged] .pr-branch__m {
+  fill: var(--color-positive);
+}
+
+[data-variant='pull-request']:is([data-motion='reduced'], [data-motion='static'])
+  :is(.pr-branch__join, .pr-prog i, .pr-fold::before) {
+  transition: none;
+}
+
+[data-variant='pull-request'] .pr-merge__sum {
+  display: grid;
+  gap: var(--space-2xs);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-merge__sum li {
+  display: flex;
+  gap: var(--space-2xs);
+  align-items: center;
+}
+
+[data-variant='pull-request'] .pr-merge .pr-tick {
+  stroke: var(--color-text-primary);
+}
+
+[data-variant='pull-request'] .pr-merge .pr-ring {
+  border-color: currentColor;
+}
+
+[data-variant='pull-request'] .pr-merge__go {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='pull-request'] .pr-merge__via,
+[data-variant='pull-request'] .pr-merge__oh {
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-merge__o {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-s);
+}
+
+[data-variant='pull-request'] .pr-bar {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 2;
+  display: grid;
+  padding: var(--space-xs) var(--layout-grid-margin)
+    calc(var(--space-xs) + env(safe-area-inset-bottom));
+  border-block-start: var(--ui-border-divider);
+  background: var(--color-canvas);
+}
+
+[data-variant='pull-request'] .pr-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: end;
+  gap: var(--space-m);
+  padding: var(--space-l) var(--layout-edge) calc(var(--space-l) + var(--layout-bar));
+  border-block-start: var(--layout-line-rule);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='pull-request'] .pr-crumbs ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+[data-variant='pull-request'] .pr-work {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+/* ── Wider: the tree shows, the merge bar goes; at 64rem, three columns, the rail and desk held in view ── */
+
+@media (min-width: 48rem) {
+  [data-variant='pull-request'] .pr-bar {
     display: none;
+  }
+
+  [data-variant='pull-request'] .pr-foot {
+    padding-block-end: var(--space-l);
+  }
+
+  [data-variant='pull-request'] .pr-body {
+    grid-template-columns: var(--layout-rail) minmax(0, 1fr);
+    column-gap: var(--space-xl);
+  }
+
+  [data-variant='pull-request'] :is(.pr-crumbs, .pr-work) {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='pull-request'] .pr-desk {
+    grid-column: 2;
+  }
+
+  [data-variant='pull-request'] .pr-tabs__l {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='pull-request'] .pr-tree {
+    display: block;
+  }
+
+  [data-variant='pull-request'] .pr-rail {
+    position: sticky;
+    inset-block-start: 0;
+    align-self: start;
+    max-block-size: 100dvh;
+    overflow: auto;
+    padding-block: var(--space-s);
+  }
+}
+
+@media (min-width: 64rem) {
+  [data-variant='pull-request'] .pr-body {
+    grid-template-columns: var(--layout-rail) minmax(0, 1fr) var(--layout-desk);
+  }
+
+  [data-variant='pull-request'] .pr-desk {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+@media print {
+  [data-variant='pull-request'] :is(.pr-bar, .pr-fold, .pr-exp-row, .pr-seg, .pr-prog) {
+    display: none;
+  }
+
+  [data-variant='pull-request'] :is(.pr-rail, .pr-desk) {
+    position: static;
+    max-block-size: none;
+    overflow: visible;
+  }
+
+  [data-variant='pull-request'] .pr-body {
+    display: block;
+  }
+
+  [data-variant='pull-request'] .pr-foot {
+    padding-block-end: var(--space-l);
+  }
+}
+
+@media (forced-colors: active) {
+  [data-variant='pull-request'] :is([data-l='add'], [data-l='del']) {
+    border-inline-start: 3px solid CanvasText;
   }
 }

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Pull Request: a composition for the portfolio.",
+  "description": "Pull Request: the portfolio as a pull request to the reader's team.",
   "main": "./src/index.tsx",
   "types": "./src/index.tsx",
   "sideEffects": false,
@@ -11,6 +11,7 @@
     ".": "./src/index.tsx",
     "./manifest": "./manifest.json",
     "./styles.css": "./src/styles.css",
+    "./enhancements/review": "./src/enhancements/review.tsx",
     "./studio-thumbnail": "./src/studio-thumbnail.tsx",
     "./package.json": "./package.json"
   },
