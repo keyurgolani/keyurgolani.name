@@ -1,7 +1,1 @@
-{
-  "pull-request": {
-    "owner": "V",
-    "release": "rc.1",
-    "fix": "The variants lane (V): two byte-identical captures of the merged commit in CI's variants job, committed from its variants-screenshots artifact with this entry removed, before 1.1.0's first candidate"
-  }
-}
+{}
