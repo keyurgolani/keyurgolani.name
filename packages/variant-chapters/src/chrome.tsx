@@ -96,14 +96,42 @@ export function RunningHead({ input, book, here }: { input: Input; book: Book; h
           </li>
         </ul>
       </nav>
+      <TopBar input={input} book={book} here={here} />
     </header>
   );
 }
 
-export function ForeEdge({ input, book, here }: { input: Input; book: Book; here: Here }) {
+/** The book's segments, and each one's state against the place being read. */
+function placed(input: Input, book: Book, here: Here) {
   const all = segments(book, input);
   const at = all.findIndex((segment) => segment.key === hereKey(here));
   const state = (i: number) => (i < at ? 'read' : i === at ? 'here' : 'ahead');
+  return { all, at, state };
+}
+
+/**
+ * The top bar: the fore-edge as one rule under the running head. It's the head's own, set on its
+ * foot, so where the head grows a line (large text, a long name) the bar goes down with it.
+ */
+function TopBar({ input, book, here }: { input: Input; book: Book; here: Here }) {
+  const { all, state } = placed(input, book, here);
+  return (
+    <div className="ch-progress" aria-hidden="true">
+      {all.map((segment, i) => (
+        <span
+          key={segment.key}
+          className="ch-progress__seg"
+          data-ink={segment.ink}
+          data-state={state(i)}
+          style={{ flexGrow: segment.pages }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function ForeEdge({ input, book, here }: { input: Input; book: Book; here: Here }) {
+  const { all, at, state } = placed(input, book, here);
   return (
     <>
       <nav className="ch-edge" aria-label="Your place in the book">
@@ -134,17 +162,6 @@ export function ForeEdge({ input, book, here }: { input: Input; book: Book; here
           ))}
         </ol>
       </nav>
-      <div className="ch-progress" aria-hidden="true">
-        {all.map((segment, i) => (
-          <span
-            key={segment.key}
-            className="ch-progress__seg"
-            data-ink={segment.ink}
-            data-state={state(i)}
-            style={{ flexGrow: segment.pages }}
-          />
-        ))}
-      </div>
     </>
   );
 }
