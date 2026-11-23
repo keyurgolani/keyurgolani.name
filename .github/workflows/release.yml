@@ -1295,6 +1295,8 @@ jobs:
       attestations: read # verify the published copy's provenance attestation
     outputs:
       targets: ${{ steps.targets.outputs.targets }}
+      # The published package, for promote-release's notes.
+      published: ${{ env.PUBLISHED }}
     env:
       # The package the self-host files and the release notes' readers pull.
       PUBLISHED: ghcr.io/keyurgolani/portfolio
@@ -1405,7 +1407,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-          IMAGE: ${{ needs.classify.outputs.image }}
+          # The published package: the release points readers at the copy promote made.
+          IMAGE: ${{ needs.promote.outputs.published }}
           DIGEST: ${{ needs.promote-scan.outputs.digest }}
           SHA: ${{ github.sha }}
           REPOSITORY: ${{ github.repository }}

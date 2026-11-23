@@ -59,7 +59,9 @@ export function renderNotes({
       ? `The tags ${(targets ?? []).map((t) => `\`${t}\``).join(', ')} point at the same digest.`
       : `The tag \`${release.version}-rc.${release.rc}\` points at the same digest. \`latest\` doesn't move until a final release.`,
     '',
-    'The package on GHCR is private for now, so pulling needs a login first: `docker login ghcr.io` with a token that has `read:packages`.',
+    final
+      ? 'The package is public, so pulling needs no login.'
+      : 'The package on GHCR is private for now, so pulling needs a login first: `docker login ghcr.io` with a token that has `read:packages`.',
     '',
     '## Verify',
     '',
