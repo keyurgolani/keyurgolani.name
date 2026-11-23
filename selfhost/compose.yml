@@ -1,0 +1,61 @@
+# Your portfolio on the published image, with nothing to build: the
+# read-only profile, which serves your site from ./config and has no editing
+# surface and nothing to sign in to (docs/self-hosting.md).
+#
+#   cp .env.example .env          # then set PORTFOLIO_ORIGIN
+#   docker compose up -d
+#
+# compose.owner.yml, beside this file, is the profile with Studio. It needs
+# the owner's password hash, and it never runs unless you choose it.
+services:
+  web:
+    # The published image, any 1.x release. Pin a release or a digest by
+    # setting PORTFOLIO_IMAGE in .env, such as
+    # ghcr.io/keyurgolani/portfolio@sha256:<digest>.
+    image: ${PORTFOLIO_IMAGE:-ghcr.io/keyurgolani/portfolio:1}
+    container_name: portfolio
+    restart: unless-stopped
+    # Loopback only: the TLS-terminating proxy on this host publishes the site
+    # (docs/self-hosting.md, Reverse proxy and HTTPS).
+    ports:
+      - '127.0.0.1:${PORT:-3000}:3000'
+    environment:
+      PORTFOLIO_PROFILE: read-only
+      # The origin visitors use, such as https://jane.name. Set it in .env.
+      PORTFOLIO_ORIGIN: ${PORTFOLIO_ORIGIN:?set PORTFOLIO_ORIGIN in .env to the origin visitors use}
+      PORTFOLIO_SOURCE_DIR: /config
+      # Where media sources resolve, read-only.
+      PORTFOLIO_MEDIA_ROOT: /media
+      NODE_ENV: production
+    # Nothing in the container is writable but Next's cache and the media
+    # cache.
+    read_only: true
+    # No capabilities, and no way to gain privileges: the server needs
+    # neither.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /app/apps/web/.next/cache
+      # The media cache read-only derives into at startup, the server user's
+      # own.
+      - /tmp/portfolio-media:uid=1001,gid=1001,mode=0700
+    volumes:
+      # config/ holds your portfolio.yml and site.yml. The server reads them
+      # once at startup: restart the container after you edit either.
+      - ./config:/config:ro
+      # assets/ holds the files your portfolio's media sources name, such as
+      # work/cover.jpg. The server only reads it.
+      - ./assets:/media:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        # Same probe as the image HEALTHCHECK.
+        - "const h=process.env.HOSTNAME;const a=!h||h==='0.0.0.0'||h==='::'?'127.0.0.1':h.includes(':')?'['+h+']':h;fetch('http://'+a+':'+(process.env.PORT||3000)+'/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

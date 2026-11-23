@@ -63,6 +63,8 @@ The repo ships a `Dockerfile` and one Compose example per profile. They all buil
 | `deploy/compose.demo.yml`  | `demo`      | `deploy/`   |
 | `deploy/compose.owner.yml` | `owner`     | `deploy/`   |
 
+To run the published image, `ghcr.io/keyurgolani/portfolio`, with nothing to build, use [`selfhost/`](../selfhost/) and [Self-hosting](self-hosting.md) instead.
+
 Each one publishes the server on `127.0.0.1` only, on port `3000` unless `PORT` is set, for the TLS-terminating proxy in front of it (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)). Each reads `PORTFOLIO_ORIGIN` from the `.env` beside it and refuses to start without one.
 
 ### `read-only`

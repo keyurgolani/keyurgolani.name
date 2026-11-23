@@ -40,6 +40,8 @@ docker compose up --build
 
 That runs the `read-only` profile, which serves `config/` as it is. Under the `owner` profile (`deploy/compose.owner.yml`), the first start imports the mounted files, and from then on they're import input: an edit goes live only through `portfolio-store import` or a Studio publish ([docs/deployment.md](docs/deployment.md#the-revision-store)).
 
+To run the published image instead, with nothing to build, start from [`selfhost/`](selfhost/): [docs/self-hosting.md](docs/self-hosting.md) takes you from your own `portfolio.yml` and `site.yml` to `docker compose up -d` behind a reverse proxy.
+
 See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough.
 
 ## What's in the box
@@ -102,6 +104,7 @@ site.example.yml                Example site document
 | Developers building packs          | [docs/appearance.md](docs/appearance.md)               |
 | Architects understanding internals | [docs/architecture.md](docs/architecture.md)           |
 | Operators deploying to production  | [docs/deployment.md](docs/deployment.md)               |
+| Self-hosting the published image   | [docs/self-hosting.md](docs/self-hosting.md)           |
 | Reviewers checking security        | [docs/threat-model.md](docs/threat-model.md)           |
 | Looking for a feature              | [docs/features.md](docs/features.md)                   |
 | AI agents authoring portfolios     | [skills/portfolio-author/](skills/portfolio-author/)   |
