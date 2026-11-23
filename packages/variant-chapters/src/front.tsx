@@ -92,7 +92,11 @@ function TitlePage({ input, book, notice }: { input: Input; book: Book; notice?:
   const ctas = (hero?.ctas ?? []).filter((cta) => present(cta.label));
   const heading = (
     <>
-      <h1 className="tp-title" data-type-role="display">
+      <h1
+        className="tp-title"
+        data-type-role="display"
+        style={{ '--layout-ch-title-word': longestWord([title]) } as CSSProperties}
+      >
         {title}
       </h1>
       {present(subtitle) ? (
