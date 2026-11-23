@@ -1286,6 +1286,11 @@
   color: inherit;
 }
 
+/* On the inverse ground, quiet text reads in the ground's own ink. */
+[data-variant='pull-request'] .pr-merge :is(.pr-sub, .pr-quiet) {
+  color: inherit;
+}
+
 [data-variant='pull-request'] .pr-merge__h {
   font-size: var(--type-step--1);
   font-family: var(--type-body-font-family);
