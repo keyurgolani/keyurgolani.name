@@ -119,12 +119,13 @@ function tabs(root: HTMLElement): () => void {
     target.querySelector('details')?.setAttribute('open', '');
     return true;
   };
-  // A hash into a panel shows it and lands there; any other page starts on the first panel.
-  if (reveal(location.hash))
-    document
-      .getElementById(decodeURIComponent(location.hash.slice(1)))
-      ?.scrollIntoView({ block: 'start' });
-  else select(name(links[0]!));
+  // A hash into a panel shows it; any other page starts on the first panel. Either way the
+  // panels around the hash's target have changed, so it lands on the target again.
+  if (!reveal(location.hash)) select(name(links[0]!));
+  const landing = location.hash
+    ? document.getElementById(decodeURIComponent(location.hash.slice(1)))
+    : null;
+  if (landing && root.contains(landing)) landing.scrollIntoView({ block: 'start' });
   const click = (event: MouseEvent) => {
     if (
       event.defaultPrevented ||
