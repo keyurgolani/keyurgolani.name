@@ -103,6 +103,14 @@ export function Tabs({ input, review }: { input: VariantRenderInput; review: Rev
     files: review.files.length,
   };
   const panels = panelsOf(review);
+  // Merge lands on Contact's own section when one renders, the merge box itself, as every
+  // composition's Contact does; with none, on the merge box the chrome draws.
+  const contact = review.sections.find(
+    ({ section, panel }) => panel === 'merge' && section.kind === 'contact',
+  )?.section;
+  const mergeHref =
+    (contact && review.outline.sections.find((each) => each.id === contact.id)?.href) ??
+    `#${review.ids.panel('merge')}`;
   return (
     <nav className="pr-tabs" aria-label="This change" data-pr-tabs="" lang={lang}>
       <ul className="pr-tabs__l" role="list">
@@ -122,7 +130,7 @@ export function Tabs({ input, review }: { input: VariantRenderInput; review: Rev
         ))}
       </ul>
       <p className="pr-tabs__merge">
-        <a className="pr-tab" href={`#${review.ids.panel('merge')}`} data-pr-to-merge="">
+        <a className="pr-tab" href={mergeHref} data-pr-to-merge="">
           <span className="pr-tab__l">{PANEL_LABELS.merge.label}</span>
           <span className="pr-tab__d">{PANEL_LABELS.merge.dest}</span>
         </a>
