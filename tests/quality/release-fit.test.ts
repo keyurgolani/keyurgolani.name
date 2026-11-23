@@ -56,10 +56,10 @@ function times(overheadSeconds: number, pace?: number): ReleaseTimes {
   return { source: 'a made-up run', overheadSeconds, tests };
 }
 
-test('the release cap stays 120 minutes, 18 at a time across its three jobs, and the per-shard target is the one the inventory run measured fits to it: 5,041 s', () => {
+test('the release cap stays 120 minutes, 19 at a time across its three jobs, and the per-shard target is the one the inventory run measured fits to it: 5,041 s', () => {
   assert.equal(RELEASE_TIMEOUT_MINUTES, 120);
   assert.equal(releaseTimeoutMinutes(), RELEASE_TIMEOUT_MINUTES);
-  assert.equal(RELEASE_PARALLEL, 18);
+  assert.equal(RELEASE_PARALLEL, 19);
   assert.ok(RELEASE_PACE.source.trim().length > 0, 'RELEASE_PACE names its source');
   assert.equal(RELEASE_CEILING, fitReleaseCeiling(RELEASE_PACE));
   assert.equal(RELEASE_CEILING, 5041);
@@ -236,7 +236,7 @@ test("given each test's measured time and a shard job's fixed part, the release 
       .length,
     1,
   );
-  // The run: 18 at a time, each shard taking the next free slot in matrix order.
+  // The run: 19 at a time, each shard taking the next free slot in matrix order.
   assert.deepEqual(
     { wall: release.wall, runner: release.runner },
     releaseWallClock(release.seconds, RELEASE_PARALLEL),
@@ -282,7 +282,7 @@ test("with the plan's estimates in the times file, the measured pace fits the ta
   );
   assert.match(
     lines[2]!,
-    /^\[release-fit\] at 18 at a time: about \d+\.\d h of wall-clock, \d+ runner-minutes$/,
+    /^\[release-fit\] at 19 at a time: about \d+\.\d h of wall-clock, \d+ runner-minutes$/,
   );
   assert.match(
     lines[3]!,
