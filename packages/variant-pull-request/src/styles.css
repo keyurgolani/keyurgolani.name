@@ -1513,6 +1513,21 @@
   [data-variant='pull-request'] :is([data-l='add'], [data-l='del']) {
     border-inline-start: 3px solid currentColor;
   }
+
+  /* Forced colours keep a ground that is a role's system colour, so the merge box's inverse
+     ground stayed the text's colour, under a ring of the same: every ground here is the canvas,
+     its ink the text, and a button a rule round its words. */
+  [data-variant='pull-request'] .pr-merge {
+    border: 1px solid currentColor;
+    background: var(--color-canvas);
+    color: var(--color-text-primary);
+  }
+
+  [data-variant='pull-request'] a.pr-btn:not([data-ui-slot]) {
+    border: 1px solid currentColor;
+    background: var(--color-canvas);
+    color: var(--color-text-primary);
+  }
 }
 
 /* Every link in a list of links holds a 24px target in its own box (WCAG 2.5.8). */
