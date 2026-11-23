@@ -821,7 +821,7 @@ test("inventory.yml runs (c′) whole in rc-quality's three matrices on kgn-a/in
   }
   assert.deepEqual(
     [1, 2, 3].map((k) => INVENTORY.jobs[`inventory-${k}`].strategy['max-parallel']),
-    [6, 6, 6],
+    [7, 6, 6],
   );
   // The plan: rc-quality-plan's count, by the inventory's scope file, and the worker count.
   const plan = INVENTORY.jobs['inventory-plan'];

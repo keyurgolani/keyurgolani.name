@@ -451,7 +451,7 @@ function testNights(
 /** The salts the balance test rolls the nights with: the plan's own, the empty one, and 49 more. */
 const SALTS = ['', ...Array.from({ length: 49 }, (_, at) => `salt-${at + 1}:`)];
 
-test('the caps: 12 shard jobs at once a night, 18 at release across its three jobs, and the release in as many waves of them as rc-quality-plan counts', () => {
+test('the caps: 12 shard jobs at once a night, 19 at release across its three jobs, and the release in as many waves of them as rc-quality-plan counts', () => {
   assert.equal(
     FULL_SHARDS,
     12,
@@ -459,11 +459,11 @@ test('the caps: 12 shard jobs at once a night, 18 at release across its three jo
   );
   assert.equal(
     RELEASE_PARALLEL,
-    18,
-    '2 of the account’s 20 job slots stay free while a candidate runs',
+    19,
+    '1 of the account’s 20 job slots stays free while a candidate runs',
   );
   assert.deepEqual(RELEASE_JOBS, [
-    { id: 'rc-quality-1', parallel: 6 },
+    { id: 'rc-quality-1', parallel: 7 },
     { id: 'rc-quality-2', parallel: 6 },
     { id: 'rc-quality-3', parallel: 6 },
   ]);
@@ -512,14 +512,14 @@ test('the caps: 12 shard jobs at once a night, 18 at release across its three jo
     shards2: '${{ steps.count.outputs.shards2 }}',
     shards3: '${{ steps.count.outputs.shards3 }}',
   });
-  // 64 shards: 22, 21 and 21, by the jobs' max-parallel, so their waves end together.
+  // 64 shards: 24, 20 and 20, by the jobs' max-parallel, so their waves end together.
   const run = (from: number, to: number) =>
     JSON.stringify(Array.from({ length: to - from + 1 }, (_, at) => from + at));
   assert.deepEqual(fullOutputs(64, 14), {
     count: '64',
-    shards1: run(1, 22),
-    shards2: run(23, 43),
-    shards3: run(44, 64),
+    shards1: run(1, 24),
+    shards2: run(25, 44),
+    shards3: run(45, 64),
     nights: '14',
   });
   // Each verdict expects every shard that ran, every wave's at release.
@@ -1568,7 +1568,7 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
   );
   assert.equal(
     releaseSummary(85),
-    'rc-quality: 85 shards (rc-quality-1 29 at 6, rc-quality-2 28 at 6, rc-quality-3 28 at 6), 18 at a time, at most 10200 runner-minutes at the 120-minute timeout',
+    'rc-quality: 85 shards (rc-quality-1 32 at 7, rc-quality-2 27 at 6, rc-quality-3 26 at 6), 19 at a time, at most 10200 runner-minutes at the 120-minute timeout',
   );
   // Each release shard's sum of per-key p90 weights, to read the run's real times against.
   for (const shard of shards) {
@@ -1635,10 +1635,14 @@ test("the release's shards split across its three jobs: consecutive runs, each b
   // A plan of fewer shards than jobs leaves the last jobs none: they skip.
   assert.deepEqual(releaseSlices(1), [[1], [], []]);
   assert.deepEqual(releaseSlices(2), [[1], [2], []]);
-  // The release's three jobs run 6 at a time each, so their shares stay level up to the cap.
+  // The release's jobs run 7, 6, and 6 at a time, so the first takes the larger share, up to the cap.
+  assert.deepEqual(
+    releaseSlices(400).map((slice) => slice.length),
+    [148, 126, 126],
+  );
   assert.deepEqual(
     releaseSlices(700).map((slice) => slice.length),
-    [234, 233, 233],
+    [256, 222, 222],
   );
   // A job whose share passes 256 first takes 256, and the others the rest.
   assert.deepEqual(

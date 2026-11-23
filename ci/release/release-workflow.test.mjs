@@ -163,9 +163,9 @@ test("rc-quality's three matrix jobs are one job but for their id, shard list an
     if: `\${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' && needs.rc-quality-plan.outputs.shards${at} != '[]' }}`,
     shard: `\${{ fromJSON(needs.rc-quality-plan.outputs.shards${at}) }}`,
   });
-  // 6 each at once: 18 together, so 2 of the account's 20 job slots stay free during a release.
+  // 7, 6, and 6 at once: 19 together, so 1 of the account's 20 job slots stays free during a release.
   const parallel = QUALITY_JOBS.map((id) => JOBS[id].strategy['max-parallel']);
-  assert.deepEqual(parallel, [6, 6, 6]);
+  assert.deepEqual(parallel, [7, 6, 6]);
   const [first, ...others] = QUALITY_JOBS.map((id, at) => {
     const job = structuredClone(JOBS[id]);
     assert.deepEqual(
@@ -331,6 +331,59 @@ test('only promote moves latest, one at a time, through targets it reads again j
     if (id === 'promote' || uses(id, 'docker/login-action').length === 0) continue;
     const text = JSON.stringify(job.steps);
     assert.doesNotMatch(text, /latest|outputs\.targets/, id);
+  }
+});
+
+test('promote copies the promoted index by digest to the published package under the same tags, then checks the copy as the build package was checked', () => {
+  const job = JOBS.promote;
+  assert.equal(job.env.PUBLISHED, 'ghcr.io/keyurgolani/portfolio');
+  // The copy pushes, so promote holds packages: write; the copy's attestation check reads.
+  assert.deepEqual(job.permissions, {
+    contents: 'read',
+    packages: 'write',
+    attestations: 'read',
+  });
+  const steps = stepsOf('promote');
+  const at = (pattern) => steps.findIndex((s) => pattern.test(s.run ?? ''));
+  const retag = at(/ci\/release\/retag\.mjs/);
+  const copy = at(/imagetools create/);
+  const tags = at(/cmp /);
+  const attests = at(/ci\/release\/attestations\.mjs/);
+  const verify = at(/gh attestation verify/);
+  assert.ok(retag >= 0 && copy === retag + 1, 'the copy comes right after the build package moves');
+  assert.ok(tags > copy && attests > tags && verify > attests, 'then the checks, in order');
+  // The same targets the build package just moved to, from the same digest, by reference.
+  assert.equal(steps[copy].env.TARGETS, '${{ steps.targets.outputs.targets }}');
+  assert.equal(steps[copy].env.DIGEST, '${{ needs.promote-scan.outputs.digest }}');
+  assert.equal(steps[copy].env.SOURCE, '${{ needs.classify.outputs.image }}');
+  assert.match(steps[copy].run, /--tag "\$PUBLISHED:\$tag"/);
+  assert.match(steps[copy].run, /"\$SOURCE@\$DIGEST"/);
+  // Every tag is the digest, and the index is the source's byte for byte: two images, two attestation manifests.
+  const check = steps[tags].run;
+  for (const line of [
+    /docker buildx imagetools inspect "\$PUBLISHED:\$tag"/,
+    /test "\$got" = "\$DIGEST"/,
+    /cmp "\$RUNNER_TEMP\/published-index\.json" "\$RUNNER_TEMP\/source-index\.json"/,
+    /test "\$\(grep -c \$'\\timage\$' "\$RUNNER_TEMP\/entries\.tsv"\)" = 2/,
+    /test "\$\(grep -c \$'\\tattestation-manifest\$' "\$RUNNER_TEMP\/entries\.tsv"\)" = 2/,
+    /\^linux\/amd64\\timage\$/,
+    /\^linux\/arm64\\timage\$/,
+  ]) {
+    assert.match(check, line);
+  }
+  assert.match(steps[attests].run, /"\$PUBLISHED@\$DIGEST" --format '\{\{ json \.Provenance \}\}'/);
+  assert.match(steps[attests].run, /"\$PUBLISHED@\$DIGEST" --format '\{\{ json \.SBOM \}\}'/);
+  // The copy's signed provenance names the candidate's tag and this commit, as promote-scan's does.
+  assert.match(steps[verify].run, /gh attestation verify "oci:\/\/\$PUBLISHED@\$DIGEST"/);
+  assert.match(steps[verify].run, /--source-ref "\$SOURCE_REF"/);
+  assert.match(steps[verify].run, /--source-digest "\$SHA"/);
+  assert.match(steps[verify].run, /--deny-self-hosted-runners/);
+  assert.equal(steps[verify].env.SOURCE_REF, '${{ needs.promote-verify.outputs.source-ref }}');
+  assert.equal(steps[verify].env.GH_TOKEN, '${{ github.token }}');
+  // No other job names the published package.
+  for (const [id, other] of Object.entries(JOBS)) {
+    if (id === 'promote') continue;
+    assert.doesNotMatch(JSON.stringify(other), /keyurgolani\/portfolio\b/, id);
   }
 });
 
@@ -548,7 +601,7 @@ test('every setup-buildx pins its buildx version, and no build uploads a build r
       }
     }
   }
-  assert.equal(inspected, 6, 'dry-run, rc-merge, and promote-scan each read both');
+  assert.equal(inspected, 8, 'dry-run, rc-merge, promote-scan, and promote each read both');
 });
 
 test('rc-rehearsal rehearses an image of the tagged commit it builds itself, with no cache, push, or token', () => {
