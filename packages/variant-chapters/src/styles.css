@@ -344,12 +344,12 @@
   color: var(--layout-ink-text);
 }
 /* The top bar: the fore-edge as one rule under the running head, a phone's always, a wide
-   screen's when the spine control says top. */
+   screen's when the spine control says top. It's the head's own, on its foot under the head's
+   1px hair rule, so a head grown past its least height (large text, a long name) takes it down. */
 [data-variant='chapters'] .ch-progress {
-  position: fixed;
-  z-index: 3;
-  inset-block-start: var(--layout-runhead);
-  inset-inline: max(0px, (100% - var(--layout-book)) / 2);
+  position: absolute;
+  inset-block-start: calc(100% + 1px);
+  inset-inline: 0;
   display: none;
   gap: 2px;
   block-size: 3px;
