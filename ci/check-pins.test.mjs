@@ -208,6 +208,27 @@ services:
   ]);
 });
 
+test('Compose: an image with a ${VAR:-default} or ${VAR-default} fallback is checked by its default', () => {
+  const compose = `
+services:
+  pinned-default:
+    image: \${PORTFOLIO_IMAGE:-ghcr.io/keyurgolani/portfolio:1.0.0@${DIGEST}}
+  pinned-unset-default:
+    image: \${PORTFOLIO_IMAGE-ghcr.io/keyurgolani/portfolio@${DIGEST}}
+  floating-default:
+    image: \${PORTFOLIO_IMAGE:-ghcr.io/keyurgolani/portfolio:1}
+  floating-unset-default:
+    image: \${PORTFOLIO_IMAGE-ghcr.io/keyurgolani/portfolio:1}
+  empty-default:
+    image: \${PORTFOLIO_IMAGE:-}
+`;
+  assert.deepEqual(messages(checkCompose(compose, 'compose.yml')), [
+    'services.floating-default.image ${PORTFOLIO_IMAGE:-ghcr.io/keyurgolani/portfolio:1} has no @sha256 digest',
+    'services.floating-unset-default.image ${PORTFOLIO_IMAGE-ghcr.io/keyurgolani/portfolio:1} has no @sha256 digest',
+    'services.empty-default.image ${PORTFOLIO_IMAGE:-} is empty',
+  ]);
+});
+
 test('the Playwright container must match @playwright/test', () => {
   const text = `image: mcr.microsoft.com/playwright:v1.58.2-noble@${DIGEST}`;
   assert.deepEqual(checkPlaywrightImage(text, 'ci.yml', '1.58.2'), []);
