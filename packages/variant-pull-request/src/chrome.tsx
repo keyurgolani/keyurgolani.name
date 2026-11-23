@@ -120,13 +120,13 @@ export function Tabs({ input, review }: { input: VariantRenderInput; review: Rev
             </a>
           </li>
         ))}
-        <li className="pr-tabs__merge">
-          <a className="pr-tab" href={`#${review.ids.panel('merge')}`} data-pr-to-merge="">
-            <span className="pr-tab__l">{PANEL_LABELS.merge.label}</span>
-            <span className="pr-tab__d">{PANEL_LABELS.merge.dest}</span>
-          </a>
-        </li>
       </ul>
+      <p className="pr-tabs__merge">
+        <a className="pr-tab" href={`#${review.ids.panel('merge')}`} data-pr-to-merge="">
+          <span className="pr-tab__l">{PANEL_LABELS.merge.label}</span>
+          <span className="pr-tab__d">{PANEL_LABELS.merge.dest}</span>
+        </a>
+      </p>
     </nav>
   );
 }

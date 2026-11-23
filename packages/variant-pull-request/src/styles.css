@@ -93,6 +93,10 @@
 
 /* ── The page: the header band, then the body's columns, both to the page's width ── */
 
+[data-variant='pull-request'] .pr-main {
+  container: pr-main / inline-size;
+}
+
 [data-variant='pull-request'] .pr-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -106,7 +110,18 @@
   color: var(--color-on-accent);
   display: grid;
   gap: var(--space-s);
-  --color-focus: var(--color-on-accent);
+}
+
+/* The ring in each ground's own ink; forced colours give every ground the Canvas, and the
+   platform's ring its system colour, so there the default ring stands. */
+@media (forced-colors: none) {
+  [data-variant='pull-request'] .pr-head {
+    --color-focus: var(--color-on-accent);
+  }
+
+  [data-variant='pull-request'] .pr-merge {
+    --color-focus: var(--color-focus-inverse);
+  }
 }
 
 [data-variant='pull-request'] .pr-head a:not([data-ui-slot]) {
@@ -155,8 +170,8 @@
 
 [data-variant='pull-request'] .pr-meta code {
   padding-inline: var(--space-3xs);
+  border: 1px solid currentColor;
   border-radius: var(--ui-radius-control);
-  background: color-mix(in oklab, var(--color-on-accent) 16%, var(--color-accent));
 }
 
 [data-variant='pull-request'] .pr-state {
@@ -243,7 +258,9 @@
 
 [data-variant='pull-request'] .pr-sq {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 2px;
+  max-inline-size: 100%;
 }
 
 [data-variant='pull-request'] .pr-sq i {
@@ -276,6 +293,10 @@
   list-style: none;
 }
 
+[data-variant='pull-request'] .pr-tabs__merge {
+  margin-block-start: var(--space-3xs);
+}
+
 [data-variant='pull-request'] .pr-tab {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -297,7 +318,7 @@
   background: var(--layout-wash);
 }
 
-[data-variant='pull-request'] .pr-tab[aria-selected='true'] {
+[data-variant='pull-request'] a.pr-tab[aria-selected='true']:not([data-ui-slot]) {
   background: var(--color-accent);
   color: var(--color-on-accent);
 }
@@ -382,9 +403,8 @@
 }
 
 [data-variant='pull-request'] .pr-tree__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 
 [data-variant='pull-request'] [data-pr-seen] .pr-tree__name {
@@ -497,7 +517,6 @@
   color: var(--color-text-secondary);
   font-size: var(--type-step--2);
   font-weight: var(--type-label-font-weight);
-  white-space: nowrap;
 }
 
 [data-variant='pull-request'] .pr-desc__greet {
@@ -635,7 +654,6 @@
 [data-variant='pull-request'] .pr-excerpt {
   border: var(--ui-border-card);
   border-radius: var(--ui-radius-card);
-  overflow: hidden;
 }
 
 [data-variant='pull-request'] .pr-excerpt__h {
@@ -1082,10 +1100,6 @@
   [data-variant='pull-request'] .pr-diff td {
     padding-inline: var(--space-3xs);
   }
-
-  [data-variant='pull-request'] .pr-note-row > td {
-    padding-inline-start: var(--space-xs);
-  }
 }
 
 [data-variant='pull-request'] .pr-diff td {
@@ -1099,9 +1113,14 @@
   user-select: none;
 }
 
-[data-variant='pull-request'] .pr-mk {
+[data-variant='pull-request'] .pr-diff td.pr-mk {
+  padding-inline: 0;
   text-align: center;
   user-select: none;
+}
+
+[data-variant='pull-request'] .pr-diff td.pr-n {
+  padding-inline: var(--space-3xs);
 }
 
 [data-variant='pull-request'] .pr-tx {
@@ -1157,11 +1176,12 @@
 
 [data-variant='pull-request'] .pr-note-row > td {
   padding-block: var(--space-2xs) var(--space-s);
-  padding-inline: calc(7ch + var(--space-s)) var(--space-s);
+  padding-inline: min(calc(7ch + var(--space-s)), 20%) var(--space-s);
 }
 
 [data-variant='pull-request'] .pr-note {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2xs);
   padding: var(--space-xs) var(--space-s);
   border: var(--ui-border-card);
@@ -1279,14 +1299,18 @@
   border-radius: var(--ui-radius-card);
   background: var(--color-text-primary);
   color: var(--color-text-inverse);
-  --color-focus: var(--color-focus-inverse);
 }
 
 [data-variant='pull-request'] .pr-merge a:not([data-ui-slot]):not(.pr-btn) {
   color: inherit;
 }
 
-/* On the inverse ground, quiet text reads in the ground's own ink. */
+/* On the inverse ground, a quiet button and quiet text read in the ground's own ink. */
+[data-variant='pull-request'] .pr-merge a.pr-btn--quiet:not([data-ui-slot]) {
+  border: 1px solid currentColor;
+  color: inherit;
+}
+
 [data-variant='pull-request'] .pr-merge :is(.pr-sub, .pr-quiet) {
   color: inherit;
 }
@@ -1429,7 +1453,11 @@
   [data-variant='pull-request'] .pr-foot {
     padding-block-end: var(--space-l);
   }
+}
 
+/* The columns follow the room the page has in its own text: a container query's rem is the
+   root's text as it renders, so at 200% text a wide window still reads in one column. */
+@container pr-main (min-width: 48rem) {
   [data-variant='pull-request'] .pr-body {
     grid-template-columns: var(--layout-rail) minmax(0, 1fr);
     column-gap: var(--space-xl);
@@ -1452,16 +1480,11 @@
   }
 
   [data-variant='pull-request'] .pr-rail {
-    position: sticky;
-    inset-block-start: 0;
     align-self: start;
-    max-block-size: 100dvh;
-    overflow: auto;
-    padding-block: var(--space-s);
   }
 }
 
-@media (min-width: 64rem) {
+@container pr-main (min-width: 64rem) {
   [data-variant='pull-request'] .pr-body {
     grid-template-columns: var(--layout-rail) minmax(0, 1fr) var(--layout-desk);
   }
@@ -1475,12 +1498,6 @@
 @media print {
   [data-variant='pull-request'] :is(.pr-bar, .pr-fold, .pr-exp-row, .pr-seg, .pr-prog) {
     display: none;
-  }
-
-  [data-variant='pull-request'] :is(.pr-rail, .pr-desk) {
-    position: static;
-    max-block-size: none;
-    overflow: visible;
   }
 
   [data-variant='pull-request'] .pr-body {
