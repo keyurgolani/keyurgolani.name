@@ -32,7 +32,7 @@ const evidence = (fields: Partial<Evidence> & Pick<Evidence, 'id'>): Evidence =>
   ({ type: 'metric', ...fields }) as Evidence;
 
 const texts = (lines: readonly DiffLine[], kind: DiffLine['kind']) =>
-  lines.flatMap((line) => (line.kind === kind ? [line.text] : []));
+  lines.flatMap((line) => (line.kind === kind && line.kind !== 'hunk' ? [line.text] : []));
 
 test('a short hash is seven hex digits of the id, the same on every render, and differs by id', () => {
   const hash = hashOf('amazon-sde-ii');
