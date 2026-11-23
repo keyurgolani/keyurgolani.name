@@ -29,6 +29,7 @@ const RC_JOBS = [
   'rc-smoke',
   'rc-tag',
   'rc-release',
+  'rc-promote-rerun',
 ];
 const FINAL_JOBS = ['promote-verify', 'promote-scan', 'promote', 'promote-release'];
 const DRY_RUN_JOBS = ['dry-run-build', 'dry-run'];
@@ -85,6 +86,7 @@ test('the workflow token is contents: read, and each write is a tag-gated job of
     'rc-merge': ['attestations', 'id-token', 'packages'],
     'rc-tag': ['packages'],
     'rc-release': ['contents'],
+    'rc-promote-rerun': ['actions'],
     promote: ['packages'],
     'promote-release': ['contents'],
   });
@@ -387,6 +389,37 @@ test('promote copies the promoted index by digest to the published package under
   }
 });
 
+test("once a candidate's release is out, rc-promote-rerun re-runs its final tag's release run on the same commit, and does nothing else", () => {
+  const job = JOBS['rc-promote-rerun'];
+  // It asks GitHub to run the final's promotion again, and promote-check still decides.
+  assert.deepEqual(job.permissions, { contents: 'read', actions: 'write' });
+  assert.equal(job.if, "${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}");
+  const steps = stepsOf('rc-promote-rerun');
+  assert.equal(steps.length, 1, 'one step, no checkout, no registry');
+  const [rerun] = steps;
+  assert.equal(rerun.uses, undefined);
+  assert.deepEqual(rerun.env, {
+    GH_TOKEN: '${{ github.token }}',
+    TAG: '${{ github.ref_name }}',
+    SHA: '${{ github.sha }}',
+  });
+  const text = rerun.run;
+  // The final's name from the candidate's, and its tag must be on this commit.
+  assert.match(text, /final="\$\{TAG%-rc\.\*\}"/);
+  assert.match(text, /git\/ref\/tags\/\$final/);
+  assert.match(text, /"\$commit" != "\$SHA"/);
+  // The final tag's newest push run of release.yml, on this commit, once it has ended.
+  assert.match(
+    text,
+    /gh run list --repo "\$GITHUB_REPOSITORY" --workflow release\.yml --event push --branch "\$final"/,
+  );
+  assert.match(text, /gh run rerun "\$id" --repo "\$GITHUB_REPOSITORY"/);
+  // It never makes or moves a tag, a release, or an image, and it never fails the candidate's run.
+  assert.doesNotMatch(text, /git (tag|push)|gh release|imagetools|docker|-X POST[^\n]*git\/refs/);
+  assert.doesNotMatch(text, /exit [1-9]/);
+  assert.doesNotMatch(JSON.stringify(job), /continue-on-error/);
+});
+
 test('each step waits on the one before it', () => {
   const needs = (id) => [...(JOBS[id].needs ?? [])].sort();
   assert.deepEqual(needs('rc-verify'), ['classify']);
@@ -413,6 +446,7 @@ test('each step waits on the one before it', () => {
     'rc-smoke',
   ]);
   assert.deepEqual(needs('rc-release'), ['classify', 'rc-merge', 'rc-scan', 'rc-tag']);
+  assert.deepEqual(needs('rc-promote-rerun'), ['classify', 'rc-release']);
   assert.deepEqual(needs('dry-run'), ['dry-run-build']);
   assert.deepEqual(needs('promote-verify'), ['classify']);
   assert.deepEqual(needs('promote-scan'), ['classify', 'promote-verify']);
