@@ -45,7 +45,12 @@ test("every transition and animation runs only when the visitor's OS asks for no
       (value) => value !== 'none',
     ),
   );
-  assert.ok(moving.length >= 3, 'the Viewed bar, the fold chevron and the branch joining main');
+  const parts = moving.map(({ selector }) => selector).join(', ');
+  for (const part of ['.pr-prog i', '.pr-fold::before', '.pr-branch__join'])
+    assert.ok(
+      parts.includes(part),
+      `${part}: the Viewed bar, the fold chevron and the branch joining main`,
+    );
   for (const { selector, at } of moving)
     assert.ok(
       at.includes('@media (prefers-reduced-motion: no-preference)'),

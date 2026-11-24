@@ -376,7 +376,19 @@
   background: var(--color-positive);
   transform: scaleX(var(--layout-viewed, 0));
   transform-origin: 0 50%;
-  transition: transform var(--motion-feedback) var(--motion-curve);
+}
+
+/* Every transition waits for the visitor's OS to ask for no less motion: under respect-os the
+   boundary stays full when it asks for less, so data-motion alone doesn't stop one. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='pull-request'] .pr-prog i,
+  [data-variant='pull-request'] .pr-fold::before {
+    transition: transform var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='pull-request'] .pr-branch__join {
+    transition: stroke-dashoffset var(--motion-scene) var(--motion-curve);
+  }
 }
 
 [data-variant='pull-request'] .pr-tree__d {
@@ -1049,7 +1061,6 @@
   border-block-end: 2px solid currentColor;
   border-inline-end: 2px solid currentColor;
   transform: rotate(45deg);
-  transition: transform var(--motion-feedback) var(--motion-curve);
 }
 
 [data-variant='pull-request'] .pr-fold[aria-expanded='false']::before {
@@ -1353,7 +1364,6 @@
   stroke: var(--color-positive);
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  transition: stroke-dashoffset var(--motion-scene) var(--motion-curve);
 }
 
 [data-variant='pull-request'] .pr-branch__m {
@@ -1369,7 +1379,8 @@
 }
 
 [data-variant='pull-request']:is([data-motion='reduced'], [data-motion='static'])
-  :is(.pr-branch__join, .pr-prog i, .pr-fold::before) {
+  :is(.pr-branch__join, .pr-prog i),
+[data-variant='pull-request']:is([data-motion='reduced'], [data-motion='static']) .pr-fold::before {
   transition: none;
 }
 
@@ -1496,8 +1507,16 @@
 }
 
 @media print {
-  [data-variant='pull-request'] :is(.pr-bar, .pr-fold, .pr-exp-row, .pr-seg, .pr-prog) {
+  [data-variant='pull-request'] :is(.pr-fold, .pr-exp-row, .pr-seg, .pr-prog) {
     display: none;
+  }
+
+  /* The phone's merge bar holds the one "Approve and merge" a phone has on its own line: on
+     paper it stays, in the page's flow, after the review, with nothing fixed. */
+  [data-variant='pull-request'] .pr-bar {
+    position: static;
+    padding: var(--space-xs) var(--layout-edge);
+    border-block-start: 0;
   }
 
   [data-variant='pull-request'] .pr-body {
