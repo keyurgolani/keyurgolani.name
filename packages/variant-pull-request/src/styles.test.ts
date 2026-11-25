@@ -82,3 +82,18 @@ test("in print the phone's merge bar stays, in the page's flow, so Approve and m
     'print puts the bar in the flow',
   );
 });
+
+test("an avatar's disc grows with its initials, so no letter of a wide face sits outside it", () => {
+  // The release cells found the initials "RV" wider than the 1.75rem disc in drafting-grotesk,
+  // shell-mono and multilingual-system, each letter's outer half on the ground around it, in
+  // the disc's ink: 1.00:1 wherever that ink is the ground's own colour.
+  const avatar = rules().filter(
+    ({ selector }) => selector === "[data-variant='pull-request'] .pr-av",
+  );
+  assert.equal(avatar.length, 1, 'one rule sizes the avatar');
+  const { body } = avatar[0]!;
+  assert.deepEqual(declares(body, 'inline-size'), [], 'no fixed width');
+  assert.ok(declares(body, 'min-inline-size').length > 0, 'at least the disc');
+  assert.ok(declares(body, 'padding-inline').length > 0, 'room either side of the letters');
+  assert.ok(declares(body, 'white-space').includes('nowrap'), 'the initials on one line');
+});

@@ -206,13 +206,18 @@
   font-size: var(--type-step--1);
 }
 
+/* The disc grows wider when a face sets the initials wider than it, so every letter stays
+   on the disc's own ground. */
 [data-variant='pull-request'] .pr-av {
   display: inline-grid;
   place-items: center;
   flex: none;
-  inline-size: var(--layout-av);
+  min-inline-size: var(--layout-av);
   block-size: var(--layout-av);
+  padding-inline: 0.3em;
   border-radius: var(--layout-round);
+  white-space: nowrap;
+  line-height: 1;
   background: var(--color-text-primary);
   color: var(--color-text-inverse);
   font-size: var(--type-step--2);
