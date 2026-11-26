@@ -2204,6 +2204,15 @@
     max-inline-size: calc(var(--type-measure-compact) / 1.5);
   }
 
+  /*
+   * The entrance and the installation are the containers their labels measure by (below): each is
+   * main's width, never its content's. Nothing in either is fixed, and each wall already isolates
+   * and holds its own floor, so the containment changes nothing else.
+   */
+  [data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) {
+    container: oa-entrance / inline-size;
+  }
+
   [data-variant='obsidian-atelier'] :is(.oa-entrance__statement, .oa-installation__title) {
     align-self: center;
   }
@@ -2525,6 +2534,23 @@
   [data-variant='obsidian-atelier'] .oa-room--wall .oa-label {
     grid-row: 2;
     grid-column: 1 / -1;
+  }
+}
+
+/*
+ * An entrance or an installation narrow for the reader's text: the label's column beside the work
+ * shrinks below its longest word, and set at the column's end, the rest ran out past the window's
+ * start, where the wall's clip cut it. So it hangs under the work across the hang, as below 64rem.
+ * A container query's rem is the root's, so this holds only when the reader's text is large: the
+ * wall is 64rem wide or more at 1x from 64rem, and 32rem at 1024 with the text at 200%. In every
+ * shipping face a label overran its column at 42.7rem (1024 at 150%) and had room from 45rem.
+ */
+@container oa-entrance (max-width: 48rem) {
+  [data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) .oa-label {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    max-inline-size: none;
   }
 }
 
